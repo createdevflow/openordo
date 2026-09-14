@@ -1,0 +1,41 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            set -e
+            cd ${{ secrets.VPS_PATH }}
+
+            echo "=== Pull latest (hard reset to avoid local changes blocking pulls) ==="
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "=== Build image ==="
+            docker compose build openordo-app
+
+            echo "=== Start DB and Push Schema ==="
+            # Ensure DB is running
+            docker compose up -d openordo-db
+            # Wait for DB to be ready
+            sleep 5 
+            # Push Prisma schema (this creates/updates tables without migrations folder)
+            docker compose run --rm openordo-app npx prisma db push --accept-data-loss
+
+            echo "=== Restart App ==="
+            docker compose up -d --no-deps openordo-app
+
+            echo "=== Status ==="
+            docker compose ps
