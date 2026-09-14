@@ -28,6 +28,22 @@ services:
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-your-secret-key-please-change}
     depends_on:
       - openordo-db
+    volumes:
+      - openordo_uploads:/app/public/uploads
+    networks:
+      - openordo_net
+
+  openordo-nginx:
+    image: nginx:alpine
+    container_name: openordo-nginx
+    restart: unless-stopped
+    depends_on:
+      - openordo-app
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - openordo_uploads:/var/www/uploads:ro
+    expose:
+      - "80"
     networks:
       - openordo_net
       - proxy
@@ -41,7 +57,7 @@ services:
       - "traefik.http.routers.openordo.entrypoints=websecure"
       - "traefik.http.routers.openordo.tls=true"
       - "traefik.http.routers.openordo.tls.certresolver=le"
-      - "traefik.http.services.openordo.loadbalancer.server.port=3000"
+      - "traefik.http.services.openordo.loadbalancer.server.port=80"
 
       # HTTP -> HTTPS redirect router
       - "traefik.http.routers.openordo-http.rule=Host(`openordo.com`) || Host(`www.openordo.com`)"
@@ -58,3 +74,4 @@ networks:
 
 volumes:
   openordo_postgres_data:
+  openordo_uploads:
