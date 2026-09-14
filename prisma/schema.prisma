@@ -1,0 +1,431 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String       @id @default(cuid())
+  username      String       @unique
+  name          String
+  email         String       @unique
+  phone         String?
+  passwordHash  String?
+  image         String?
+  platformRole  String       @default("USER") // Enum PlatformRole
+  status        String       @default("ACTIVE") // ACTIVE, BANNED, SOFT_DELETED
+  deletedAt     DateTime?
+  activeClinicId String?
+  onboardingStep String      @default("CLINIC_DETAILS")
+  notificationPrefs String?  // JSON string
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  memberships   Membership[]
+}
+
+model Clinic {
+  id            String       @id @default(cuid())
+  name          String
+  slug          String       @unique
+  type          String       
+  phone         String?
+  address       String?
+  openTime      String?      @default("09:00")
+  closeTime     String?      @default("18:00")
+  status        String       @default("ACTIVE") // Enum ClinicStatus
+  country       String       @default("US")
+  billingConfig String?      // JSON string for region-specific compliance
+  createdAt     DateTime     @default(now())
+
+  memberships      Membership[]
+  patients         Patient[]
+  doctors          Doctor[]
+  appointments     Appointment[]
+  invoices         Invoice[]
+  records          MedicalRecord[]
+  subscription     Subscription?
+  bookingRequests  BookingRequest[]
+  promoRedemptions PromoRedemption[]
+  payments         Payment[]
+  clinicPlugins    ClinicPlugin[]
+  inventoryItems   InventoryItem[]
+  prescriptions    Prescription[]
+}
+
+model Membership {
+  id        String     @id @default(cuid())
+  userId    String
+  clinicId  String
+  role      String     // Enum ClinicRole (OWNER, ADMIN, DOCTOR, FRONT_DESK)
+  createdAt DateTime   @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, clinicId])
+}
+
+model Plan {
+  id              String   @id @default(cuid())
+  name            String   
+  slug            String   @unique
+  description     String?
+  priceMonthlyUsd Int      @default(0)
+  priceYearlyUsd  Int?
+  priceMonthlyInr Int      @default(0)
+  priceYearlyInr  Int?
+  patientLimit    Int?     
+  doctorLimit     Int?     
+  features        String   // JSON array of extra marketing bullets (extraBullets)
+  isFeatured      Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  isDefaultFree   Boolean  @default(false)
+  stripeProductId String?
+  stripePriceIdMonthly String?
+  stripePriceIdYearly  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  subscriptions   Subscription[]
+  promos          Promo[]
+  planFeatures    PlanFeature[]
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  clinicId             String             @unique
+  planId               String
+  status               String             @default("TRIALING") // Enum SubscriptionStatus
+  billingCycle         String             @default("monthly")
+  trialEndsAt          DateTime?
+  currentPeriodEnd     DateTime?
+  promoId              String?
+  promoExpiresAt       DateTime?
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  cancelAtPeriodEnd    Boolean            @default(false)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  plan   Plan   @relation(fields: [planId], references: [id])
+}
+
+model Patient {
+  id          String   @id @default(cuid())
+  clinicId    String
+  displayId   String   
+  name        String
+  age         Int
+  gender      String
+  phone       String
+  email       String?
+  address     String?
+  bloodGroup  String?
+  allergies   String?
+  condition   String?
+  colorTag    String   @default("#1E4638")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  clinic        Clinic          @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  appointments  Appointment[]
+  invoices      Invoice[]
+  records       MedicalRecord[]
+  prescriptions Prescription[]
+
+  @@unique([clinicId, displayId])
+}
+
+model Doctor {
+  id         String   @id @default(cuid())
+  clinicId   String
+  userId     String?  
+  name       String
+  specialty  String
+  phone      String
+  email      String
+  workingDays String  // Was String[], store as JSON string or comma-separated
+  createdAt  DateTime @default(now())
+
+  clinic        Clinic         @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  appointments  Appointment[]
+  records       MedicalRecord[]
+  prescriptions Prescription[]
+}
+
+model Appointment {
+  id        String             @id @default(cuid())
+  clinicId  String
+  patientId String
+  doctorId  String
+  date      DateTime           // Removed @db.Date
+  time      String             
+  duration  Int                @default(30)
+  reason    String
+  status    String             @default("SCHEDULED") // Enum AppointmentStatus
+  visitType String             @default("IN_PERSON") // "IN_PERSON" | "VIDEO"
+  roomId    String?
+  createdAt DateTime           @default(now())
+
+  clinic  Clinic  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor  Doctor  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+}
+
+model Invoice {
+  id        String        @id @default(cuid())
+  clinicId  String
+  patientId String
+  displayId String        
+  date      DateTime      // Removed @db.Date
+  status    String        @default("UNPAID") // Enum InvoiceStatus
+  items     String        // Was Json, SQLite native JSON requires modern Prisma setup, String is safer for quick mockup
+  createdAt DateTime      @default(now())
+
+  clinic  Clinic  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicId, displayId])
+}
+
+model MedicalRecord {
+  id           String   @id @default(cuid())
+  clinicId     String
+  patientId    String
+  doctorId     String
+  date         DateTime // Removed @db.Date
+  diagnosis    String
+  prescription String?
+  notes        String?
+  documentUrl  String?
+  createdAt    DateTime @default(now())
+
+  clinic  Clinic  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor  Doctor  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+}
+
+model BookingRequest {
+  id        String   @id @default(cuid())
+  clinicId  String
+  name      String
+  email     String
+  phone     String
+  doctorId  String?
+  date      String
+  time      String
+  reason    String
+  notes     String?
+  status    String   @default("PENDING") // PENDING | CONFIRMED | REJECTED
+  createdAt DateTime @default(now())
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+}
+
+model Promo {
+  id              String            @id @default(cuid())
+  name            String            // internal label
+  targetPlanId    String            // which Plan gets unlocked
+  durationDays    Int               // how many days of free access
+  eligibility     String            @default("NEW_CLINICS_ONLY") // NEW_CLINICS_ONLY | ALL_CLINICS
+  startsAt        DateTime?
+  endsAt          DateTime?
+  isActive        Boolean           @default(true)
+  redemptionLimit Int?              // null = unlimited
+  redemptionCount Int               @default(0)
+  headline        String            // customer-facing
+  subtext         String?           // customer-facing
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  targetPlan  Plan              @relation(fields: [targetPlanId], references: [id])
+  redemptions PromoRedemption[]
+}
+
+model PromoRedemption {
+  id         String   @id @default(cuid())
+  promoId    String
+  clinicId   String
+  redeemedAt DateTime @default(now())
+  expiresAt  DateTime
+
+  promo  Promo  @relation(fields: [promoId], references: [id], onDelete: Cascade)
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@unique([promoId, clinicId])
+}
+
+model Payment {
+  id          String   @id @default(cuid())
+  clinicId    String
+  amount      Int
+  currency    String
+  status      String   // "succeeded" | "failed" | "refunded"
+  stripeInvoiceId String?
+  createdAt   DateTime @default(now())
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+}
+
+model AuditLogEntry {
+  id          String   @id @default(cuid())
+  actorUserId String        // which Super Admin did it
+  action      String        // "SUSPEND_CLINIC" | "CHANGE_PLAN" | "GRANT_PROMO" | ...
+  targetType  String        // "Clinic" | "User" | "Plan" | "Promo"
+  targetId    String
+  metadata    String?       // JSON string
+  createdAt   DateTime @default(now())
+}
+
+model PlatformFlag {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  label       String
+  description String
+  category    String            // "Access" | "Billing" | "Modules" | "Platform"
+  enabled     Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
+}
+
+model Feature {
+  id                String   @id @default(cuid())
+  key               String   @unique    // "appointments.calendar", "billing.invoices"
+  name              String              // "Appointment calendar"
+  description       String?
+  category          String              // "Core" | "Scheduling" | "Billing" | "Communication" | "Support"
+  isGloballyEnabled Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  planFeatures PlanFeature[]
+}
+
+model PlanFeature {
+  id        String  @id @default(cuid())
+  planId    String
+  featureId String
+  included  Boolean @default(true)
+
+  plan    Plan    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  feature Feature @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, featureId])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
+// ─── Plugin Marketplace ──────────────────────────────────────────────────────
+
+model Plugin {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  tagline     String
+  description String
+  category    String   // "Clinical" | "Operations"
+  icon        String   // lucide-react icon name
+
+  priceOneTimeINR Int?
+  priceOneTimeUSD Int?
+  priceMonthlyINR Int?
+  priceMonthlyUSD Int?
+  priceYearlyINR  Int?
+  priceYearlyUSD  Int?
+
+  isActive     Boolean @default(true)
+  isComingSoon Boolean @default(false)
+  sortOrder    Int     @default(0)
+
+  stripeProductId      String?
+  stripePriceIdOneTime String?
+  stripePriceIdMonthly String?
+  stripePriceIdYearly  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinicPlugins ClinicPlugin[]
+}
+
+model ClinicPlugin {
+  id           String  @id @default(cuid())
+  clinicId     String
+  pluginId     String
+  pricingModel String  // "ONE_TIME" | "MONTHLY" | "YEARLY"
+  status       String  @default("ACTIVE") // "ACTIVE" | "EXPIRED" | "CANCELED"
+  isEnabled    Boolean @default(true)
+
+  purchasedAt       DateTime  @default(now())
+  currentPeriodEnd  DateTime?
+  cancelAtPeriodEnd Boolean   @default(false)
+
+  stripeSubscriptionId  String?
+  stripePaymentIntentId String?
+
+  grantedByAdmin Boolean @default(false)
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  plugin Plugin @relation(fields: [pluginId], references: [id])
+
+  @@unique([clinicId, pluginId])
+}
+
+// ─── Inventory Management Plugin ─────────────────────────────────────────────
+
+model InventoryItem {
+  id               String   @id @default(cuid())
+  clinicId         String
+  name             String
+  sku              String?
+  unit             String
+  quantityOnHand   Int      @default(0)
+  reorderThreshold Int      @default(5)
+  unitCost         Int?
+  createdAt        DateTime @default(now())
+
+  clinic       Clinic                 @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  transactions InventoryTransaction[]
+}
+
+model InventoryTransaction {
+  id        String   @id @default(cuid())
+  itemId    String
+  change    Int
+  reason    String   // "RESTOCK" | "USED_IN_VISIT" | "ADJUSTMENT"
+  recordId  String?
+  createdAt DateTime @default(now())
+
+  item InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+}
+
+// ─── E-Prescriptions Plugin ───────────────────────────────────────────────────
+
+model Prescription {
+  id        String   @id @default(cuid())
+  clinicId  String
+  patientId String
+  recordId  String?
+  doctorId  String
+  date      DateTime
+  items     String   // JSON: [{ drug, dosage, frequency, durationDays, notes }]
+  createdAt DateTime @default(now())
+
+  clinic  Clinic  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor  Doctor  @relation(fields: [doctorId], references: [id])
+}
+

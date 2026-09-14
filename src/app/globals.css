@@ -1,0 +1,327 @@
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+
+@theme inline {
+  --color-ink: #16241F;
+  --color-ink-soft: #3C4A45;
+  --color-paper: #F1F0EA;
+  --color-paper-raised: #FBFAF6;
+  --color-forest: #1E4638;
+  --color-forest-dark: #123025;
+  --color-moss: #5C7A67;
+  --color-line: #DAD6C9;
+  --color-amber: #C8862B;
+  --color-amber-soft: #F3E3C6;
+  --color-coral: #B5432F;
+  --color-coral-soft: #F3DBD3;
+  --color-blue: #386A8A;
+  --color-blue-soft: #DCE7EC;
+  --color-success: #2E6B3E;
+  --color-success-soft: #DCEADD;
+
+  --font-serif: var(--font-fraunces), serif;
+  --font-sans: var(--font-inter), sans-serif;
+  --font-mono: var(--font-jetbrains-mono), monospace;
+
+  --radius-card: 12px;
+  --radius-control: 7px;
+  --radius-pill: 20px;
+}
+
+:root {
+  --ink: #16241F;
+  --ink-soft: #3C4A45;
+  --paper: #F1F0EA;
+  --paper-raised: #FBFAF6;
+  --forest: #1E4638;
+  --forest-dark: #123025;
+  --forest-soft: rgba(30, 70, 56, 0.12);
+  --moss: #5C7A67;
+  --line: #DAD6C9;
+  --amber: #C8862B;
+  --amber-soft: #F3E3C6;
+  --coral: #B5432F;
+  --coral-soft: #F3DBD3;
+  --blue: #386A8A;
+  --blue-soft: #DCE7EC;
+  --success: #2E6B3E;
+  --success-soft: #DCEADD;
+  --white: #FFFFFF;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background-color: var(--color-paper);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-amber-soft);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+
+button, input, select, textarea {
+  font-family: inherit;
+}
+
+#print-root {
+  display: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #print-root, #print-root * {
+    visibility: visible;
+  }
+  #print-root {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: white;
+    padding: 0;
+    margin: 0;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Video Consultation Room — layout, tiles, responsive
+   Mobile-first. Patients join without login on any device.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* Root shell — fills viewport, no scroll */
+.cw-room-root {
+  background: #123025;
+  height: 100dvh;
+  height: 100vh; /* fallback for browsers without dvh */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: #fff;
+  font-family: var(--font-inter, system-ui, sans-serif);
+  /* Prevent iOS rubber-band scroll from revealing page bg */
+  overscroll-behavior: none;
+}
+
+/* Header: fixed 56px, never shrinks */
+.cw-room-header {
+  height: 56px;
+  min-height: 56px;
+  border-bottom: 1px solid rgba(255,255,255,0.09);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  background: rgba(255,255,255,0.05);
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+/* Main grid: video stage + side panel */
+.cw-consultation-layout {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 16px;
+  padding: 16px;
+  /* Critical: fill remaining height after header, don't overflow */
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Video stage column */
+.cw-video-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+/* The actual video stage tile */
+.cw-stage {
+  flex: 1;
+  background: #0a1f16;
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255,255,255,0.09);
+  min-height: 0;
+}
+
+/* Control bar pill */
+.cw-control-bar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255,255,255,0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 10px 24px;
+  border-radius: 40px;
+  border: 1px solid rgba(255,255,255,0.09);
+  align-self: center;
+  flex-shrink: 0;
+  /* Prevent overflow on narrow screens */
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Control buttons */
+.cw-ctrl-btn {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.09);
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s;
+  /* iOS: min 44px tap target already satisfied */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.cw-ctrl-btn--off {
+  background: rgba(181,67,47,0.22);
+  border-color: rgba(181,67,47,0.4);
+}
+.cw-ctrl-btn--end {
+  height: 48px;
+  padding: 0 20px;
+  border-radius: 40px;
+  background: #B5432F;
+  border: none;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 14px;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  white-space: nowrap;
+}
+
+/* Side panel column */
+.cw-side-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* PIP tile — desktop: bottom-right */
+.cw-pip-video {
+  position: absolute;
+  bottom: 14px;
+  right: 14px;
+  width: 180px;
+  height: 130px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(255,255,255,0.12);
+  background: #0a1f16;
+  overflow: hidden;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.6);
+  z-index: 10;
+}
+
+/* Visibility helpers */
+.hide-on-mobile  { display: initial; }
+.show-on-mobile  { display: none; }
+
+/* ── Tablet: 640–1023px ── */
+@media (max-width: 1023px) {
+  .cw-consultation-layout {
+    grid-template-columns: 1fr 300px;
+    gap: 12px;
+    padding: 12px;
+  }
+  .cw-pip-video {
+    width: 140px;
+    height: 100px;
+  }
+}
+
+/* ── Mobile: < 640px ── */
+@media (max-width: 639px) {
+  .cw-room-header {
+    height: 52px;
+    min-height: 52px;
+    padding: 0 12px;
+  }
+
+  .cw-consultation-layout {
+    /* Single column — side panel hidden, video fills full height */
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 8px;
+    /* Video stage must fill the space between header and control bar */
+    overflow: hidden;
+  }
+
+  /* Hide side panel on mobile — it becomes a bottom sheet */
+  .cw-side-panel { display: none; }
+
+  /* Video column fills the mobile layout */
+  .cw-video-col {
+    gap: 8px;
+  }
+
+  /* Control bar: tighter on mobile */
+  .cw-control-bar {
+    gap: 10px;
+    padding: 10px 16px;
+  }
+
+  /* Bigger tap targets on mobile */
+  .cw-ctrl-btn {
+    width: 52px;
+    height: 52px;
+    min-width: 52px;
+  }
+
+  /* PIP: top-right on mobile, clear of the "muted" badge */
+  .cw-pip-video {
+    bottom: auto;
+    top: 48px;   /* below name badge */
+    right: 10px;
+    width: 96px;
+    height: 72px;
+    border-radius: 8px;
+  }
+
+  .hide-on-mobile { display: none !important; }
+  .show-on-mobile { display: flex !important; }
+  .show-on-mobile-inline { display: inline !important; }
+}
+
+/* Keep the old class name working too */
+.show-on-mobile-inline { display: none; }
+@media (max-width: 639px) {
+  .show-on-mobile-inline { display: inline !important; }
+}

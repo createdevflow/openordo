@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  openordo-db:
+    image: postgres:15-alpine
+    container_name: openordo-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-openordo}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-openordo_pass}
+      POSTGRES_DB: ${DB_NAME:-openordo}
+    volumes:
+      - openordo_postgres_data:/var/lib/postgresql/data
+    networks:
+      - openordo_net
+
+  openordo-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: openordo-app
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://${DB_USER:-openordo}:${DB_PASSWORD:-openordo_pass}@openordo-db:5432/${DB_NAME:-openordo}?schema=public
+      - NEXTAUTH_URL=https://openordo.com
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-your-secret-key-please-change}
+    depends_on:
+      - openordo-db
+    networks:
+      - openordo_net
+      - proxy
+    
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      
+      # HTTPS router
+      - "traefik.http.routers.openordo.rule=Host(`openordo.com`) || Host(`www.openordo.com`)"
+      - "traefik.http.routers.openordo.entrypoints=websecure"
+      - "traefik.http.routers.openordo.tls=true"
+      - "traefik.http.routers.openordo.tls.certresolver=le"
+      - "traefik.http.services.openordo.loadbalancer.server.port=3000"
+
+      # HTTP -> HTTPS redirect router
+      - "traefik.http.routers.openordo-http.rule=Host(`openordo.com`) || Host(`www.openordo.com`)"
+      - "traefik.http.routers.openordo-http.entrypoints=web"
+      - "traefik.http.routers.openordo-http.middlewares=openordo-https-redirect"
+      - "traefik.http.middlewares.openordo-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.openordo-https-redirect.redirectscheme.permanent=true"
+
+networks:
+  openordo_net:
+    name: openordo_internal_net
+  proxy:
+    external: true
+
+volumes:
+  openordo_postgres_data:
