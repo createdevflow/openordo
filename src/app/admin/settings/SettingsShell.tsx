@@ -141,7 +141,7 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
     setSavingGlobal(true)
     toast.promise(
       saveGlobalSettings(settingsToSave).then(res => {
-        if (res.error) throw new Error(res.error)
+        if ((res as any).error) throw new Error((res as any).error)
         return res
       }),
       {
