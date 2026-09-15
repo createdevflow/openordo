@@ -1,21 +1,35 @@
 "use client"
 
-import { useActionState, Suspense, useState } from "react"
-import { useSearchParams } from "next/navigation"
+import { useActionState, Suspense, useState, useEffect } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import { loginAction } from "@/server/actions/auth"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import Link from "next/link"
-import { Eye, EyeOff } from "lucide-react"
+import { Eye, EyeOff, CheckCircle2 } from "lucide-react"
 
 function LoginForm() {
   const [state, formAction, pending] = useActionState(loginAction, null)
   const [showPassword, setShowPassword] = useState(false)
   const searchParams = useSearchParams()
+  const router = useRouter()
   const callbackUrl = searchParams.get("callbackUrl") || ""
+  const verified = searchParams.get("verified")
+
+  useEffect(() => {
+    if (state?.redirectToOtp && state?.email) {
+      router.push(`/verify-otp?email=${encodeURIComponent(state.email)}`)
+    }
+  }, [state, router])
 
   return (
     <form action={formAction} className="space-y-4">
+      {verified && !state?.error && (
+        <div className="bg-forest-soft text-forest p-3 rounded-md text-[13px] font-medium flex items-center gap-2">
+          <CheckCircle2 size={16} /> Email verified! You can now sign in.
+        </div>
+      )}
+      
       {state?.error && (
         <div className="bg-coral-soft text-coral p-3 rounded-md text-[13px] font-medium">
           {state.error}

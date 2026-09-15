@@ -6,15 +6,16 @@ import { useState, useTransition } from "react"
 import { toast } from "sonner"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { togglePlatformFlag, toggleFeatureGlobal, createFeature, deleteFeature } from "@/server/actions/admin/flags"
-import { updateAdminCredentials } from "@/server/actions/admin/settings"
-import { ShieldAlert, Zap, Package, Palette, User, AlertTriangle, Plus, Trash2, Globe } from "lucide-react"
+import { saveGlobalSettings } from "@/server/actions/admin/global-settings"
+import { ShieldAlert, Zap, Package, Palette, User, AlertTriangle, Plus, Trash2, Globe, Mail } from "lucide-react"
 
 const FEATURE_CATEGORIES = ["Core", "Scheduling", "Billing", "Communication", "Support"]
 
-export function SettingsShell({ flags, features, plans, adminEmail }: {
+export function SettingsShell({ flags, features, plans, globalSettings, adminEmail }: {
   flags: any[]
   features: any[]
   plans: any[]
+  globalSettings: Record<string, string>
   adminEmail: string
 }) {
   const { confirm } = useConfirm()
@@ -89,6 +90,37 @@ export function SettingsShell({ flags, features, plans, adminEmail }: {
     })
   }
 
+  // Global Settings State
+  const [smtpSettings, setSmtpSettings] = useState({
+    SMTP_HOST: globalSettings.SMTP_HOST || "",
+    SMTP_PORT: globalSettings.SMTP_PORT || "587",
+    SMTP_USER: globalSettings.SMTP_USER || "",
+    SMTP_PASS: globalSettings.SMTP_PASS || "",
+    SMTP_FROM: globalSettings.SMTP_FROM || "",
+  })
+  const [seoSettings, setSeoSettings] = useState({
+    SEO_META_TITLE: globalSettings.SEO_META_TITLE || "OpenORDO Admin",
+    SEO_META_DESC: globalSettings.SEO_META_DESC || "Automating your clinic",
+    SEO_FAVICON_URL: globalSettings.SEO_FAVICON_URL || "",
+    SEO_OG_IMAGE_URL: globalSettings.SEO_OG_IMAGE_URL || "",
+  })
+  const [paymentSettings, setPaymentSettings] = useState({
+    STRIPE_SECRET_KEY: globalSettings.STRIPE_SECRET_KEY || "",
+    STRIPE_WEBHOOK_SECRET: globalSettings.STRIPE_WEBHOOK_SECRET || "",
+    STRIPE_PUBLIC_KEY: globalSettings.STRIPE_PUBLIC_KEY || "",
+  })
+
+  const [savingGlobal, setSavingGlobal] = useState(false)
+  
+  const handleSaveGlobal = async (settingsToSave: Record<string, string>) => {
+    setSavingGlobal(true)
+    toast.promise(saveGlobalSettings(settingsToSave), {
+      loading: "Saving settings…",
+      success: () => { setSavingGlobal(false); return "Settings updated" },
+      error: () => { setSavingGlobal(false); return "Failed to save settings" },
+    })
+  }
+
   return (
     <div>
       <div className="adm-page-head">
@@ -105,7 +137,8 @@ export function SettingsShell({ flags, features, plans, adminEmail }: {
                   { value: "flags", label: "Feature Flags", icon: <Zap size={14} /> },
                   { value: "catalog", label: "Feature Catalog", icon: <Package size={14} /> },
                   { value: "billing", label: "Plans & Billing", icon: <Globe size={14} /> },
-                  { value: "branding", label: "Branding", icon: <Palette size={14} /> },
+                  { value: "email", label: "Email & SMTP", icon: <Mail size={14} /> },
+                  { value: "branding", label: "Branding & SEO", icon: <Palette size={14} /> },
                   { value: "account", label: "Account", icon: <User size={14} /> },
                   { value: "danger", label: "Danger Zone", icon: <AlertTriangle size={14} /> },
                 ].map(tab => (
@@ -289,33 +322,89 @@ export function SettingsShell({ flags, features, plans, adminEmail }: {
               <div className="adm-info-box" style={{ marginTop: 8 }}>
                 <Zap size={16} style={{ flexShrink: 0, marginTop: 2 }} />
                 <span>
-                  <strong>Stripe mode:</strong> {process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "🟢 Live" : "🟡 Test (no charges)"} — reflects the API key in .env
+                  <strong>Stripe mode:</strong> {paymentSettings.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "🟢 Live" : "🟡 Test (no charges)"}
                 </span>
               </div>
-              <button className="adm-btn adm-btn-primary" style={{ alignSelf: "flex-start" }}>Save Billing Defaults</button>
+              <div style={{ marginTop: 16 }}>
+                <div className="adm-section-label" style={{ marginBottom: 16 }}>Payment Gateway (Stripe)</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  <div>
+                    <label className="adm-label">Stripe Public Key</label>
+                    <input className="adm-input" value={paymentSettings.STRIPE_PUBLIC_KEY} onChange={e => setPaymentSettings(p => ({...p, STRIPE_PUBLIC_KEY: e.target.value}))} placeholder="pk_test_..." />
+                  </div>
+                  <div>
+                    <label className="adm-label">Stripe Secret Key</label>
+                    <input className="adm-input" type="password" value={paymentSettings.STRIPE_SECRET_KEY} onChange={e => setPaymentSettings(p => ({...p, STRIPE_SECRET_KEY: e.target.value}))} placeholder="sk_test_..." />
+                  </div>
+                  <div>
+                    <label className="adm-label">Stripe Webhook Secret</label>
+                    <input className="adm-input" type="password" value={paymentSettings.STRIPE_WEBHOOK_SECRET} onChange={e => setPaymentSettings(p => ({...p, STRIPE_WEBHOOK_SECRET: e.target.value}))} placeholder="whsec_..." />
+                  </div>
+                </div>
+              </div>
+              <button className="adm-btn adm-btn-primary" style={{ alignSelf: "flex-start" }} onClick={() => handleSaveGlobal(paymentSettings)} disabled={savingGlobal}>
+                {savingGlobal ? "Saving..." : "Save Billing Settings"}
+              </button>
+            </div>
+          </Tabs.Content>
+
+          {/* ── Email & SMTP ── */}
+          <Tabs.Content value="email" className="adm-tab-content">
+            <div className="adm-section-label" style={{ marginBottom: 16 }}>SMTP Email Configuration</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 520 }}>
+              <div>
+                <label className="adm-label">SMTP Host</label>
+                <input className="adm-input" value={smtpSettings.SMTP_HOST} onChange={e => setSmtpSettings(p => ({...p, SMTP_HOST: e.target.value}))} placeholder="smtp.gmail.com or smtp.mailtrap.io" />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <label className="adm-label">SMTP Port</label>
+                  <input className="adm-input" value={smtpSettings.SMTP_PORT} onChange={e => setSmtpSettings(p => ({...p, SMTP_PORT: e.target.value}))} placeholder="587" />
+                </div>
+                <div>
+                  <label className="adm-label">From Address</label>
+                  <input className="adm-input" value={smtpSettings.SMTP_FROM} onChange={e => setSmtpSettings(p => ({...p, SMTP_FROM: e.target.value}))} placeholder="OpenORDO <noreply@openordo.com>" />
+                </div>
+              </div>
+              <div>
+                <label className="adm-label">SMTP Username</label>
+                <input className="adm-input" value={smtpSettings.SMTP_USER} onChange={e => setSmtpSettings(p => ({...p, SMTP_USER: e.target.value}))} />
+              </div>
+              <div>
+                <label className="adm-label">SMTP Password</label>
+                <input className="adm-input" type="password" value={smtpSettings.SMTP_PASS} onChange={e => setSmtpSettings(p => ({...p, SMTP_PASS: e.target.value}))} />
+              </div>
+              <button className="adm-btn adm-btn-primary" style={{ alignSelf: "flex-start" }} onClick={() => handleSaveGlobal(smtpSettings)} disabled={savingGlobal}>
+                {savingGlobal ? "Saving..." : "Save SMTP Settings"}
+              </button>
             </div>
           </Tabs.Content>
 
           {/* ── Branding ── */}
           <Tabs.Content value="branding" className="adm-tab-content">
-            <div className="adm-section-label" style={{ marginBottom: 16 }}>Platform Branding</div>
+            <div className="adm-section-label" style={{ marginBottom: 16 }}>Platform Branding & SEO</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 520 }}>
               <div>
                 <label className="adm-label">Admin Panel Display Name</label>
-                <input className="adm-input" defaultValue="OpenORDO Super Admin" />
-                <p style={{ fontSize: 12.5, color: "var(--adm-muted)", marginTop: 6 }}>Shown in the topbar and emails.</p>
+                <input className="adm-input" value={seoSettings.SEO_META_TITLE} onChange={e => setSeoSettings(p => ({...p, SEO_META_TITLE: e.target.value}))} />
+                <p style={{ fontSize: 12.5, color: "var(--adm-muted)", marginTop: 6 }}>Shown in the topbar and browser title.</p>
               </div>
               <div>
-                <label className="adm-label">Support Email</label>
-                <input className="adm-input" type="email" defaultValue="support@openordo.com" />
-                <p style={{ fontSize: 12.5, color: "var(--adm-muted)", marginTop: 6 }}>Shown on suspended and expired plan screens.</p>
+                <label className="adm-label">Meta Description</label>
+                <input className="adm-input" value={seoSettings.SEO_META_DESC} onChange={e => setSeoSettings(p => ({...p, SEO_META_DESC: e.target.value}))} />
               </div>
               <div>
-                <label className="adm-label">Platform Logo URL (optional)</label>
-                <input className="adm-input" type="url" placeholder="https://…/logo.png" />
-                <p style={{ fontSize: 12.5, color: "var(--adm-muted)", marginTop: 6 }}>Used in emails and the onboarding flow. Leave blank to use text logo.</p>
+                <label className="adm-label">Favicon URL</label>
+                <input className="adm-input" type="url" value={seoSettings.SEO_FAVICON_URL} onChange={e => setSeoSettings(p => ({...p, SEO_FAVICON_URL: e.target.value}))} placeholder="https://…/favicon.ico" />
               </div>
-              <button className="adm-btn adm-btn-primary" style={{ alignSelf: "flex-start" }}>Save Branding</button>
+              <div>
+                <label className="adm-label">OpenGraph (OG) Image URL</label>
+                <input className="adm-input" type="url" value={seoSettings.SEO_OG_IMAGE_URL} onChange={e => setSeoSettings(p => ({...p, SEO_OG_IMAGE_URL: e.target.value}))} placeholder="https://…/og-image.jpg" />
+                <p style={{ fontSize: 12.5, color: "var(--adm-muted)", marginTop: 6 }}>This image appears when a link to your site is shared on social media.</p>
+              </div>
+              <button className="adm-btn adm-btn-primary" style={{ alignSelf: "flex-start" }} onClick={() => handleSaveGlobal(seoSettings)} disabled={savingGlobal}>
+                {savingGlobal ? "Saving..." : "Save Branding & SEO"}
+              </button>
             </div>
           </Tabs.Content>
 

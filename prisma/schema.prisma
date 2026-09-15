@@ -16,7 +16,7 @@ model User {
   passwordHash  String?
   image         String?
   platformRole  String       @default("USER") // Enum PlatformRole
-  status        String       @default("ACTIVE") // ACTIVE, BANNED, SOFT_DELETED
+  status        String       @default("ACTIVE") // ACTIVE, PENDING_VERIFICATION, BANNED, SOFT_DELETED
   deletedAt     DateTime?
   activeClinicId String?
   onboardingStep String      @default("CLINIC_DETAILS")
@@ -427,5 +427,23 @@ model Prescription {
   clinic  Clinic  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
   doctor  Doctor  @relation(fields: [doctorId], references: [id])
+}
+
+// ─── Global Settings & Auth ───────────────────────────────────────────────────
+
+model GlobalSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model OtpToken {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
 }
 

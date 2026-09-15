@@ -1,8 +1,8 @@
 "use client"
 
 import React, { useState, Suspense } from "react"
-import { useActionState } from "react"
-import { useSearchParams } from "next/navigation"
+import { useActionState, useEffect } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import { registerAccountAction } from "@/server/actions/auth"
 import Link from "next/link"
 import { Eye, EyeOff, ChevronDown, Check } from "lucide-react"
@@ -49,6 +49,7 @@ function getPasswordStrength(password: string): { score: number; label: string; 
 
 function RegisterForm() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const planParam = searchParams.get("plan") || ""
 
   const planInfo: Record<string, { name: string; badge: string }> = {
@@ -76,6 +77,12 @@ function RegisterForm() {
     c.name.toLowerCase().includes(countrySearch.toLowerCase()) ||
     c.code.includes(countrySearch)
   )
+
+  useEffect(() => {
+    if (state?.redirectToOtp && state?.email) {
+      router.push(`/verify-otp?email=${encodeURIComponent(state.email)}`)
+    }
+  }, [state, router])
 
   const tips = [
     { met: password.length >= 8, text: "At least 8 characters" },

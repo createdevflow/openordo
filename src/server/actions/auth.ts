@@ -6,6 +6,7 @@ import { z } from "zod"
 import { db } from "@/lib/db"
 import bcrypt from "bcryptjs"
 import { cookies } from "next/headers"
+import { sendVerificationOtp, sendPasswordResetEmail } from "@/lib/email"
 
 export async function loginAction(prevState: any, formData: FormData) {
   const rawIdentifier = ((formData.get("identifier") || formData.get("email")) as string)?.trim()
@@ -36,6 +37,11 @@ export async function loginAction(prevState: any, formData: FormData) {
 
   if (user?.status === "BANNED") {
     return { error: "Your account has been suspended. Please contact support." }
+  }
+
+  if (user?.status === "PENDING_VERIFICATION") {
+    // Cannot login yet. Redirect to OTP page.
+    return { redirectToOtp: true, email: user.email }
   }
 
   // Determine redirect URL
@@ -115,32 +121,30 @@ export async function registerAccountAction(prevState: any, formData: FormData) 
 
   const passwordHash = await bcrypt.hash(password, 10)
 
-  await db.user.create({
+  const newUser = await db.user.create({
     data: {
       name,
       email,
       passwordHash,
       username,
       onboardingStep: "CLINIC_DETAILS",
-      status: "ACTIVE",
+      status: "PENDING_VERIFICATION",
       ...(phone ? { phone } : {})
     }
   })
 
-  // Auto login and immediately redirect to onboarding
-  const authData = new FormData()
-  authData.set("email", email)
-  authData.set("password", password)
-  authData.set("redirectTo", "/onboarding/clinic")
+  // Generate 6-digit OTP
+  const otpCode = Math.floor(100000 + Math.random() * 900000).toString()
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000) // 15 mins
 
-  try {
-    await signIn("credentials", authData)
-  } catch (error) {
-    if (error instanceof AuthError) {
-      return { error: "Account created! Please log in to continue." }
-    }
-    throw error // Important: Next.js NEXT_REDIRECT must be rethrown!
-  }
+  await (db as any).otpToken.create({
+    data: { email, code: otpCode, expiresAt }
+  })
+
+  // Send OTP
+  await sendVerificationOtp(email, otpCode)
+
+  return { redirectToOtp: true, email }
 }
 
 export async function forgotPasswordAction(prevState: any, formData: FormData) {
@@ -176,8 +180,7 @@ export async function forgotPasswordAction(prevState: any, formData: FormData) {
       }
     })
 
-    // In a production setup, send email via nodemailer / Resend / Postmark
-    console.log(`[PASSWORD RESET LINK] For ${email}: /reset-password?token=${token}`)
+    await sendPasswordResetEmail(email, token)
   }
 
   // Always return success for security (prevents user enumeration)

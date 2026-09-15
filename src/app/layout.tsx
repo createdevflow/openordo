@@ -20,10 +20,37 @@ const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "OpenORDO",
-  description: "Clinic management system",
-};
+import { db } from "@/lib/db";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await db.globalSetting.findMany({
+    where: { key: { in: ["SEO_META_TITLE", "SEO_META_DESC", "SEO_FAVICON_URL", "SEO_OG_IMAGE_URL"] } }
+  }).catch(() => []);
+
+  const config = settings.reduce((acc: Record<string, string>, s) => {
+    acc[s.key] = s.value;
+    return acc;
+  }, {});
+
+  const title = config.SEO_META_TITLE || "OpenORDO";
+  const description = config.SEO_META_DESC || "Clinic management system";
+  const favicon = config.SEO_FAVICON_URL || "/favicon.ico";
+  const ogImage = config.SEO_OG_IMAGE_URL || "";
+
+  return {
+    title: {
+      template: \`%s | \${title}\`,
+      default: title,
+    },
+    description,
+    icons: {
+      icon: favicon,
+    },
+    openGraph: ogImage ? {
+      images: [ogImage],
+    } : undefined,
+  };
+}
 
 export default function RootLayout({
   children,
