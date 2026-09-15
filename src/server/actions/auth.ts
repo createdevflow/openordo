@@ -4,7 +4,7 @@ import { signIn } from "@/lib/auth"
 import { AuthError } from "next-auth"
 import { z } from "zod"
 import { db } from "@/lib/db"
-import bcrypt from "bcrypt"
+import bcrypt from "bcryptjs"
 import { cookies } from "next/headers"
 
 export async function loginAction(prevState: any, formData: FormData) {

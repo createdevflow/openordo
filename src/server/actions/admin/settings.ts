@@ -3,7 +3,7 @@
 import { db } from "@/lib/db"
 import { revalidatePath } from "next/cache"
 import { requireSuperAdmin, logAudit } from "../admin-base"
-import bcrypt from "bcrypt"
+import bcrypt from "bcryptjs"
 
 export async function updateAdminCredentialsAction(formData: FormData) {
   try {
