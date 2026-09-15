@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { togglePlatformFlag, toggleFeatureGlobal, createFeature, deleteFeature } from "@/server/actions/admin/flags"
 import { saveGlobalSettings, uploadBrandingAsset } from "@/server/actions/admin/global-settings"
+import { updateAdminCredentials } from "@/server/actions/admin/settings"
 import { ShieldAlert, Zap, Package, Palette, User, AlertTriangle, Plus, Trash2, Globe, Mail } from "lucide-react"
 
 const FEATURE_CATEGORIES = ["Core", "Scheduling", "Billing", "Communication", "Support"]
