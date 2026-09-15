@@ -6,7 +6,7 @@ import { useState, useTransition } from "react"
 import { toast } from "sonner"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { togglePlatformFlag, toggleFeatureGlobal, createFeature, deleteFeature } from "@/server/actions/admin/flags"
-import { saveGlobalSettings } from "@/server/actions/admin/global-settings"
+import { saveGlobalSettings, uploadBrandingAsset } from "@/server/actions/admin/global-settings"
 import { ShieldAlert, Zap, Package, Palette, User, AlertTriangle, Plus, Trash2, Globe, Mail } from "lucide-react"
 
 const FEATURE_CATEGORIES = ["Core", "Scheduling", "Billing", "Communication", "Support"]
@@ -119,6 +119,29 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
       success: () => { setSavingGlobal(false); return "Settings updated" },
       error: () => { setSavingGlobal(false); return "Failed to save settings" },
     })
+  }
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, key: string) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const formData = new FormData()
+    formData.append("file", file)
+    formData.append("key", key)
+
+    setSavingGlobal(true)
+    try {
+      const res = await uploadBrandingAsset(formData)
+      if (res.success && res.url) {
+        if (key === "SEO_FAVICON_URL") setSeoSettings(p => ({...p, SEO_FAVICON_URL: res.url}))
+        if (key === "SEO_OG_IMAGE_URL") setSeoSettings(p => ({...p, SEO_OG_IMAGE_URL: res.url}))
+        toast.success("Image uploaded successfully")
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload image")
+    } finally {
+      setSavingGlobal(false)
+    }
   }
 
   return (
@@ -394,12 +417,22 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
                 <input className="adm-input" value={seoSettings.SEO_META_DESC} onChange={e => setSeoSettings(p => ({...p, SEO_META_DESC: e.target.value}))} />
               </div>
               <div>
-                <label className="adm-label">Favicon URL</label>
-                <input className="adm-input" type="url" value={seoSettings.SEO_FAVICON_URL} onChange={e => setSeoSettings(p => ({...p, SEO_FAVICON_URL: e.target.value}))} placeholder="https://…/favicon.ico" />
+                <label className="adm-label">Favicon</label>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  {seoSettings.SEO_FAVICON_URL && (
+                    <img src={seoSettings.SEO_FAVICON_URL} alt="Favicon" style={{ width: 32, height: 32, borderRadius: 4, objectFit: "cover", background: "#fff", border: "1px solid var(--adm-border)" }} />
+                  )}
+                  <input className="adm-input" type="file" accept="image/png, image/jpeg, image/x-icon, image/svg+xml" onChange={e => handleFileUpload(e, "SEO_FAVICON_URL")} disabled={savingGlobal} />
+                </div>
               </div>
               <div>
-                <label className="adm-label">OpenGraph (OG) Image URL</label>
-                <input className="adm-input" type="url" value={seoSettings.SEO_OG_IMAGE_URL} onChange={e => setSeoSettings(p => ({...p, SEO_OG_IMAGE_URL: e.target.value}))} placeholder="https://…/og-image.jpg" />
+                <label className="adm-label">OpenGraph (OG) Image</label>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {seoSettings.SEO_OG_IMAGE_URL && (
+                    <img src={seoSettings.SEO_OG_IMAGE_URL} alt="OG Image" style={{ width: "100%", maxWidth: 300, borderRadius: 8, objectFit: "cover", background: "#fff", border: "1px solid var(--adm-border)" }} />
+                  )}
+                  <input className="adm-input" type="file" accept="image/png, image/jpeg, image/webp" onChange={e => handleFileUpload(e, "SEO_OG_IMAGE_URL")} disabled={savingGlobal} />
+                </div>
                 <p style={{ fontSize: 12.5, color: "var(--adm-muted)", marginTop: 6 }}>This image appears when a link to your site is shared on social media.</p>
               </div>
               <button className="adm-btn adm-btn-primary" style={{ alignSelf: "flex-start" }} onClick={() => handleSaveGlobal(seoSettings)} disabled={savingGlobal}>

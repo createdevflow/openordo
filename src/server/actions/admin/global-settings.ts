@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db"
 import { revalidatePath } from "next/cache"
-import { auth } from "@/auth"
+import { auth } from "@/lib/auth"
 
 export async function saveGlobalSettings(settings: Record<string, string>) {
   const session = await auth()
@@ -22,6 +22,57 @@ export async function saveGlobalSettings(settings: Record<string, string>) {
   await db.$transaction(upserts)
 
   revalidatePath("/admin/settings")
-  revalidatePath("/") // Revalidate layout for SEO tags
+  revalidatePath("/") //  revalidatePath("/", "layout")
+
   return { success: true }
+}
+
+export async function uploadBrandingAsset(formData: FormData) {
+  const session = await auth()
+  if (session?.user?.platformRole !== "SUPER_ADMIN") {
+    throw new Error("Unauthorized")
+  }
+
+  const file = formData.get("file") as File
+  const key = formData.get("key") as string
+
+  if (!file || !key) {
+    throw new Error("Missing file or key")
+  }
+
+  if (key !== "SEO_FAVICON_URL" && key !== "SEO_OG_IMAGE_URL") {
+    throw new Error("Invalid key")
+  }
+
+  const fs = await import("fs/promises")
+  const path = await import("path")
+  const crypto = await import("crypto")
+
+  // Ensure public/uploads exists
+  const uploadsDir = path.join(process.cwd(), "public", "uploads")
+  await fs.mkdir(uploadsDir, { recursive: true })
+
+  // Generate unique filename
+  const ext = file.name.split(".").pop() || "png"
+  const random = crypto.randomBytes(8).toString("hex")
+  const filename = `${key.toLowerCase()}_${random}.${ext}`
+  const filepath = path.join(uploadsDir, filename)
+
+  // Save file
+  const arrayBuffer = await file.arrayBuffer()
+  const buffer = Buffer.from(arrayBuffer)
+  await fs.writeFile(filepath, buffer)
+
+  const url = `/uploads/${filename}`
+
+  // Update DB
+  await db.globalSetting.upsert({
+    where: { key },
+    update: { value: url },
+    create: { key, value: url },
+  })
+
+  revalidatePath("/", "layout")
+
+  return { success: true, url }
 }
