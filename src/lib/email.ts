@@ -4,7 +4,7 @@ import { db } from "./db"
 // Fetch SMTP credentials from the GlobalSetting table
 async function getSmtpConfig() {
   const settings = await db.globalSetting.findMany({
-    where: { key: { in: ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM"] } }
+    where: { key: { in: ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM", "SMTP_FROM_AUTH", "SMTP_FROM_BILLING", "SMTP_FROM_GENERAL"] } }
   })
 
   const config: Record<string, string> = {}
@@ -17,8 +17,25 @@ async function getSmtpConfig() {
     port: parseInt(config.SMTP_PORT || process.env.SMTP_PORT || "587", 10),
     user: config.SMTP_USER || process.env.SMTP_USER || "",
     pass: config.SMTP_PASS || process.env.SMTP_PASS || "",
-    from: config.SMTP_FROM || process.env.SMTP_FROM || "OpenORDO <noreply@openordo.com>",
+    from: (config.SMTP_FROM && config.SMTP_FROM.includes("@")) 
+      ? config.SMTP_FROM 
+      : (config.SMTP_FROM ? `${config.SMTP_FROM} <noreply@openordo.com>` : process.env.SMTP_FROM || "OpenORDO <noreply@openordo.com>"),
+    fromAuth: config.SMTP_FROM_AUTH || "",
+    fromBilling: config.SMTP_FROM_BILLING || "",
+    fromGeneral: config.SMTP_FROM_GENERAL || "",
   }
+}
+
+function getFromAddress(category: 'auth' | 'billing' | 'general' | 'default', config: any) {
+  let selected = config.from
+  if (category === 'auth' && config.fromAuth) selected = config.fromAuth
+  if (category === 'billing' && config.fromBilling) selected = config.fromBilling
+  if (category === 'general' && config.fromGeneral) selected = config.fromGeneral
+
+  if (selected && !selected.includes("@")) {
+    return `${selected} <noreply@openordo.com>`
+  }
+  return selected
 }
 
 async function getTransporter() {
@@ -86,7 +103,7 @@ export async function sendVerificationOtp(email: string, code: string) {
 
   try {
     await transporter.sendMail({
-      from: config.from,
+      from: getFromAddress('auth', config),
       to: email,
       subject: "OpenORDO - Email Verification Code",
       html,
@@ -118,7 +135,7 @@ export async function sendPasswordResetEmail(email: string, resetToken: string) 
 
   try {
     await transporter.sendMail({
-      from: config.from,
+      from: getFromAddress('auth', config),
       to: email,
       subject: "OpenORDO - Password Reset Request",
       html,
@@ -126,6 +143,32 @@ export async function sendPasswordResetEmail(email: string, resetToken: string) 
     return true
   } catch (error) {
     console.error("Failed to send password reset email:", error)
+    return false
+  }
+}
+
+export async function sendTestEmail(email: string) {
+  const transporter = await getTransporter()
+  if (!transporter) return false
+
+  const config = await getSmtpConfig()
+
+  const html = baseTemplate(`
+    <h2 style="margin-top: 0; color: #1E4638;">Test Email Configuration</h2>
+    <p style="color: #4A6B5C;">Hello from OpenORDO!</p>
+    <p style="color: #4A6B5C;">If you are reading this, your SMTP settings are configured correctly.</p>
+  `)
+
+  try {
+    await transporter.sendMail({
+      from: getFromAddress('general', config),
+      to: email,
+      subject: "OpenORDO - SMTP Test Successful",
+      html,
+    })
+    return true
+  } catch (error) {
+    console.error("Failed to send test email:", error)
     return false
   }
 }

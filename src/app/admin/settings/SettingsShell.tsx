@@ -6,7 +6,7 @@ import { useState, useTransition } from "react"
 import { toast } from "sonner"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { togglePlatformFlag, toggleFeatureGlobal, createFeature, deleteFeature } from "@/server/actions/admin/flags"
-import { saveGlobalSettings, uploadBrandingAsset } from "@/server/actions/admin/global-settings"
+import { saveGlobalSettings, uploadBrandingAsset, sendTestEmailAction } from "@/server/actions/admin/global-settings"
 import { updateAdminCredentials } from "@/server/actions/admin/settings"
 import { ShieldAlert, Zap, Package, Palette, User, AlertTriangle, Plus, Trash2, Globe, Mail } from "lucide-react"
 
@@ -98,6 +98,9 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
     SMTP_USER: globalSettings.SMTP_USER || "",
     SMTP_PASS: globalSettings.SMTP_PASS || "",
     SMTP_FROM: globalSettings.SMTP_FROM || "",
+    SMTP_FROM_AUTH: globalSettings.SMTP_FROM_AUTH || "",
+    SMTP_FROM_BILLING: globalSettings.SMTP_FROM_BILLING || "",
+    SMTP_FROM_GENERAL: globalSettings.SMTP_FROM_GENERAL || "",
   })
   const [seoSettings, setSeoSettings] = useState({
     SEO_META_TITLE: globalSettings.SEO_META_TITLE || "OpenORDO Admin",
@@ -112,14 +115,41 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
   })
 
   const [savingGlobal, setSavingGlobal] = useState(false)
+  const [testEmail, setTestEmail] = useState("")
+  const [testingEmail, setTestingEmail] = useState(false)
+  
+  const handleTestEmail = async () => {
+    if (!testEmail) {
+      toast.error("Please enter an email address")
+      return
+    }
+    setTestingEmail(true)
+    toast.promise(
+      sendTestEmailAction(testEmail).then(res => {
+        if (res.error) throw new Error(res.error)
+        return res
+      }), 
+      {
+        loading: "Sending test email…",
+        success: () => { setTestingEmail(false); return "Test email sent successfully!" },
+        error: (err: any) => { setTestingEmail(false); return err.message || "Failed to send test email" },
+      }
+    )
+  }
   
   const handleSaveGlobal = async (settingsToSave: Record<string, string>) => {
     setSavingGlobal(true)
-    toast.promise(saveGlobalSettings(settingsToSave), {
-      loading: "Saving settings…",
-      success: () => { setSavingGlobal(false); return "Settings updated" },
-      error: () => { setSavingGlobal(false); return "Failed to save settings" },
-    })
+    toast.promise(
+      saveGlobalSettings(settingsToSave).then(res => {
+        if (res.error) throw new Error(res.error)
+        return res
+      }),
+      {
+        loading: "Saving settings…",
+        success: () => { setSavingGlobal(false); return "Settings updated" },
+        error: (err: any) => { setSavingGlobal(false); return err.message || "Failed to save settings" },
+      }
+    )
   }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, key: string) => {
@@ -401,6 +431,43 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
               <button className="adm-btn adm-btn-primary" style={{ alignSelf: "flex-start" }} onClick={() => handleSaveGlobal(smtpSettings)} disabled={savingGlobal}>
                 {savingGlobal ? "Saving..." : "Save SMTP Settings"}
               </button>
+            </div>
+
+            <hr style={{ border: 0, borderTop: "1px solid var(--adm-border)", margin: "32px 0", maxWidth: 520 }} />
+
+            <div className="adm-section-label" style={{ marginBottom: 16 }}>Email Routing (Optional)</div>
+            <p style={{ fontSize: 13, color: "var(--adm-muted)", marginBottom: 16, maxWidth: 520 }}>
+              Specify different sender addresses for different types of emails. If left blank, the default "From Address" above will be used. You can use full formats like <code>Billing &lt;billing@openordo.com&gt;</code>.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 520 }}>
+              <div>
+                <label className="adm-label">Auth & Security (OTP, Password Reset)</label>
+                <input className="adm-input" value={smtpSettings.SMTP_FROM_AUTH} onChange={e => setSmtpSettings(p => ({...p, SMTP_FROM_AUTH: e.target.value}))} placeholder="e.g. Auth <security@openordo.com>" />
+              </div>
+              <div>
+                <label className="adm-label">Billing & Subscriptions (Invoices, Receipts)</label>
+                <input className="adm-input" value={smtpSettings.SMTP_FROM_BILLING} onChange={e => setSmtpSettings(p => ({...p, SMTP_FROM_BILLING: e.target.value}))} placeholder="e.g. Billing <billing@openordo.com>" />
+              </div>
+              <div>
+                <label className="adm-label">General (System Alerts, General Info)</label>
+                <input className="adm-input" value={smtpSettings.SMTP_FROM_GENERAL} onChange={e => setSmtpSettings(p => ({...p, SMTP_FROM_GENERAL: e.target.value}))} placeholder="e.g. OpenORDO <hello@openordo.com>" />
+              </div>
+              <button className="adm-btn adm-btn-primary" style={{ alignSelf: "flex-start" }} onClick={() => handleSaveGlobal(smtpSettings)} disabled={savingGlobal}>
+                {savingGlobal ? "Saving..." : "Save Routing Settings"}
+              </button>
+            </div>
+
+            <hr style={{ border: 0, borderTop: "1px solid var(--adm-border)", margin: "32px 0", maxWidth: 520 }} />
+
+            <div className="adm-section-label" style={{ marginBottom: 16 }}>Test Configuration</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 520, background: "var(--adm-bg)", padding: 20, borderRadius: 8, border: "1px solid var(--adm-border)" }}>
+              <p style={{ fontSize: 13, margin: 0, color: "var(--adm-muted)" }}>Send a test email to verify your SMTP settings and routing are working correctly. (Uses General Routing)</p>
+              <div style={{ display: "flex", gap: 12 }}>
+                <input className="adm-input" type="email" placeholder="Test email address" value={testEmail} onChange={e => setTestEmail(e.target.value)} style={{ flex: 1 }} />
+                <button className="adm-btn adm-btn-primary" onClick={handleTestEmail} disabled={testingEmail}>
+                  {testingEmail ? "Sending..." : "Send Test"}
+                </button>
+              </div>
             </div>
           </Tabs.Content>
 

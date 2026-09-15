@@ -3,6 +3,7 @@
 import { db } from "@/lib/db"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
+import { sendTestEmail } from "@/lib/email"
 
 export async function saveGlobalSettings(settings: Record<string, string>) {
   const session = await auth()
@@ -24,6 +25,24 @@ export async function saveGlobalSettings(settings: Record<string, string>) {
   revalidatePath("/admin/settings")
   revalidatePath("/") //  revalidatePath("/", "layout")
 
+  return { success: true }
+}
+
+export async function sendTestEmailAction(email: string) {
+  const session = await auth()
+  if (session?.user?.platformRole !== "SUPER_ADMIN") {
+    throw new Error("Unauthorized")
+  }
+  
+  if (!email || !email.includes("@")) {
+    return { error: "Invalid email address" }
+  }
+
+  const result = await sendTestEmail(email)
+  if (!result) {
+    return { error: "Failed to send email. Check your SMTP settings." }
+  }
+  
   return { success: true }
 }
 
