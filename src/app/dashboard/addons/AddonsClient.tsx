@@ -173,7 +173,7 @@ export function AddonsClient({ availablePlugins, ownedPlugins, currency }: Addon
                 const Icon = ICON_MAP[p.icon] || Puzzle
                 const categoryColor = p.category === "Clinical" ? "#14b8a6" : "#8b5cf6"
                 return (
-                  <div key={cp.id} className="cw-myaddon-card" style={{ padding: 20, gap: 0, justifyContent: "space-between" }}>
+                  <div key={cp.id} className="cw-myaddon-card" style={{ padding: 20, gap: 0, justifyContent: "space-between", height: "100%" }}>
                     <div>
                       {/* Top Row: Icon, Name, Toggle */}
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>

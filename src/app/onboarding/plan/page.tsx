@@ -56,44 +56,15 @@ export default async function OnboardingPlanPage() {
       .map(pf => pf.feature.name)
 
     let displayFeatures: string[] = []
-    if (customBullets.length > 0) {
-      displayFeatures = customBullets
-    } else if (p.name.toLowerCase().includes("starter")) {
+    
+    // Combine DB catalog features and custom extra bullets
+    displayFeatures = [...catalogFeatures, ...customBullets]
+
+    // Fallback if absolutely no features are defined for this plan in DB yet
+    if (displayFeatures.length === 0) {
       displayFeatures = [
-        "1 Doctor account",
-        "Up to 250 patient records",
-        "Visual appointment calendar",
-        "Patient medical history",
-        "Doctor profile & schedule",
-        "Automated daily backups",
-      ]
-    } else if (p.name.toLowerCase().includes("practice")) {
-      displayFeatures = [
-        "Up to 5 Doctor accounts",
-        "Unlimited patient records",
-        "Visual appointment calendar",
-        "Online booking page",
-        "Invoicing & billing",
-        "Automated SMS/email reminders",
-        "Waitlist management",
-      ]
-    } else if (p.name.toLowerCase().includes("group")) {
-      displayFeatures = [
-        "Unlimited Doctor accounts",
-        "Unlimited patient records",
-        "All Practice plan features",
-        "Multi-doctor simultaneous scheduling",
-        "Insurance tracking & processing",
-        "Revenue reports & analytics export",
-        "Clinic data export (CSV/PDF)",
-      ]
-    } else if (catalogFeatures.length > 0) {
-      displayFeatures = catalogFeatures
-    } else {
-      displayFeatures = [
-        "Patient management",
-        "Appointment calendar",
-        "Doctor profiles",
+        "Core clinic management",
+        "Basic reporting"
       ]
     }
 

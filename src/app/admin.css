@@ -114,6 +114,22 @@
   flex-direction: column;
   gap: 2px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.15) transparent;
+}
+
+.adm-nav::-webkit-scrollbar {
+  width: 4px;
+}
+.adm-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+.adm-nav::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.15);
+  border-radius: 4px;
+}
+.adm-nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.25);
 }
 
 .adm-nav-section {

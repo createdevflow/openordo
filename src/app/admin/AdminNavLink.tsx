@@ -17,6 +17,10 @@ const NAV_MANAGE = [
   { href: "/admin/users",      label: "Users",      icon: UsersIcon },
 ]
 
+const NAV_CRM = [
+  { href: "/admin/leads",      label: "Contact Leads", icon: UsersIcon }, // Using UsersIcon as generic
+]
+
 const NAV_BILLING = [
   { href: "/admin/plans",       label: "Plans",       icon: Package },
   { href: "/admin/plugins",     label: "Plugins",     icon: Puzzle },
@@ -64,6 +68,15 @@ export function AdminNav({ onNavigate }: { onNavigate?: () => void }) {
       <NavGroup label="" items={NAV_TOP} pathname={pathname} onNavigate={onNavigate} />
       <div className="adm-nav-section">Manage</div>
       {NAV_MANAGE.map(({ href, label, icon: Icon }) => {
+        const isActive = pathname.startsWith(href)
+        return (
+          <Link key={href} href={href} onClick={onNavigate} className={`adm-nav-link${isActive ? " active" : ""}`}>
+            <Icon size={15} /> {label}
+          </Link>
+        )
+      })}
+      <div className="adm-nav-section">Marketing & CRM</div>
+      {NAV_CRM.map(({ href, label, icon: Icon }) => {
         const isActive = pathname.startsWith(href)
         return (
           <Link key={href} href={href} onClick={onNavigate} className={`adm-nav-link${isActive ? " active" : ""}`}>

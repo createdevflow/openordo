@@ -103,7 +103,7 @@ export function PluginCard({
 
   if (variant === "addons" || variant === "admin") {
     return (
-      <div className="plugin-card" style={{ padding: 20, gap: 0, justifyContent: "space-between" }}>
+      <div className="plugin-card" style={{ padding: 20, gap: 0, justifyContent: "space-between", height: "100%" }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
             <div style={{

@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -446,4 +446,16 @@ model OtpToken {
 
   @@index([email])
 }
+
+// ─── Marketing / CRM ──────────────────────────────────────────────────────────
+
+model ContactLead {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  message   String
+  status    String   @default("NEW") // "NEW", "CONTACTED", "ARCHIVED"
+  createdAt DateTime @default(now())
+}
+
 

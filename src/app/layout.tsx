@@ -34,7 +34,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
   const title = config.SEO_META_TITLE || "OpenORDO";
   const description = config.SEO_META_DESC || "Clinic management system";
-  const favicon = config.SEO_FAVICON_URL || "/favicon.ico";
+  const favicon = config.SEO_FAVICON_URL || null;
   const ogImage = config.SEO_OG_IMAGE_URL || "";
 
   return {
@@ -43,12 +43,12 @@ export async function generateMetadata(): Promise<Metadata> {
       default: title,
     },
     description,
-    icons: {
-      icon: favicon,
+    ...(favicon ? { icons: { icon: favicon } } : {}),
+    openGraph: {
+      title,
+      description,
+      ...(ogImage ? { images: [{ url: ogImage }] } : {}),
     },
-    openGraph: ogImage ? {
-      images: [ogImage],
-    } : undefined,
   };
 }
 

@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  openordo-db-dev:
+    image: postgres:15-alpine
+    container_name: openordo-db-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: openordo
+      POSTGRES_PASSWORD: openordo_pass
+      POSTGRES_DB: openordo
+    ports:
+      - "5434:5432"
+    volumes:
+      - openordo_postgres_data_dev:/var/lib/postgresql/data
+
+volumes:
+  openordo_postgres_data_dev:

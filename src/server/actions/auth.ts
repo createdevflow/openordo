@@ -5,13 +5,24 @@ import { AuthError } from "next-auth"
 import { z } from "zod"
 import { db } from "@/lib/db"
 import bcrypt from "bcryptjs"
-import { cookies } from "next/headers"
+import { cookies, headers } from "next/headers"
 import { sendVerificationOtp, sendPasswordResetEmail } from "@/lib/email"
+import { checkRateLimit, applyProgressiveDelay } from "@/lib/rate-limit"
 
 export async function loginAction(prevState: any, formData: FormData) {
   const rawIdentifier = ((formData.get("identifier") || formData.get("email")) as string)?.trim()
   const password = formData.get("password") as string
   const callbackUrl = formData.get("callbackUrl") as string
+
+  const headersList = await headers()
+  const ip = headersList.get("x-forwarded-for") || "unknown"
+  if (!checkRateLimit(`login_${ip}`, 10, 15 * 60 * 1000)) {
+    return { error: "Too many login attempts. Please try again later." }
+  }
+  if (rawIdentifier && !checkRateLimit(`login_${rawIdentifier}`, 5, 15 * 60 * 1000)) {
+    return { error: "Too many login attempts. Please try again later." }
+  }
+  await applyProgressiveDelay(`login_${rawIdentifier}`, 500)
 
   if (!rawIdentifier || !password) {
     return { error: "Please enter your email or phone number and password." }
@@ -87,6 +98,11 @@ export async function registerAccountAction(prevState: any, formData: FormData) 
   const phone = phoneRaw ? `${countryCode}${phoneRaw.replace(/^0+/, "")}` : undefined
   const selectedPlan = (formData.get("selectedPlan") as string)?.trim()
 
+  const headersList = await headers()
+  const ip = headersList.get("x-forwarded-for") || "unknown"
+  if (!checkRateLimit(`register_${ip}`, 5, 60 * 60 * 1000)) {
+    return { error: "Too many registration attempts. Please try again later." }
+  }
   if (selectedPlan) {
     try {
       const cookieStore = await cookies()
@@ -98,8 +114,8 @@ export async function registerAccountAction(prevState: any, formData: FormData) 
     return { error: "Please fill in all required fields." }
   }
 
-  if (password.length < 6) {
-    return { error: "Password must be at least 6 characters." }
+  if (password.length < 8) {
+    return { error: "Password must be at least 8 characters." }
   }
 
   // Generate username from name
@@ -116,7 +132,7 @@ export async function registerAccountAction(prevState: any, formData: FormData) 
 
   const existing = await db.user.findUnique({ where: { email } })
   if (existing) {
-    return { error: "An account with this email already exists." }
+    return { redirectToOtp: true, email }
   }
 
   const passwordHash = await bcrypt.hash(password, 10)
@@ -149,6 +165,12 @@ export async function registerAccountAction(prevState: any, formData: FormData) 
 
 export async function forgotPasswordAction(prevState: any, formData: FormData) {
   const email = (formData.get("email") as string)?.toLowerCase().trim()
+
+  const headersList = await headers()
+  const ip = headersList.get("x-forwarded-for") || "unknown"
+  if (!checkRateLimit(`forgot_${ip}`, 3, 60 * 60 * 1000)) {
+    return { success: true, email, message: "If an account exists with this email address, password reset instructions have been sent." }
+  }
 
   if (!email || !email.includes("@")) {
     return { error: "Please enter a valid email address." }
@@ -196,12 +218,18 @@ export async function resetPasswordAction(prevState: any, formData: FormData) {
   const password = formData.get("password") as string
   const confirmPassword = formData.get("confirmPassword") as string
 
+  const headersList = await headers()
+  const ip = headersList.get("x-forwarded-for") || "unknown"
+  if (!checkRateLimit(`reset_${ip}`, 5, 60 * 60 * 1000)) {
+    return { error: "Too many attempts. Please try again later." }
+  }
+
   if (!token) {
     return { error: "Invalid or missing reset token." }
   }
 
-  if (!password || password.length < 6) {
-    return { error: "Password must be at least 6 characters long." }
+  if (!password || password.length < 8) {
+    return { error: "Password must be at least 8 characters long." }
   }
 
   if (password !== confirmPassword) {
@@ -221,7 +249,7 @@ export async function resetPasswordAction(prevState: any, formData: FormData) {
   })
 
   if (!user) {
-    return { error: "User account not found." }
+    return { error: "This password reset link has expired or is invalid. Please request a new one." }
   }
 
   const passwordHash = await bcrypt.hash(password, 10)

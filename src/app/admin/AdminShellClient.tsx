@@ -49,13 +49,7 @@ export function AdminShellClient({
               >
                 {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
               </button>
-              <div className="adm-topbar-title">
-                <span style={{ color: "var(--adm-coral)", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "1px", opacity: 0.8 }}>
-                  ADMIN
-                </span>
-                &nbsp;·&nbsp;
-                <span style={{ fontFamily: "var(--font-fraunces, 'Fraunces', serif)" }}>OpenORDO</span> Control Center
-              </div>
+
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <div className="adm-topbar-meta">{session.email}</div>

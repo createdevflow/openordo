@@ -103,7 +103,7 @@ export async function sendPasswordResetEmail(email: string, resetToken: string) 
   if (!transporter) return false
 
   const config = await getSmtpConfig()
-  const resetUrl = \`https://openordo.com/reset-password?token=\${resetToken}\`
+  const resetUrl = `https://openordo.com/reset-password?token=${resetToken}`
 
   const html = baseTemplate(`
     <h2 style="margin-top: 0; color: #1E4638;">Reset your password</h2>
