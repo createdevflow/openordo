@@ -1,6 +1,20 @@
 version: '3.8'
 
 services:
+  openordo-traefik:
+    image: traefik:v2.11
+    container_name: openordo-traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/acme:/etc/traefik/acme
+    networks:
+      - proxy
+
   openordo-db:
     image: postgres:15-alpine
     container_name: openordo-db
@@ -70,7 +84,7 @@ networks:
   openordo_net:
     name: openordo_internal_net
   proxy:
-    external: true
+    driver: bridge
 
 volumes:
   openordo_postgres_data:

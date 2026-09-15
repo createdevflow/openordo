@@ -1,0 +1,21 @@
+api:
+  dashboard: false
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: admin@openordo.com
+      storage: acme/acme.json
+      httpChallenge:
+        entryPoint: web
