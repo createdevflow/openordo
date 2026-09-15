@@ -65,6 +65,9 @@ jobs:
             echo "🐳 Building and restarting containers..."
             docker compose up -d --build --remove-orphans
 
+            echo "⏳ Waiting 10 seconds for database to initialize..."
+            sleep 10
+
             echo "🔄 Pushing DB schema..."
             docker compose run --rm openordo-app npx --yes prisma db push --accept-data-loss
 
