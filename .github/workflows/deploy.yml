@@ -62,11 +62,6 @@ jobs:
             git fetch --all
             git reset --hard origin/main
 
-            echo "🔐 Setting up Traefik ACME permissions..."
-            mkdir -p traefik/acme
-            touch traefik/acme/acme.json
-            chmod 600 traefik/acme/acme.json
-
             echo "🐳 Building and restarting containers..."
             docker compose up -d --build --remove-orphans
 
