@@ -125,8 +125,8 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
     }
     setTestingEmail(true)
     toast.promise(
-      sendTestEmailAction(testEmail).then(res => {
-        if (res.error) throw new Error(res.error)
+      sendTestEmailAction(testEmail, smtpSettings).then(res => {
+        if ((res as any).error) throw new Error((res as any).error)
         return res
       }), 
       {

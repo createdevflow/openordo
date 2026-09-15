@@ -38,8 +38,8 @@ function getFromAddress(category: 'auth' | 'billing' | 'general' | 'default', co
   return selected
 }
 
-async function getTransporter() {
-  const config = await getSmtpConfig()
+async function getTransporter(testConfig?: any) {
+  const config = testConfig || await getSmtpConfig()
 
   if (!config.host || !config.user || !config.pass) {
     console.warn("⚠️ SMTP configuration is missing! Emails will not be sent.")
@@ -147,11 +147,11 @@ export async function sendPasswordResetEmail(email: string, resetToken: string) 
   }
 }
 
-export async function sendTestEmail(email: string) {
-  const transporter = await getTransporter()
+export async function sendTestEmail(email: string, testConfig?: any) {
+  const transporter = await getTransporter(testConfig)
   if (!transporter) return false
 
-  const config = await getSmtpConfig()
+  const config = testConfig || await getSmtpConfig()
 
   const html = baseTemplate(`
     <h2 style="margin-top: 0; color: #1E4638;">Test Email Configuration</h2>

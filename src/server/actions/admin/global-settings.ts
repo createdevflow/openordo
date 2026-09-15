@@ -28,7 +28,7 @@ export async function saveGlobalSettings(settings: Record<string, string>) {
   return { success: true }
 }
 
-export async function sendTestEmailAction(email: string) {
+export async function sendTestEmailAction(email: string, uiSettings?: Record<string, string>) {
   const session = await auth()
   if (session?.user?.platformRole !== "SUPER_ADMIN") {
     throw new Error("Unauthorized")
@@ -38,7 +38,23 @@ export async function sendTestEmailAction(email: string) {
     return { error: "Invalid email address" }
   }
 
-  const result = await sendTestEmail(email)
+  let testConfig = undefined
+  if (uiSettings) {
+    testConfig = {
+      host: uiSettings.SMTP_HOST || process.env.SMTP_HOST || "",
+      port: parseInt(uiSettings.SMTP_PORT || process.env.SMTP_PORT || "587", 10),
+      user: uiSettings.SMTP_USER || process.env.SMTP_USER || "",
+      pass: uiSettings.SMTP_PASS || process.env.SMTP_PASS || "",
+      from: (uiSettings.SMTP_FROM && uiSettings.SMTP_FROM.includes("@")) 
+        ? uiSettings.SMTP_FROM 
+        : (uiSettings.SMTP_FROM ? `${uiSettings.SMTP_FROM} <noreply@openordo.com>` : process.env.SMTP_FROM || "OpenORDO <noreply@openordo.com>"),
+      fromAuth: uiSettings.SMTP_FROM_AUTH || "",
+      fromBilling: uiSettings.SMTP_FROM_BILLING || "",
+      fromGeneral: uiSettings.SMTP_FROM_GENERAL || "",
+    }
+  }
+
+  const result = await sendTestEmail(email, testConfig)
   if (!result) {
     return { error: "Failed to send email. Check your SMTP settings." }
   }
