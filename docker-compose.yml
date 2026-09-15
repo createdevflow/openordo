@@ -26,6 +26,8 @@ services:
       - DATABASE_URL=postgresql://${DB_USER:-openordo}:${DB_PASSWORD:-openordo_pass}@openordo-db:5432/${DB_NAME:-openordo}?schema=public
       - NEXTAUTH_URL=https://openordo.com
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-your-secret-key-please-change}
+      - AUTH_URL=https://openordo.com
+      - AUTH_SECRET=${NEXTAUTH_SECRET:-your-secret-key-please-change}
     depends_on:
       - openordo-db
     volumes:
