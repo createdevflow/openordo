@@ -55,10 +55,12 @@ jobs:
             set -e  # Exit immediately on any error
 
             echo "📦 Navigating to project directory..."
-            cd ${{ secrets.VPS_PATH }}
+            mkdir -p /var/www/openordo
+            cd /var/www/openordo
 
             echo "🔄 Pulling latest code from main..."
-            git pull origin main
+            git fetch --all
+            git reset --hard origin/main
 
             echo "🐳 Building and restarting containers..."
             docker compose up -d --build --remove-orphans
