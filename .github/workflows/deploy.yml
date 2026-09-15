@@ -2,40 +2,79 @@ name: Deploy to VPS
 
 on:
   push:
-    branches: ["main"]
+    branches: [main]
+  # Allow manual trigger from GitHub UI
+  workflow_dispatch:
+
+# Cancel any in-progress deployment if a new push arrives
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
 
 jobs:
-  deploy:
+  # ── Job 1: Validate (fast checks before deploying) ─────────────────────────
+  validate:
+    name: Type-check & Lint
     runs-on: ubuntu-latest
+
     steps:
-      - name: Deploy over SSH
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client (needed for type-check)
+        run: npx prisma generate
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+  # ── Job 2: Deploy (only after validate passes) ──────────────────────────────
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: validate   # only run if validate succeeds
+
+    steps:
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.VPS_HOST }}
+          host:     ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT }}
+          key:      ${{ secrets.VPS_SSH_KEY }}
+          port:     ${{ secrets.VPS_PORT }}
           script: |
-            set -e
+            set -e  # Exit immediately on any error
+
+            echo "📦 Navigating to project directory..."
             cd ${{ secrets.VPS_PATH }}
 
-            echo "=== Pull latest (hard reset to avoid local changes blocking pulls) ==="
-            git fetch origin main
-            git reset --hard origin/main
+            echo "🔄 Pulling latest code from main..."
+            git pull origin main
 
-            echo "=== Build image ==="
-            docker compose build openordo-app
+            echo "🐳 Building and restarting containers..."
+            docker compose up -d --build --remove-orphans
 
-            echo "=== Start DB and Push Schema ==="
-            # Ensure DB is running
-            docker compose up -d openordo-db
-            # Wait for DB to be ready
-            sleep 5 
-            # Push Prisma schema (this creates/updates tables without migrations folder)
+            echo "🔄 Pushing DB schema..."
             docker compose run --rm openordo-app npx prisma db push --accept-data-loss
 
-            echo "=== Restart App & Nginx ==="
-            docker compose up -d --no-deps openordo-app openordo-nginx
+            echo "🧹 Pruning unused Docker images..."
+            docker image prune -f
 
-            echo "=== Status ==="
-            docker compose ps
+            echo "✅ Deployment complete!"
+            echo "🌐 Web:    https://openordo.com"
+            echo "🔑 Admin:  https://openordo.com/admin"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Deployment failed! Check the logs above."
+          exit 1
