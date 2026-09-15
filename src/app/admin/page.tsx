@@ -58,7 +58,7 @@ export default async function AdminOverviewPage() {
     <div>
       <div className="adm-page-head">
         <h1 className="adm-page-title">Platform Overview</h1>
-        <div style={{ fontSize: 13, color: "var(--adm-muted)" }}>
+        <div style={{ fontSize: 13, color: "var(--adm-muted)" }} suppressHydrationWarning>
           {new Date().toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
         </div>
       </div>
