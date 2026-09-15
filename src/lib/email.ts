@@ -13,16 +13,16 @@ async function getSmtpConfig() {
   }
 
   return {
-    host: config.SMTP_HOST || process.env.SMTP_HOST || "",
-    port: parseInt(config.SMTP_PORT || process.env.SMTP_PORT || "587", 10),
-    user: config.SMTP_USER || process.env.SMTP_USER || "",
-    pass: config.SMTP_PASS || process.env.SMTP_PASS || "",
+    host: (config.SMTP_HOST || process.env.SMTP_HOST || "").trim(),
+    port: parseInt((config.SMTP_PORT || process.env.SMTP_PORT || "587").trim(), 10),
+    user: (config.SMTP_USER || process.env.SMTP_USER || "").trim(),
+    pass: (config.SMTP_PASS || process.env.SMTP_PASS || "").trim(),
     from: (config.SMTP_FROM && config.SMTP_FROM.includes("@")) 
-      ? config.SMTP_FROM 
-      : (config.SMTP_FROM ? `${config.SMTP_FROM} <noreply@openordo.com>` : process.env.SMTP_FROM || "OpenORDO <noreply@openordo.com>"),
-    fromAuth: config.SMTP_FROM_AUTH || "",
-    fromBilling: config.SMTP_FROM_BILLING || "",
-    fromGeneral: config.SMTP_FROM_GENERAL || "",
+      ? config.SMTP_FROM.trim()
+      : (config.SMTP_FROM ? `${config.SMTP_FROM.trim()} <noreply@openordo.com>` : process.env.SMTP_FROM || "OpenORDO <noreply@openordo.com>"),
+    fromAuth: (config.SMTP_FROM_AUTH || "").trim(),
+    fromBilling: (config.SMTP_FROM_BILLING || "").trim(),
+    fromGeneral: (config.SMTP_FROM_GENERAL || "").trim(),
   }
 }
 
@@ -54,6 +54,9 @@ async function getTransporter(testConfig?: any) {
       user: config.user,
       pass: config.pass,
     },
+    tls: {
+      rejectUnauthorized: false, // Allow self-signed certificates or Hostinger cert mismatches
+    }
   })
 }
 
@@ -101,6 +104,12 @@ export async function sendVerificationOtp(email: string, code: string) {
     <p style="color: #4A6B5C; font-size: 14px;">This code will expire in 15 minutes. If you did not request this, please ignore this email.</p>
   `)
 
+  if (process.env.NODE_ENV !== "production") {
+    console.log("=========================================")
+    console.log(`[DEV ONLY] OTP for ${email}: ${code}`)
+    console.log("=========================================")
+  }
+
   try {
     await transporter.sendMail({
       from: getFromAddress('auth', config),
@@ -111,6 +120,7 @@ export async function sendVerificationOtp(email: string, code: string) {
     return true
   } catch (error) {
     console.error("Failed to send OTP email:", error)
+    console.log(`[FALLBACK] Please use this OTP: ${code}`)
     return false
   }
 }
@@ -133,6 +143,13 @@ export async function sendPasswordResetEmail(email: string, resetToken: string) 
     <p style="color: #4A6B5C; font-size: 14px; margin-top: 24px;">This link will expire in 1 hour. If you did not request a password reset, you can safely ignore this email.</p>
   `)
 
+  if (process.env.NODE_ENV !== "production") {
+    console.log("=========================================")
+    console.log(`[DEV ONLY] Password Reset Link for ${email}:`)
+    console.log(resetUrl)
+    console.log("=========================================")
+  }
+
   try {
     await transporter.sendMail({
       from: getFromAddress('auth', config),
@@ -143,6 +160,7 @@ export async function sendPasswordResetEmail(email: string, resetToken: string) 
     return true
   } catch (error) {
     console.error("Failed to send password reset email:", error)
+    console.log(`[FALLBACK] Please use this Reset Link: ${resetUrl}`)
     return false
   }
 }

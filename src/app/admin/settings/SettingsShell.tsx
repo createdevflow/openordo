@@ -423,6 +423,7 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
               <div>
                 <label className="adm-label">SMTP Username</label>
                 <input className="adm-input" value={smtpSettings.SMTP_USER} onChange={e => setSmtpSettings(p => ({...p, SMTP_USER: e.target.value}))} />
+                <p className="text-[11px] text-ink-soft mt-1">If using aliases, this MUST be the primary mailbox address.</p>
               </div>
               <div>
                 <label className="adm-label">SMTP Password</label>

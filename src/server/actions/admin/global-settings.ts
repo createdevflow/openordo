@@ -41,16 +41,16 @@ export async function sendTestEmailAction(email: string, uiSettings?: Record<str
   let testConfig = undefined
   if (uiSettings) {
     testConfig = {
-      host: uiSettings.SMTP_HOST || process.env.SMTP_HOST || "",
-      port: parseInt(uiSettings.SMTP_PORT || process.env.SMTP_PORT || "587", 10),
-      user: uiSettings.SMTP_USER || process.env.SMTP_USER || "",
-      pass: uiSettings.SMTP_PASS || process.env.SMTP_PASS || "",
+      host: (uiSettings.SMTP_HOST || process.env.SMTP_HOST || "").trim(),
+      port: parseInt((uiSettings.SMTP_PORT || process.env.SMTP_PORT || "587").trim(), 10),
+      user: (uiSettings.SMTP_USER || process.env.SMTP_USER || "").trim(),
+      pass: (uiSettings.SMTP_PASS || process.env.SMTP_PASS || "").trim(),
       from: (uiSettings.SMTP_FROM && uiSettings.SMTP_FROM.includes("@")) 
-        ? uiSettings.SMTP_FROM 
-        : (uiSettings.SMTP_FROM ? `${uiSettings.SMTP_FROM} <noreply@openordo.com>` : process.env.SMTP_FROM || "OpenORDO <noreply@openordo.com>"),
-      fromAuth: uiSettings.SMTP_FROM_AUTH || "",
-      fromBilling: uiSettings.SMTP_FROM_BILLING || "",
-      fromGeneral: uiSettings.SMTP_FROM_GENERAL || "",
+        ? uiSettings.SMTP_FROM.trim()
+        : (uiSettings.SMTP_FROM ? `${uiSettings.SMTP_FROM.trim()} <noreply@openordo.com>` : process.env.SMTP_FROM || "OpenORDO <noreply@openordo.com>"),
+      fromAuth: (uiSettings.SMTP_FROM_AUTH || "").trim(),
+      fromBilling: (uiSettings.SMTP_FROM_BILLING || "").trim(),
+      fromGeneral: (uiSettings.SMTP_FROM_GENERAL || "").trim(),
     }
   }
 
