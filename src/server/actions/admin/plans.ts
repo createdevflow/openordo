@@ -30,6 +30,27 @@ export async function updatePlan(id: string, data: any) {
   }
 }
 
+export async function updatePlanFeatures(planId: string, featureIds: string[]) {
+  try {
+    const session = await requireSuperAdmin()
+    
+    await db.$transaction([
+      db.planFeature.deleteMany({ where: { planId } }),
+      ...featureIds.map(featureId => 
+        db.planFeature.create({
+          data: { planId, featureId, included: true }
+        })
+      )
+    ])
+    
+    revalidatePath("/admin/plans")
+    revalidatePath(`/admin/plans/${planId}`)
+    return { ok: true }
+  } catch (e: any) {
+    return { ok: false, error: e.message }
+  }
+}
+
 export async function togglePlanActive(id: string, isActive: boolean) {
   try {
     const session = await requireSuperAdmin()

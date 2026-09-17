@@ -42,6 +42,9 @@ export interface ClinicPlanDetails {
   isDefaultFree: boolean
   promoId?: string | null
   promoExpiresAt?: Date | null
+  trialEndsAt?: Date | null
+  cancelAtPeriodEnd?: boolean
+  currentPeriodEnd?: Date | null
 }
 
 /**
@@ -150,7 +153,10 @@ export async function getClinicSubscriptionDetails(clinicId: string): Promise<Cl
     activeFeatures: features,
     isDefaultFree: plan.isDefaultFree,
     promoId: subscription.promoId,
-    promoExpiresAt: subscription.promoExpiresAt
+    promoExpiresAt: subscription.promoExpiresAt,
+    trialEndsAt: subscription.trialEndsAt,
+    cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+    currentPeriodEnd: subscription.currentPeriodEnd,
   }
 }
 

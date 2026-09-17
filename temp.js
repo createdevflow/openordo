@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); prisma.subscription.updateMany({ data: { currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), status: 'ACTIVE' } }).then(console.log).finally(() => prisma.$disconnect())

@@ -281,3 +281,48 @@ export async function exportClinicDataAction(filter?: {
 }
 
 
+
+export async function cancelSubscriptionAction() {
+  const clinicId = await requireClinicId()
+
+  const sub = await db.subscription.findUnique({ where: { clinicId } })
+  if (!sub) throw new Error("No subscription found")
+
+  const { getStripeSecretKey } = await import("@/lib/stripe-utils")
+  const stripeSecretKey = await getStripeSecretKey()
+
+  if (stripeSecretKey && sub.stripeSubscriptionId) {
+    // Cancel via Stripe -- access continues until current period end
+    const Stripe = (await import("stripe")).default
+    const stripe = new Stripe(stripeSecretKey)
+
+    await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+      cancel_at_period_end: true
+    })
+
+    // Detach all payment methods from the Stripe customer
+    if (sub.stripeCustomerId) {
+      const methods = await stripe.customers.listPaymentMethods(sub.stripeCustomerId, { type: "card" })
+      for (const pm of methods.data) {
+        await stripe.paymentMethods.detach(pm.id)
+      }
+    }
+  }
+
+  // Update our DB: mark as pending cancellation at period end
+  await db.subscription.update({
+    where: { clinicId },
+    data: {
+      cancelAtPeriodEnd: true,
+      // If no Stripe, set currentPeriodEnd to 30 days from now as a grace period
+      currentPeriodEnd: sub.currentPeriodEnd || (() => {
+        const d = new Date()
+        d.setDate(d.getDate() + 30)
+        return d
+      })()
+    }
+  })
+
+  revalidatePath("/dashboard/settings")
+  return { ok: true, currentPeriodEnd: sub.currentPeriodEnd }
+}

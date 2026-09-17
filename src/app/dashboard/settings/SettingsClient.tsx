@@ -8,7 +8,8 @@ import {
   generateApiKeyAction,
   deleteApiKeyAction,
   changeClinicPlanAction,
-  exportClinicDataAction
+  exportClinicDataAction,
+  cancelSubscriptionAction
 } from "@/server/actions/settings"
 import { Copy, RefreshCw, Eye, EyeOff, ExternalLink, Lock, Check, ArrowUpRight, Sparkles, Download, Calendar, Receipt, Users, X, FileText } from "lucide-react"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
@@ -22,6 +23,11 @@ export function SettingsClient({
 }: any) {
   const { confirm, showAlert } = useConfirm()
   const [tab, setTab] = useState(initialTab)
+
+  function handleTabChange(newTab: string) {
+    setTab(newTab)
+    window.history.replaceState(null, "", `?tab=${newTab}`)
+  }
   const [apiKey, setApiKey] = useState<string>(() => {
     try { return JSON.parse(initialClinic?.billingConfig || "{}").apiKey || "" } catch { return "" }
   })
@@ -229,51 +235,117 @@ export function SettingsClient({
   function handlePlanSwitch(planId: string) {
     startTransition(async () => {
       try {
-        await changeClinicPlanAction(planId)
-        await showAlert({ title: "Plan Updated", body: "Plan updated successfully! Reloading dashboard...", tone: "primary" })
+        const plan = allPlans.find((p: any) => p.id === planId)
+        if (!plan) throw new Error("Plan not found")
+        
+        // If it's a free plan (0 price), just change it locally
+        if ((plan.priceMonthlyUsd || 0) === 0 && (plan.priceMonthlyInr || 0) === 0) {
+          await changeClinicPlanAction(planId)
+          await showAlert({ title: "Plan Updated", body: `Switched to ${plan.name} plan successfully!`, tone: "primary" })
+          window.location.reload()
+          return
+        }
+        
+        const priceId = plan.stripePriceIdMonthly || plan.stripePriceIdYearly
+        if (!priceId) {
+          throw new Error("This plan is not configured for Stripe checkout. Please contact support.")
+        }
+        
+        const res = await fetch("/api/stripe/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "PLAN",
+            itemId: plan.id,
+            priceId: priceId
+          })
+        })
+        
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error || "Failed to create checkout session")
+        
+        if (json.url) {
+          window.location.href = json.url
+        } else {
+          // Fallback if no URL
+          window.location.reload()
+        }
+      } catch (err: any) {
+        showAlert({ title: "Checkout Error", body: err.message || "Failed to initiate checkout", tone: "danger" })
+      }
+    })
+  }
+
+  async function handleCancelSubscription() {
+    const ok = await confirm({
+      title: "Cancel Subscription?",
+      body: "Your access will remain fully active until the end of your current billing period. After that, your account will be locked for 30 days before data deletion. Autopay will be disabled and your billing details removed.",
+      tone: "danger"
+    })
+    if (!ok) return
+
+    startTransition(async () => {
+      try {
+        await cancelSubscriptionAction()
+        await showAlert({ title: "Subscription Cancelled", body: "Your subscription has been cancelled. You'll retain access until your current period ends.", tone: "primary" })
         window.location.reload()
       } catch (err: any) {
-        showAlert({ title: "Error", body: err.message || "Failed to change plan", tone: "danger" })
+        showAlert({ title: "Error", body: err.message || "Failed to cancel subscription", tone: "danger" })
       }
     })
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-8 max-w-[1000px]">
+    <div className="flex flex-col gap-6 w-full">
+      {initialClinic.status === "LOCKED_CANCELLED" && (
+        <div className="bg-coral-soft border border-coral/30 rounded-xl p-5 max-w-[1000px]">
+          <div className="flex items-start gap-3">
+            <span className="text-coral font-bold mt-0.5">!</span>
+            <div>
+              <h4 className="text-[15px] font-bold text-coral m-0">Account Locked</h4>
+              <p className="text-[13.5px] text-coral/90 mt-1 mb-0 leading-relaxed">
+                Your subscription has ended and your account is locked. Your data will be safely kept for <strong>30 days</strong> from the cancellation date before being automatically deleted. 
+                You can still access this page to export your data or renew your subscription.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="flex flex-col lg:flex-row gap-8 max-w-[1000px]">
       <aside className="w-full lg:w-[220px] flex-shrink-0 lg:sticky lg:top-24 lg:self-start z-10 bg-paper">
         <nav className="flex flex-col gap-1">
           <button 
-            onClick={() => setTab("clinic")}
+            onClick={() => handleTabChange("clinic")}
             className={`w-full text-left px-3 py-2 rounded-md ${tab === "clinic" ? "bg-paper-raised font-semibold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "font-medium text-ink-soft hover:text-ink hover:bg-paper-raised"}`}
           >
             Clinic Profile
           </button>
           <button 
-            onClick={() => setTab("subscription")}
+            onClick={() => handleTabChange("subscription")}
             className={`w-full text-left px-3 py-2 rounded-md ${tab === "subscription" ? "bg-paper-raised font-semibold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "font-medium text-ink-soft hover:text-ink hover:bg-paper-raised"}`}
           >
             Subscription & Plan
           </button>
           <button 
-            onClick={() => setTab("billing")}
+            onClick={() => handleTabChange("billing")}
             className={`w-full text-left px-3 py-2 rounded-md ${tab === "billing" ? "bg-paper-raised font-semibold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "font-medium text-ink-soft hover:text-ink hover:bg-paper-raised"}`}
           >
             Billing & Compliance
           </button>
           <button 
-            onClick={() => setTab("account")}
+            onClick={() => handleTabChange("account")}
             className={`w-full text-left px-3 py-2 rounded-md ${tab === "account" ? "bg-paper-raised font-semibold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "font-medium text-ink-soft hover:text-ink hover:bg-paper-raised"}`}
           >
             Account & Export
           </button>
           <button 
-            onClick={() => setTab("notifs")}
+            onClick={() => handleTabChange("notifs")}
             className={`w-full text-left px-3 py-2 rounded-md ${tab === "notifs" ? "bg-paper-raised font-semibold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "font-medium text-ink-soft hover:text-ink hover:bg-paper-raised"}`}
           >
             Notifications
           </button>
           <button 
-            onClick={() => setTab("developer")}
+            onClick={() => handleTabChange("developer")}
             className={`w-full text-left px-3 py-2 rounded-md ${tab === "developer" ? "bg-paper-raised font-semibold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "font-medium text-ink-soft hover:text-ink hover:bg-paper-raised"}`}
           >
             Developer & Booking
@@ -333,6 +405,21 @@ export function SettingsClient({
                   </h4>
                   <p style={{ color: "var(--ink-soft)", fontSize: 13, marginTop: 4 }}>
                     Billing cycle: <span style={{ textTransform: "capitalize", fontWeight: 600 }}>{planDetails?.billingCycle || "monthly"}</span>
+                    {planDetails?.cancelAtPeriodEnd && planDetails.currentPeriodEnd && (
+                      <span className="text-coral ml-2">
+                        · Cancels on {Intl.DateTimeFormat("en-GB").format(new Date(planDetails.currentPeriodEnd))}
+                      </span>
+                    )}
+                    {!planDetails?.cancelAtPeriodEnd && planDetails?.currentPeriodEnd && !planDetails?.isDefaultFree && (
+                      <span className="ml-2">
+                        · Renews on {Intl.DateTimeFormat("en-GB").format(new Date(planDetails.currentPeriodEnd))}
+                      </span>
+                    )}
+                    {planDetails?.trialEndsAt && (
+                      <span className="text-amber ml-2">
+                        · Trial ends on {Intl.DateTimeFormat("en-GB").format(new Date(planDetails.trialEndsAt))}
+                      </span>
+                    )}
                   </p>
                 </div>
               </div>
@@ -492,6 +579,23 @@ export function SettingsClient({
                   )
                 })}
               </div>
+
+              {!planDetails.isDefaultFree && (
+                <div style={{ marginTop: 32, paddingTop: 24, borderTop: "1px solid var(--line)" }}>
+                  <h4 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 8px 0" }}>Danger Zone</h4>
+                  <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: "0 0 16px 0" }}>
+                    If you cancel your subscription, your account will be locked at the end of the billing cycle. Data will be retained for 30 days before being permanently deleted.
+                  </p>
+                  <button 
+                    onClick={handleCancelSubscription}
+                    className="cw-btn cw-btn-ghost cw-btn-sm" 
+                    style={{ color: "var(--coral)", border: "1px solid var(--coral)" }}
+                    disabled={isPending}
+                  >
+                    Cancel Subscription
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -683,7 +787,7 @@ export function SettingsClient({
                   <Download size={13} /> {isExportLoading ? "Preparing..." : "Export Data"}
                 </button>
               ) : (
-                <button className="cw-btn cw-btn-primary cw-btn-sm" onClick={() => setTab("subscription")} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <button className="cw-btn cw-btn-primary cw-btn-sm" onClick={() => handleTabChange("subscription")} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                   <Lock size={12} /> Upgrade to Export
                 </button>
               )}
@@ -867,7 +971,7 @@ export function SettingsClient({
                     <p style={{ fontSize: 12.5, color: "var(--ink-soft)", maxWidth: 320, margin: "4px auto 14px" }}>
                       Online self-booking pages for patients are included in Practice and Clinic Group plans.
                     </p>
-                    <button className="cw-btn cw-btn-primary cw-btn-sm" onClick={() => setTab("subscription")}>
+                    <button className="cw-btn cw-btn-primary cw-btn-sm" onClick={() => handleTabChange("subscription")}>
                       Upgrade to Activate Booking Link
                     </button>
                   </div>
@@ -1328,6 +1432,7 @@ export function SettingsClient({
           </div>
         </div>
       )}
+    </div>
     </div>
   )
 }

@@ -1,7 +1,9 @@
 import { db } from "@/lib/db"
 import { SettingsShell } from "./SettingsShell"
 
-export default async function AdminSettingsPage() {
+export default async function AdminSettingsPage(props: { searchParams?: Promise<{ tab?: string }> }) {
+  const searchParams = await props.searchParams
+  const initialTab = searchParams?.tab || "flags"
   const [flags, features, plans, settingsList] = await Promise.all([
     db.platformFlag.findMany({ orderBy: [{ category: "asc" }, { label: "asc" }] }).catch(() => []),
     db.feature.findMany({ orderBy: [{ category: "asc" }, { name: "asc" }] }).catch(() => []),
@@ -24,6 +26,7 @@ export default async function AdminSettingsPage() {
       plans={plans}
       globalSettings={globalSettings}
       adminEmail={adminEmail}
+      initialTab={initialTab}
     />
   )
 }

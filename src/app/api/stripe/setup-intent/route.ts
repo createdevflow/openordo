@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { requireClinicId } from "@/lib/auth-utils"
 
+// Creates a Stripe Checkout Session in setup mode to collect a payment method
 export async function POST(req: Request) {
   const session = await auth()
   if (!session?.user) {
@@ -16,12 +16,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { type, itemId, priceId, successUrl, cancelUrl } = await req.json()
-    // type: "PLAN" | "PLUGIN"
-    
-    // We get clinicId from session directly to avoid trust issues
-    const clinicId = await requireClinicId()
-
+    const { clinicId } = await req.json()
     const Stripe = (await import("stripe")).default
     const stripe = new Stripe(stripeSecretKey)
 
@@ -49,43 +44,19 @@ export async function POST(req: Request) {
       }
     }
 
-    // Determine mode
-    let mode: "subscription" | "payment" = "subscription"
-    
-    // If it's a one-time payment for a plugin, set mode to payment
-    if (type === "PLUGIN") {
-      const plugin = await db.plugin.findUnique({ where: { id: itemId } })
-      if (!plugin) throw new Error("Plugin not found")
-      
-      if (priceId === plugin.stripePriceIdOneTime) {
-        mode = "payment"
-      }
-    }
-
+    // Create Stripe Checkout in setup mode to collect card
     const checkoutSession = await stripe.checkout.sessions.create({
-      mode,
+      mode: "setup",
       customer: customerId,
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
-      success_url: successUrl || `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/dashboard?checkout=success`,
-      cancel_url: cancelUrl || `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/dashboard?checkout=cancel`,
-      metadata: { 
-        clinicId, 
-        userId: session.user.id!,
-        type, 
-        itemId 
-      },
-      // In subscription mode, we may want to allow promotion codes
-      allow_promotion_codes: true
+      payment_method_types: ["card"],
+      success_url: `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/api/stripe/confirm-setup?session_id={CHECKOUT_SESSION_ID}&clinicId=${clinicId}&userId=${session.user.id}`,
+      cancel_url: `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/onboarding/plan/payment`,
+      metadata: { clinicId, userId: session.user.id! }
     })
 
     return NextResponse.json({ url: checkoutSession.url })
   } catch (err: any) {
-    console.error("checkout error:", err)
+    console.error("setup-intent error:", err)
     return NextResponse.json({ error: err.message || "Failed" }, { status: 500 })
   }
 }

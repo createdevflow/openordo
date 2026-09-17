@@ -6,19 +6,33 @@ import { useState, useTransition } from "react"
 import { toast } from "sonner"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { togglePlatformFlag, toggleFeatureGlobal, createFeature, deleteFeature } from "@/server/actions/admin/flags"
-import { saveGlobalSettings, uploadBrandingAsset, sendTestEmailAction } from "@/server/actions/admin/global-settings"
+import { useRouter, usePathname, useSearchParams } from "next/navigation"
+import { saveGlobalSettings, uploadBrandingAsset, sendTestEmailAction, setDefaultFreePlan } from "@/server/actions/admin/global-settings"
 import { updateAdminCredentials } from "@/server/actions/admin/settings"
 import { ShieldAlert, Zap, Package, Palette, User, AlertTriangle, Plus, Trash2, Globe, Mail } from "lucide-react"
 
 const FEATURE_CATEGORIES = ["Core", "Scheduling", "Billing", "Communication", "Support"]
 
-export function SettingsShell({ flags, features, plans, globalSettings, adminEmail }: {
+export function SettingsShell({ flags, features, plans, globalSettings, adminEmail, initialTab = "flags" }: {
   flags: any[]
   features: any[]
   plans: any[]
   globalSettings: Record<string, string>
   adminEmail: string
+  initialTab?: string
 }) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  const [activeTab, setActiveTab] = useState(initialTab)
+  
+  const handleTabChange = (val: string) => {
+    setActiveTab(val)
+    const params = new URLSearchParams(searchParams)
+    params.set("tab", val)
+    router.replace(`${pathname}?${params.toString()}`)
+  }
   const { confirm } = useConfirm()
   const [, startTransition] = useTransition()
 
@@ -109,9 +123,16 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
     SEO_OG_IMAGE_URL: globalSettings.SEO_OG_IMAGE_URL || "",
   })
   const [paymentSettings, setPaymentSettings] = useState({
+    DEFAULT_TRIAL_DAYS: globalSettings.DEFAULT_TRIAL_DAYS || "14",
+    DEFAULT_CURRENCY: globalSettings.DEFAULT_CURRENCY || "INR",
     STRIPE_SECRET_KEY: globalSettings.STRIPE_SECRET_KEY || "",
     STRIPE_WEBHOOK_SECRET: globalSettings.STRIPE_WEBHOOK_SECRET || "",
     STRIPE_PUBLIC_KEY: globalSettings.STRIPE_PUBLIC_KEY || "",
+  })
+
+  const [defaultFreePlanId, setDefaultFreePlanId] = useState(() => {
+    const defaultPlan = plans.find(p => p.isDefaultFree)
+    return defaultPlan?.id || ""
   })
 
   const [savingGlobal, setSavingGlobal] = useState(false)
@@ -152,6 +173,21 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
     )
   }
 
+  const handleSaveBilling = async () => {
+    setSavingGlobal(true)
+    toast.promise(
+      Promise.all([
+        saveGlobalSettings(paymentSettings),
+        setDefaultFreePlan(defaultFreePlanId)
+      ]).then(() => ({ success: true })),
+      {
+        loading: "Saving billing settings…",
+        success: () => { setSavingGlobal(false); return "Settings updated" },
+        error: (err: any) => { setSavingGlobal(false); return err.message || "Failed to save settings" },
+      }
+    )
+  }
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, key: string) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -177,16 +213,18 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
 
   return (
     <div>
-      <div className="adm-page-head">
-        <h1 className="adm-page-title">Settings</h1>
-        <span style={{ fontSize: 13, color: "var(--adm-muted)" }}>Control Center</span>
-      </div>
-
-      <div className="adm-card" style={{ overflow: "visible" }}>
-        <Tabs.Root defaultValue="flags">
-          <div className="adm-tabs-list">
+      <Tabs.Root value={activeTab} onValueChange={handleTabChange}>
+        <div style={{
+          position: "sticky",
+          top: -28,
+          zIndex: 40,
+          backgroundColor: "var(--adm-bg)",
+          margin: "-28px -28px 24px -28px",
+          padding: "0 28px 0 28px",
+        }}>
+          <div className="adm-tabs-list" style={{ flexWrap: "nowrap", overflowX: "auto", overflowY: "hidden", backgroundColor: "transparent", borderBottom: "1px solid var(--adm-border)" }}>
             <Tabs.List asChild>
-              <div style={{ display: "flex", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", flexWrap: "nowrap", minWidth: "min-content" }}>
                 {[
                   { value: "flags", label: "Feature Flags", icon: <Zap size={14} /> },
                   { value: "catalog", label: "Feature Catalog", icon: <Package size={14} /> },
@@ -205,6 +243,9 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
               </div>
             </Tabs.List>
           </div>
+        </div>
+
+        <div className="adm-card" style={{ overflow: "visible" }}>
 
           {/* ── Feature Flags ── */}
           <Tabs.Content value="flags" className="adm-tab-content">
@@ -351,7 +392,7 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
             <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 520 }}>
               <div>
                 <label className="adm-label">Default Free Plan</label>
-                <select className="adm-input">
+                <select className="adm-input" value={defaultFreePlanId} onChange={e => setDefaultFreePlanId(e.target.value)}>
                   <option value="">— Select default plan —</option>
                   {plans.map((p: any) => (
                     <option key={p.id} value={p.id}>{p.name} ({p.priceMonthlyUsd === 0 ? "Free" : `$${p.priceMonthlyUsd}/mo`})</option>
@@ -396,7 +437,7 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
                   </div>
                 </div>
               </div>
-              <button className="adm-btn adm-btn-primary" style={{ alignSelf: "flex-start" }} onClick={() => handleSaveGlobal(paymentSettings)} disabled={savingGlobal}>
+              <button className="adm-btn adm-btn-primary" style={{ alignSelf: "flex-start" }} onClick={handleSaveBilling} disabled={savingGlobal}>
                 {savingGlobal ? "Saving..." : "Save Billing Settings"}
               </button>
             </div>
@@ -575,8 +616,8 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
               </div>
             </div>
           </Tabs.Content>
-        </Tabs.Root>
-      </div>
+        </div>
+      </Tabs.Root>
     </div>
   )
 }

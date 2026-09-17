@@ -1,4 +1,4 @@
-"use server"
+﻿"use server"
 
 import { db } from "@/lib/db"
 import { auth } from "@/lib/auth"
@@ -26,31 +26,18 @@ export async function createClinicAction(prevState: any, formData: FormData) {
   }
 
   const clinic = await db.clinic.create({
-    data: {
-      name,
-      slug,
-      type,
-      country,
-    }
+    data: { name, slug, type, country }
   })
 
   await db.membership.create({
-    data: {
-      userId: session.user.id,
-      clinicId: clinic.id,
-      role: "OWNER",
-    }
+    data: { userId: session.user.id, clinicId: clinic.id, role: "OWNER" }
   })
 
   await db.user.update({
     where: { id: session.user.id },
-    data: { 
-      activeClinicId: clinic.id,
-      onboardingStep: "COMPLIANCE" 
-    }
+    data: { activeClinicId: clinic.id, onboardingStep: "COMPLIANCE" }
   })
 
-  // We need to redirect to the next step
   redirect("/onboarding/compliance")
 }
 
@@ -118,7 +105,6 @@ export async function saveStaffAction(prevState: any, formData: FormData) {
 
 export async function selectPlanAction(prevState: any, formData: FormData) {
   const session = await auth()
-  
   if (!session?.user?.id) return
 
   let clinicId = session?.user?.clinicId
@@ -131,26 +117,44 @@ export async function selectPlanAction(prevState: any, formData: FormData) {
   const planId = formData.get("planId") as string
   if (!planId) return { error: "No plan selected" }
 
-  // Upsert subscription for the clinic
-  await db.subscription.upsert({
-    where: { clinicId },
-    update: {
-      planId,
-      status: "TRIALING",
-    },
-    create: {
-      clinicId,
-      planId,
-      status: "TRIALING",
-    }
-  })
+  const plan = await db.plan.findUnique({ where: { id: planId } })
+  if (!plan) return { error: "Plan not found" }
 
-  await db.user.update({
-    where: { id: session.user.id! },
-    data: { onboardingStep: "COMPLETED" }
-  })
+  const isPaidPlan = plan.priceMonthlyUsd > 0 || plan.priceMonthlyInr > 0
 
-  redirect("/dashboard")
+  if (isPaidPlan) {
+    const trialSetting = await db.globalSetting.findUnique({ where: { key: "DEFAULT_TRIAL_DAYS" } })
+    const trialDays = parseInt(trialSetting?.value || "14", 10)
+
+    const trialEndsAt = new Date()
+    trialEndsAt.setDate(trialEndsAt.getDate() + trialDays)
+
+    await db.subscription.upsert({
+      where: { clinicId },
+      update: { planId, status: "TRIALING", trialEndsAt, cancelAtPeriodEnd: false },
+      create: { clinicId, planId, status: "TRIALING", trialEndsAt }
+    })
+
+    await db.user.update({
+      where: { id: session.user.id! },
+      data: { onboardingStep: "PAYMENT_SETUP" }
+    })
+
+    redirect("/onboarding/plan/payment")
+  } else {
+    await db.subscription.upsert({
+      where: { clinicId },
+      update: { planId, status: "ACTIVE", trialEndsAt: null },
+      create: { clinicId, planId, status: "ACTIVE" }
+    })
+
+    await db.user.update({
+      where: { id: session.user.id! },
+      data: { onboardingStep: "COMPLETED" }
+    })
+
+    redirect("/dashboard")
+  }
 }
 
 export async function redeemPromoAction(prevState: any, formData: FormData) {
@@ -176,40 +180,18 @@ export async function redeemPromoAction(prevState: any, formData: FormData) {
 
   let assignPlanId = promo.targetPlanId
   const defaultPlan = await db.plan.findFirst({ where: { isDefaultFree: true } })
-  if (defaultPlan) {
-    assignPlanId = defaultPlan.id
-  }
+  if (defaultPlan) assignPlanId = defaultPlan.id
 
   await db.$transaction([
-    db.promoRedemption.create({
-      data: { promoId, clinicId, expiresAt }
-    }),
-    db.promo.update({
-      where: { id: promoId },
-      data: { redemptionCount: { increment: 1 } }
-    }),
+    db.promoRedemption.create({ data: { promoId, clinicId, expiresAt } }),
+    db.promo.update({ where: { id: promoId }, data: { redemptionCount: { increment: 1 } } }),
     db.subscription.upsert({
       where: { clinicId },
-      update: {
-        planId: assignPlanId,
-        status: "ACTIVE",
-        promoId,
-        promoExpiresAt: expiresAt
-      },
-      create: {
-        clinicId,
-        planId: assignPlanId,
-        status: "ACTIVE",
-        promoId,
-        promoExpiresAt: expiresAt
-      }
+      update: { planId: assignPlanId, status: "ACTIVE", promoId, promoExpiresAt: expiresAt },
+      create: { clinicId, planId: assignPlanId, status: "ACTIVE", promoId, promoExpiresAt: expiresAt }
     }),
-    db.user.update({
-      where: { id: session.user.id },
-      data: { onboardingStep: "COMPLETED" }
-    })
+    db.user.update({ where: { id: session.user.id }, data: { onboardingStep: "COMPLETED" } })
   ])
 
   redirect("/dashboard")
 }
-

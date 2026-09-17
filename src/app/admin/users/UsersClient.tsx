@@ -73,13 +73,13 @@ export function UsersClient({ users }: { users: any[] }) {
     })
   }
 
-  const handleHardDelete = async (userId: string) => {
+  const handleHardDelete = async (userId: string, username: string) => {
     const ok = await confirm({
       title: "Hard delete account?",
       body: "WARNING: This is permanent. All data associated with this user will be deleted immediately.",
       tone: "danger",
       confirmLabel: "Hard Delete",
-      verifyString: "delete"
+      verifyString: username
     })
     if (!ok) return
     toast.promise(hardDeleteUser(userId), {
@@ -263,6 +263,9 @@ export function UsersClient({ users }: { users: any[] }) {
                       {u.status === "ACTIVE" ? <CheckCircle size={11} /> : u.status === "BANNED" ? <Ban size={11} /> : <Trash2 size={11} />}
                       {u.status}
                     </span>
+                    {u.status === "ACTIVE" && u.memberships?.[0]?.clinic?.subscription?.status === "TRIALING" && (
+                      <span className="adm-badge adm-badge-amber" style={{ marginLeft: 6 }}>Trial</span>
+                    )}
                   </td>
                   <td style={{ fontSize: 12.5, color: "var(--adm-muted)", whiteSpace: "nowrap" }} className="adm-mono">
                     {new Date(u.createdAt).toLocaleDateString("en-IN")}
@@ -297,7 +300,7 @@ export function UsersClient({ users }: { users: any[] }) {
                         label: "Hard Delete",
                         icon: <Trash2 size={14} />,
                         tone: "danger",
-                        onSelect: () => handleHardDelete(u.id),
+                        onSelect: () => handleHardDelete(u.id, u.username),
                       },
                     ]} />
                   </td>

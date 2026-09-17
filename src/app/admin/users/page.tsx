@@ -15,7 +15,16 @@ export default async function AdminUsersPage() {
       createdAt: true,
       activeClinicId: true,
       memberships: {
-        include: { clinic: { select: { name: true } } },
+        include: { 
+          clinic: { 
+            select: { 
+              name: true,
+              subscription: {
+                select: { status: true }
+              }
+            } 
+          } 
+        },
         take: 1
       }
     }

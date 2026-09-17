@@ -21,6 +21,7 @@ export async function requireClinicId() {
     if (user.onboardingStep === "COMPLIANCE") return redirect("/onboarding/compliance")
     if (user.onboardingStep === "STAFF") return redirect("/onboarding/staff")
     if (user.onboardingStep === "PLAN_SELECTION") return redirect("/onboarding/plan")
+    if (user.onboardingStep === "PAYMENT_SETUP") return redirect("/onboarding/plan/payment")
     return redirect("/onboarding/clinic")
   }
 

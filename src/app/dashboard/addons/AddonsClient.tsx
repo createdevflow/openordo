@@ -45,9 +45,32 @@ function PurchaseModal({ plugin, currency, onClose, onSuccess }: PurchaseModalPr
   const handlePurchase = async () => {
     setLoading(true)
     try {
-      await purchasePluginAction(plugin.id, selected)
-      toast.success(`${plugin.name} added to your clinic!`)
-      onSuccess()
+      const priceId = 
+        selected === "ONE_TIME" ? plugin.stripePriceIdOneTime :
+        selected === "MONTHLY" ? plugin.stripePriceIdMonthly :
+        plugin.stripePriceIdYearly
+
+      if (!priceId) throw new Error("This plugin pricing model is not configured for Stripe checkout.")
+
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "PLUGIN",
+          itemId: plugin.id,
+          priceId
+        })
+      })
+
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || "Failed to create checkout session")
+
+      if (json.url) {
+        window.location.href = json.url
+      } else {
+        toast.success(`${plugin.name} added to your clinic!`)
+        onSuccess()
+      }
     } catch (err: any) {
       toast.error(err.message || "Failed to add plugin")
     } finally {

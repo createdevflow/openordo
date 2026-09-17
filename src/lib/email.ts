@@ -190,3 +190,51 @@ export async function sendTestEmail(email: string, testConfig?: any) {
     return false
   }
 }
+
+export async function sendTrialEndingEmail(
+  email: string,
+  planName: string,
+  priceMonthly: string,
+  chargeDate: string
+) {
+  const transporter = await getTransporter()
+  if (!transporter) {
+    console.log(`[DEV] Trial ending for ${email} -- plan: ${planName}, charge date: ${chargeDate}`)
+    return false
+  }
+
+  const config = await getSmtpConfig()
+
+  const html = baseTemplate(`
+    <h2 style="margin-top: 0; color: #1E4638;">Your trial ends soon</h2>
+    <p style="color: #4A6B5C;">Hi there,</p>
+    <p style="color: #4A6B5C;">Your <strong>${planName}</strong> trial on OpenORDO is ending soon.</p>
+    <div style="background: #f4f9f6; border: 1px solid #c8e6d4; border-radius: 8px; padding: 16px 20px; margin: 20px 0;">
+      <div style="font-size: 13px; color: #4A6B5C; font-weight: 600; margin-bottom: 4px;">Auto-payment scheduled</div>
+      <div style="font-size: 20px; font-weight: 700; color: #1E4638;">${priceMonthly} / month</div>
+      <div style="font-size: 13px; color: #6B8E80; margin-top: 4px;">Will be charged automatically on <strong>${chargeDate}</strong></div>
+    </div>
+    <p style="color: #4A6B5C;">If you would like to cancel before being charged, go to Dashboard &rarr; Settings &rarr; Subscription &amp; Plan &rarr; Cancel Subscription.</p>
+    <p style="color: #4A6B5C; font-size: 14px;">Thank you for using OpenORDO!</p>
+  `)
+
+  if (process.env.NODE_ENV !== "production") {
+    console.log("=========================================")
+    console.log(`[DEV] Trial ending email for ${email}`)
+    console.log(`Plan: ${planName}, Charge date: ${chargeDate}`)
+    console.log("=========================================")
+  }
+
+  try {
+    await transporter.sendMail({
+      from: getFromAddress('billing', config),
+      to: email,
+      subject: `Your OpenORDO ${planName} trial ends soon`,
+      html,
+    })
+    return true
+  } catch (error) {
+    console.error("Failed to send trial ending email:", error)
+    return false
+  }
+}

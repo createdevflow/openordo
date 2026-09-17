@@ -2,6 +2,8 @@
 
 import { db } from "@/lib/db"
 import { sendVerificationOtp } from "@/lib/email"
+import { signIn } from "@/lib/auth"
+import { isRedirectError } from "next/dist/client/components/redirect-error"
 
 export async function verifyOtpAction(prevState: any, formData: FormData) {
   const email = (formData.get("email") as string)?.trim().toLowerCase()
@@ -34,6 +36,20 @@ export async function verifyOtpAction(prevState: any, formData: FormData) {
 
   // Delete the used token
   await (db as any).otpToken.delete({ where: { id: otpRecord.id } })
+
+  // Auto sign-in and redirect to onboarding — no need to ask user to log in again
+  try {
+    await signIn("credentials", {
+      identifier: email,
+      password: formData.get("password") as string,
+      redirectTo: "/onboarding/clinic",
+    })
+  } catch (err) {
+    // NextAuth throws a NEXT_REDIRECT — we must re-throw it so the redirect works
+    if (isRedirectError(err)) throw err
+    // If sign-in failed (e.g. password not provided), fall back to login page with verified flag
+    return { success: true, email, fallbackRedirect: true }
+  }
 
   return { success: true, email }
 }

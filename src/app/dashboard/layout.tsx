@@ -61,6 +61,7 @@ export default async function DashboardLayout({
       activePlugins={activePlugins}
       defaultCollapsed={isCollapsed}
       promoExpiresAt={planDetails.promoExpiresAt ? planDetails.promoExpiresAt.toISOString() : null}
+      clinicStatus={clinic.status}
     >
       {children}
     </DashboardShell>

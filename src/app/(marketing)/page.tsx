@@ -16,11 +16,14 @@ export default async function MarketingPage() {
 
   // Fetch real plans from DB
   let dbPlans: any[] = []
+  let defaultTrialDays = 14
   try {
     dbPlans = await db.plan.findMany({
       where: { isActive: true },
       orderBy: { sortOrder: "asc" }
     })
+    const trialSetting = await db.globalSetting.findUnique({ where: { key: "DEFAULT_TRIAL_DAYS" } })
+    if (trialSetting) defaultTrialDays = parseInt(trialSetting.value, 10)
   } catch (err) {
     console.error("Failed to load plans from DB, using defaults", err)
   }
@@ -306,6 +309,7 @@ export default async function MarketingPage() {
         plans={plans} 
         promo={promo} 
         initialCurrency={initialCurrency as "USD" | "INR"} 
+        defaultTrialDays={defaultTrialDays}
       />
 
       {/* PLUGINS SECTION */}

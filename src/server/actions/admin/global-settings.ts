@@ -28,6 +28,23 @@ export async function saveGlobalSettings(settings: Record<string, string>) {
   return { success: true }
 }
 
+export async function setDefaultFreePlan(planId: string) {
+  const session = await auth()
+  if (session?.user?.platformRole !== "SUPER_ADMIN") {
+    throw new Error("Unauthorized")
+  }
+  
+  if (!planId) return { success: true }
+  
+  await db.$transaction([
+    db.plan.updateMany({ data: { isDefaultFree: false } }),
+    db.plan.update({ where: { id: planId }, data: { isDefaultFree: true } })
+  ])
+  
+  revalidatePath("/admin/settings")
+  return { success: true }
+}
+
 export async function sendTestEmailAction(email: string, uiSettings?: Record<string, string>) {
   const session = await auth()
   if (session?.user?.platformRole !== "SUPER_ADMIN") {

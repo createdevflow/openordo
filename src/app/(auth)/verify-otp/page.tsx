@@ -16,6 +16,11 @@ export default function VerifyOtpPage() {
   const [state, formAction, pending] = useActionState(verifyOtpAction, null)
   const [resendPending, startResend] = useTransition()
   const [resendMsg, setResendMsg] = useState("")
+  const [pwd, setPwd] = useState("")
+
+  useEffect(() => {
+    setPwd(sessionStorage.getItem("temp_reg_pwd") || "")
+  }, [])
 
   const handleResend = () => {
     startResend(async () => {
@@ -29,8 +34,8 @@ export default function VerifyOtpPage() {
   }
 
   useEffect(() => {
-    if (state?.success && state?.email) {
-      // Upon success, redirect to login page so they can actually sign in
+    if (state?.fallbackRedirect && state?.email) {
+      // Auto-login failed, fallback to login page
       router.push("/login?verified=true")
     }
   }, [state, router])
@@ -64,6 +69,7 @@ export default function VerifyOtpPage() {
 
         <form action={formAction} className="space-y-4">
           <input type="hidden" name="email" value={emailParam} />
+          <input type="hidden" name="password" value={pwd} />
           
           {state?.error && (
             <div className="bg-coral-soft text-coral p-3 rounded-md text-[13px] font-medium">

@@ -20,11 +20,13 @@ export type PlanItem = {
 export function LandingPricingSection({
   plans,
   promo,
-  initialCurrency = "USD"
+  initialCurrency = "USD",
+  defaultTrialDays = 14
 }: {
   plans: PlanItem[]
   promo?: any | null
   initialCurrency?: "USD" | "INR"
+  defaultTrialDays?: number
 }) {
   const [currency, setCurrency] = useState<"USD" | "INR">(initialCurrency)
 
@@ -190,7 +192,7 @@ export function LandingPricingSection({
                   }`}
                   style={isFeatured ? { color: "#FFFFFF" } : {}}
                 >
-                  {isFree ? "Start free" : "Start 14-day free trial"} <ArrowRight size={14} />
+                  {isFree ? "Start free" : `Start ${defaultTrialDays}-day free trial`} <ArrowRight size={14} />
                 </button>
               </Link>
             </div>

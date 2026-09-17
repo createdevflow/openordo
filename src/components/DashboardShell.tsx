@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { ClipboardList, LogOut, Menu, Search, Bell, ChevronsLeft, ChevronsRight, Settings, X } from "lucide-react"
 import { DashboardNav } from "./DashboardNav"
 import { signOut } from "next-auth/react"
+import { usePathname, useRouter } from "next/navigation"
 
 export function DashboardShell({
   children,
@@ -18,6 +19,7 @@ export function DashboardShell({
   activePlugins = [],
   defaultCollapsed = false,
   promoExpiresAt = null,
+  clinicStatus = "ACTIVE",
 }: {
   children: React.ReactNode
   clinicName: string
@@ -31,7 +33,10 @@ export function DashboardShell({
   activePlugins?: string[]
   defaultCollapsed?: boolean
   promoExpiresAt?: string | null
+  clinicStatus?: string
 }) {
+  const pathname = usePathname()
+  const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed || false)
   const [globalSearch, setGlobalSearch] = useState("")
@@ -39,6 +44,13 @@ export function DashboardShell({
   const [profileOpen, setProfileOpen] = useState(false)
   const [timeLeft, setTimeLeft] = useState<{ d: number, h: number, m: number, s: number } | null>(null)
   const [isBannerDismissed, setIsBannerDismissed] = useState(false)
+
+  useEffect(() => {
+    if (clinicStatus === "LOCKED_CANCELLED" && pathname !== "/dashboard/settings") {
+      router.replace("/dashboard/settings")
+    }
+  }, [clinicStatus, pathname, router])
+
   useEffect(() => {
     if (!promoExpiresAt) return
 
@@ -71,6 +83,17 @@ export function DashboardShell({
 
     return () => clearInterval(interval)
   }, [promoExpiresAt])
+
+  const isLocked = clinicStatus === "LOCKED_CANCELLED"
+
+  if (isLocked && pathname !== "/dashboard/settings") {
+    // Show nothing while redirecting to prevent flashing blocked content
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "var(--paper)" }}>
+        <div className="text-ink-soft text-sm">Redirecting to settings...</div>
+      </div>
+    )
+  }
 
   return (
     <div className={`cw ${isCollapsed ? "collapsed-ui" : ""}`}>

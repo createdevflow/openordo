@@ -3,8 +3,7 @@
 import { useState } from "react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
-import { createPlan, updatePlan } from "@/server/actions/admin/plans"
-import { upsertPlanFeature } from "@/server/actions/admin/flags"
+import { createPlan, updatePlan, updatePlanFeatures } from "@/server/actions/admin/plans"
 import { Check, CheckCircle2, Plus, X } from "lucide-react"
 
 const FEATURE_CATEGORIES = ["Core", "Scheduling", "Billing", "Communication", "Support"]
@@ -81,11 +80,9 @@ export function PlanBuilderClient({
       const res = plan ? await updatePlan(plan.id, data) : await createPlan(data)
       if (!res.ok) { toast.error(res.error || "Failed to save"); setPending(false); return }
 
-      const planId = plan?.id || (res as any).plan?.id
+      const planId = plan?.id || (res as any).planId
       if (planId && allFeatures.length > 0) {
-        await Promise.all(
-          allFeatures.map(f => upsertPlanFeature(planId, f.id, includedIds.has(f.id)))
-        )
+        await updatePlanFeatures(planId, Array.from(includedIds))
       }
 
       toast.success("Plan saved")
