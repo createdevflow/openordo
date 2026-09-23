@@ -4,6 +4,11 @@ const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
   serverExternalPackages: ["razorpay"],
+  // Ensure docs/legal/*.md files are included in the standalone output trace.
+  // Required because the legal pages read these files from disk at runtime.
+  outputFileTracingIncludes: {
+    "/legal/*": ["./docs/legal/**/*"],
+  },
   async headers() {
     return [
       {
@@ -21,3 +26,4 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
