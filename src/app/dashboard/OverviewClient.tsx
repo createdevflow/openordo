@@ -232,7 +232,7 @@ export function OverviewClient({ clinic, patients, appointments, invoices, docto
                     <div className="subtitle">{fmtTime12(a.time)} · {a.visitType === "VIDEO" ? "Video call" : "In-person"}</div>
                   </div>
                   <div className="cw-list-action">
-                    <StatusBadge status={a.status} type={a.visitType} />
+                    <StatusBadge status={a.status} />
                   </div>
                 </div>
               )

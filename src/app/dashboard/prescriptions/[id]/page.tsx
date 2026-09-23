@@ -32,7 +32,6 @@ export default async function ViewPrescriptionPage({ params }: { params: Promise
         </Link>
         <button
           className="cw-btn cw-btn-primary cw-btn-sm"
-          onClick="window.print()"
           style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
         >
           <Printer size={13} /> Print
