@@ -51,8 +51,8 @@ export default async function MarketingLayout({
                 <Link href="/login" tabIndex={-1}>
                   <Button variant="ghost" size="sm">Log in</Button>
                 </Link>
-                <Link href="/register" tabIndex={-1}>
-                  <Button size="sm">Start free</Button>
+                <Link href="/request-demo" tabIndex={-1}>
+                  <Button size="sm" className="bg-[#1a382c] hover:bg-[#142c23]">Request a demo</Button>
                 </Link>
               </>
             )}
@@ -104,7 +104,8 @@ export default async function MarketingLayout({
               <div className="text-[12px] font-bold text-ink uppercase tracking-wider mb-2">Company</div>
               <Link href="/contact" className="text-[13.5px] text-ink-soft hover:text-ink">Contact Us</Link>
               <Link href="/login" className="text-[13.5px] text-ink-soft hover:text-ink">Clinic Login</Link>
-              <Link href="/register" className="text-[13.5px] text-ink-soft hover:text-ink">Start Free Trial</Link>
+              <Link href="/request-demo" className="text-[13.5px] text-ink-soft hover:text-ink">Request a Demo</Link>
+              <Link href="/account-deletion" className="text-[13.5px] text-ink-soft hover:text-ink">Account Deletion</Link>
             </div>
           </div>
           <div className="text-[13px] text-ink-soft">© 2026 OpenORDO.</div>

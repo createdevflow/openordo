@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useTransition } from "react"
+import Link from "next/link"
 import { Search, Plus, FileSignature, Trash2, Printer, X, Pill, Calendar, User, Stethoscope } from "lucide-react"
 import { createPrescriptionAction, deletePrescriptionAction } from "@/server/actions/prescriptions"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
@@ -27,6 +28,7 @@ export function PrescriptionsClient({
   patients,
   doctors,
   clinic,
+  clinicEmail,
   initialAction,
   initialPatientId
 }: {
@@ -34,6 +36,7 @@ export function PrescriptionsClient({
   patients: any[]
   doctors: any[]
   clinic: any
+  clinicEmail?: string
   initialAction?: string
   initialPatientId?: string
 }) {
@@ -82,14 +85,107 @@ export function PrescriptionsClient({
 
     startTransition(async () => {
       try {
-        await createPrescriptionAction({
+        const result = await createPrescriptionAction({
           patientId,
           doctorId,
           date,
           items: validItems
         })
+        
+        // Secretly render the prescription to generate PDF
+        if (result.success && result.prescription) {
+          try {
+            const html2pdf = (await import("html2pdf.js")).default
+            const ReactDOMServer = (await import("react-dom/server")).default
+            
+            const rxPatient = patients.find((p: any) => p.id === patientId)
+            const rxDoctor = doctors.find((d: any) => d.id === doctorId)
+            
+            const htmlString = ReactDOMServer.renderToString(
+              <div style={{ padding: "30px", fontFamily: "system-ui, sans-serif", color: "#111" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "2px solid #1E4638", paddingBottom: 16, marginBottom: 16 }}>
+                  <div>
+                    <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--moss)", marginBottom: 2 }}>{clinic?.name || "Clinic"}</h2>
+                    <div style={{ fontSize: 10.5, color: "#555", lineHeight: 1.4 }}>
+                      {clinic?.address || "Address details"}<br />
+                      Phone: {clinic?.phone || "+91 98765 43210"} • Email: {clinicEmail || "care@clinic.com"}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <h3 style={{ margin: 0, fontSize: 16, color: "#1E4638" }}>Dr. {rxDoctor?.name}</h3>
+                    <div style={{ fontSize: 12, color: "#666" }}>{rxDoctor?.specialty}</div>
+                    <div style={{ fontSize: 11, color: "#888", marginTop: 4 }}>
+                      Date: {new Date(date).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ background: "#F4F6F5", padding: "10px 14px", display: "flex", justifyContent: "space-between", marginBottom: 20, fontSize: 13, border: "1px solid #E5E7EB" }}>
+                  <div><b>Patient:</b> {rxPatient?.name}</div>
+                  <div><b>Age/Sex:</b> {rxPatient?.age || "—"} / {rxPatient?.gender || "—"}</div>
+                  <div><b>Patient ID:</b> {rxPatient?.displayId || "—"}</div>
+                </div>
+
+                <div style={{ fontSize: 32, fontWeight: 900, color: "#1E4638", fontFamily: "serif", marginBottom: 12 }}>
+                  ℞
+                </div>
+
+                <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 30, fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ borderBottom: "2px solid #1E4638", textAlign: "left" }}>
+                      <th style={{ padding: "8px 4px", width: "30px" }}>#</th>
+                      <th style={{ padding: "8px" }}>Medicine / Drug</th>
+                      <th style={{ padding: "8px" }}>Dosage</th>
+                      <th style={{ padding: "8px" }}>Frequency</th>
+                      <th style={{ padding: "8px" }}>Duration</th>
+                      <th style={{ padding: "8px" }}>Instructions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {validItems.map((it, i) => (
+                      <tr key={i} style={{ borderBottom: "1px solid #E5E7EB" }}>
+                        <td style={{ padding: "8px 4px", fontWeight: 600 }}>{i + 1}</td>
+                        <td style={{ padding: "8px", fontWeight: 700, color: "#16241F" }}>{it.drug}</td>
+                        <td style={{ padding: "8px" }}>{it.dosage}</td>
+                        <td style={{ padding: "8px" }}>{it.frequency}</td>
+                        <td style={{ padding: "8px" }}>{it.durationDays} Days</td>
+                        <td style={{ padding: "8px", color: "#555" }}>{it.notes || "As directed"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+            
+            const container = document.createElement("div")
+            container.innerHTML = htmlString
+            
+            const pdfBlob = await html2pdf().from(container).outputPdf("blob")
+            const file = new File([pdfBlob], `Prescription_${result.prescription.id.substring(0, 6)}.pdf`, { type: "application/pdf" })
+            
+            const formData = new FormData()
+            formData.append("file", file)
+            
+            const res = await fetch("/api/upload", { method: "POST", body: formData })
+            if (res.ok) {
+              const json = await res.json()
+              if (json.url) {
+                const { createPatientDocumentAction } = await import("@/server/actions/documents")
+                await createPatientDocumentAction({
+                  patientId,
+                  name: `Prescription ${result.prescription.id.substring(0, 6)}`,
+                  type: "PRESCRIPTION",
+                  sizeBytes: json.sizeBytes || file.size,
+                  url: json.url
+                })
+              }
+            }
+          } catch (pdfErr) {
+            console.error("Failed to generate/upload prescription PDF:", pdfErr)
+          }
+        }
+
         setIsNewModalOpen(false)
-        // Reset
         setItems([{ drug: "", dosage: "1 tab", frequency: "BD (2x daily)", durationDays: 5, notes: "After meals" }])
       } catch (err: any) {
         showAlert({ title: "Error", body: err.message || "Failed to create prescription", tone: "danger" })
@@ -247,12 +343,11 @@ export function PrescriptionsClient({
                     <Trash2 size={14} />
                   </button>
                   <div style={{ display: "flex", gap: 8 }}>
-                    <button
-                      className="cw-btn cw-btn-ghost cw-btn-sm"
-                      onClick={() => setPreviewPrescription(rx)}
-                    >
-                      View Rx
-                    </button>
+                    <Link href={`/dashboard/prescriptions/${rx.id}`}>
+                      <button className="cw-btn cw-btn-ghost cw-btn-sm">
+                        View Rx
+                      </button>
+                    </Link>
                     <button
                       className="cw-btn cw-btn-primary cw-btn-sm"
                       onClick={() => handlePrint(rx)}
@@ -270,9 +365,9 @@ export function PrescriptionsClient({
 
       {/* New Prescription Modal */}
       {isNewModalOpen && (
-        <div className="cw-modal-backdrop">
-          <div className="cw-modal-card" style={{ maxWidth: 640, width: "95%", maxHeight: "90vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, borderBottom: "1px solid var(--sand-soft)", paddingBottom: 12 }}>
+        <div className="cw-overlay" onClick={() => setIsNewModalOpen(false)}>
+          <div className="cw-modal" style={{ maxWidth: 640 }} onClick={e => e.stopPropagation()}>
+            <div className="cw-modal-head">
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <FileSignature size={20} color="var(--forest)" />
                 <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>New E-Prescription</h3>
@@ -283,8 +378,9 @@ export function PrescriptionsClient({
             </div>
 
             <form onSubmit={handleSavePrescription}>
-              {/* Header Info */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+              <div className="cw-modal-body">
+                {/* Header Info */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
                 <div>
                   <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Patient *</label>
                   <select
@@ -422,9 +518,9 @@ export function PrescriptionsClient({
                   ))}
                 </div>
               </div>
+              </div>
 
-              {/* Modal Buttons */}
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, borderTop: "1px solid var(--sand-soft)", paddingTop: 14 }}>
+              <div className="cw-modal-foot">
                 <button
                   type="button"
                   className="cw-btn cw-btn-ghost cw-btn-sm"
@@ -437,118 +533,10 @@ export function PrescriptionsClient({
                   className="cw-btn cw-btn-primary cw-btn-sm"
                   disabled={isPending}
                 >
-                  {isPending ? "Generating Rx…" : "Issue Prescription"}
+                  {isPending ? "Saving..." : "Save & Generate PDF"}
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Prescription Preview / Print Modal */}
-      {previewPrescription && (
-        <div className="cw-modal-backdrop no-print">
-          <div className="cw-modal-card" style={{ maxWidth: 700, width: "95%", maxHeight: "90vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--forest)" }}>Prescription Preview</span>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  className="cw-btn cw-btn-primary cw-btn-sm"
-                  onClick={() => window.print()}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
-                >
-                  <Printer size={13} /> Print
-                </button>
-                <button className="cw-btn cw-btn-ghost cw-btn-sm" onClick={() => setPreviewPrescription(null)}>
-                  <X size={16} />
-                </button>
-              </div>
-            </div>
-
-            {/* Printable View Container */}
-            <div
-              style={{
-                border: "2px solid #1E4638",
-                borderRadius: 8,
-                padding: "24px 28px",
-                background: "#fff",
-                color: "#16241F"
-              }}
-            >
-              {/* Header */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid #1E4638", paddingBottom: 16, marginBottom: 16 }}>
-                <div>
-                  <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 800, color: "#1E4638" }}>
-                    {clinic?.name || "OpenORDO Medical Centre"}
-                  </h2>
-                  <div style={{ fontSize: 12, color: "#555", lineHeight: 1.4 }}>
-                    {clinic?.address || "Health Plaza, Level 2"}<br />
-                    Phone: {clinic?.phone || "+91 98765 43210"} • Email: {clinic?.email || "care@clinic.com"}
-                  </div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: "#1E4638" }}>
-                    Dr. {previewPrescription.doctor?.name || "Attending Physician"}
-                  </div>
-                  <div style={{ fontSize: 12, color: "#666" }}>
-                    {previewPrescription.doctor?.specialty || "General Medicine"}
-                  </div>
-                  <div style={{ fontSize: 11, color: "#888", marginTop: 4 }}>
-                    Rx Date: {new Date(previewPrescription.date).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
-                  </div>
-                </div>
-              </div>
-
-              {/* Patient Info Strip */}
-              <div style={{ background: "#F4F6F5", padding: "10px 14px", borderRadius: 6, display: "flex", justifyContent: "space-between", marginBottom: 20, fontSize: 13 }}>
-                <div><b>Patient:</b> {previewPrescription.patient?.name}</div>
-                <div><b>Age/Sex:</b> {previewPrescription.patient?.age || "—"} / {previewPrescription.patient?.gender || "—"}</div>
-                <div><b>Patient ID:</b> {previewPrescription.patient?.displayId || "—"}</div>
-              </div>
-
-              {/* Rx Symbol */}
-              <div style={{ fontSize: 28, fontWeight: 900, color: "#1E4638", fontFamily: "serif", marginBottom: 12 }}>
-                ℞
-              </div>
-
-              {/* Medicines Table */}
-              <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 24, fontSize: 13 }}>
-                <thead>
-                  <tr style={{ borderBottom: "2px solid #1E4638", textAlign: "left" }}>
-                    <th style={{ padding: "6px 4px", width: "30px" }}>#</th>
-                    <th style={{ padding: "6px 8px" }}>Medicine / Drug</th>
-                    <th style={{ padding: "6px 8px" }}>Dosage</th>
-                    <th style={{ padding: "6px 8px" }}>Frequency</th>
-                    <th style={{ padding: "6px 8px" }}>Duration</th>
-                    <th style={{ padding: "6px 8px" }}>Instructions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {parseItems(previewPrescription.items).map((it, i) => (
-                    <tr key={i} style={{ borderBottom: "1px solid #E5E7EB" }}>
-                      <td style={{ padding: "8px 4px", fontWeight: 600 }}>{i + 1}</td>
-                      <td style={{ padding: "8px 8px", fontWeight: 700, color: "#16241F" }}>{it.drug}</td>
-                      <td style={{ padding: "8px 8px" }}>{it.dosage}</td>
-                      <td style={{ padding: "8px 8px" }}>{it.frequency}</td>
-                      <td style={{ padding: "8px 8px" }}>{it.durationDays} Days</td>
-                      <td style={{ padding: "8px 8px", color: "#555" }}>{it.notes || "As directed"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {/* Signature / Footer */}
-              <div style={{ marginTop: 40, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
-                <div style={{ fontSize: 11, color: "#777" }}>
-                  Computer-generated clinical prescription issued via OpenORDO E-Prescriptions.
-                </div>
-                <div style={{ textAlign: "center", minWidth: 160 }}>
-                  <div style={{ borderBottom: "1px solid #16241F", height: 35 }}></div>
-                  <div style={{ fontSize: 12, fontWeight: 700, marginTop: 4 }}>Dr. {previewPrescription.doctor?.name}</div>
-                  <div style={{ fontSize: 10.5, color: "#666" }}>Authorized Medical Signatory</div>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       )}
@@ -562,7 +550,7 @@ export function PrescriptionsClient({
                 <h1 style={{ margin: "0 0 4px", fontSize: 22, color: "#1E4638" }}>{clinic?.name || "OpenORDO Medical Centre"}</h1>
                 <div style={{ fontSize: 12, color: "#555" }}>
                   {clinic?.address || "Health Plaza, Level 2"}<br />
-                  Phone: {clinic?.phone || "+91 98765 43210"} • Email: {clinic?.email || "care@clinic.com"}
+                  Phone: {clinic?.phone || "+91 98765 43210"} • Email: {clinicEmail || "care@clinic.com"}
                 </div>
               </div>
               <div style={{ textAlign: "right" }}>

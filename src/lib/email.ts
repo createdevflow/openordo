@@ -238,3 +238,44 @@ export async function sendTrialEndingEmail(
     return false
   }
 }
+
+export async function sendDemoCredentialsEmail(email: string, name: string, link: string) {
+  const transporter = await getTransporter()
+  if (!transporter) return false
+
+  const config = await getSmtpConfig()
+  
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+      <h2 style="color: #1a382c;">Your OpenORDO Demo is Ready</h2>
+      <p>Hi ${name},</p>
+      <p>Thank you for requesting a demo of OpenORDO. We've set up a temporary sandbox environment for you to explore.</p>
+      <div style="margin: 30px 0; padding: 20px; background-color: #f7f9f8; border-left: 4px solid #1a382c; border-radius: 4px;">
+        <p style="margin-top: 0;"><strong>Access your demo environment here:</strong></p>
+        <a href="${link}" style="display: inline-block; background-color: #1a382c; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Enter Demo Environment</a>
+      </div>
+      <p style="font-size: 14px; color: #666;">Note: This link provides direct access without a password and is valid for 30 minutes from generation. The demo environment is isolated and temporary.</p>
+      <p style="margin-top: 30px;">Best regards,<br>The OpenORDO Team</p>
+    </div>
+  `
+
+  if (process.env.NODE_ENV !== "production") {
+    console.log("=========================================")
+    console.log(`[DEV] Demo Credentials email for ${email}`)
+    console.log(`Link: ${link}`)
+    console.log("=========================================")
+  }
+
+  try {
+    await transporter.sendMail({
+      from: getFromAddress('general', config),
+      to: email,
+      subject: "Your OpenORDO Demo Access",
+      html,
+    })
+    return true
+  } catch (error) {
+    console.error("Failed to send demo credentials email:", error)
+    return false
+  }
+}

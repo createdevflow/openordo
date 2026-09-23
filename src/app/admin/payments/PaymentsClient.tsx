@@ -18,7 +18,7 @@ export function PaymentsClient({ payments }: { payments: any[] }) {
     const matchSearch =
       p.clinic?.name?.toLowerCase().includes(search.toLowerCase()) ||
       p.clinic?.slug?.toLowerCase().includes(search.toLowerCase()) ||
-      p.stripeInvoiceId?.toLowerCase().includes(search.toLowerCase())
+      p.razorpayPaymentId?.toLowerCase().includes(search.toLowerCase())
     const matchStatus = statusFilter === "ALL" || p.status === statusFilter
     return matchSearch && matchStatus
   })
@@ -92,7 +92,7 @@ export function PaymentsClient({ payments }: { payments: any[] }) {
           <div className="adm-empty">
             <div className="adm-empty-icon"><CreditCard size={24} /></div>
             <div className="adm-empty-title">No payments found</div>
-            <div className="adm-empty-desc">Payments appear here when Stripe webhooks are received.</div>
+            <div className="adm-empty-desc">Payments appear here when Razorpay webhooks are received.</div>
           </div>
         ) : (
           <div className="adm-table-wrap">
@@ -102,9 +102,9 @@ export function PaymentsClient({ payments }: { payments: any[] }) {
                   <th>Clinic</th>
                   <th>Amount</th>
                   <th>Status</th>
-                  <th>Invoice ID</th>
+                  <th>Razorpay ID</th>
                   <th>Date</th>
-                  <th></th>
+                  <th className="adm-text-right">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -124,19 +124,19 @@ export function PaymentsClient({ payments }: { payments: any[] }) {
                       </span>
                     </td>
                     <td className="adm-mono" style={{ fontSize: 12, color: "var(--adm-muted)" }}>
-                      {p.stripeInvoiceId || "—"}
+                      {p.razorpayPaymentId || "—"}
                     </td>
                     <td className="adm-mono" style={{ fontSize: 12.5, color: "var(--adm-muted)", whiteSpace: "nowrap" }}>
                       {new Date(p.createdAt).toLocaleString("en-IN")}
                     </td>
-                    <td>
-                      {p.stripeInvoiceId && (
+                    <td style={{ textAlign: "right" }}>
+                      {p.razorpayPaymentId && (
                         <a
-                          href={`https://dashboard.stripe.com/invoices/${p.stripeInvoiceId}`}
+                          href={`https://dashboard.razorpay.com/app/payments/${p.razorpayPaymentId}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="adm-btn adm-btn-ghost adm-btn-icon adm-btn-sm"
-                          title="View in Stripe"
+                          title="View in Razorpay"
                         >
                           <ExternalLink size={13} />
                         </a>

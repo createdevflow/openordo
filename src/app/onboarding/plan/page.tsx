@@ -52,13 +52,19 @@ export default async function OnboardingPlanPage() {
     } catch {}
 
     const catalogFeatures = (p.planFeatures || [])
-      .filter(pf => pf.feature?.isGloballyEnabled)
-      .map(pf => pf.feature.name)
+      .filter(pf => pf.feature?.isGloballyEnabled !== false)
+      .map(pf => pf.feature?.name || "")
+      .filter(Boolean)
 
     let displayFeatures: string[] = []
     
     // Combine DB catalog features and custom extra bullets
     displayFeatures = [...catalogFeatures, ...customBullets]
+
+    // Always append storage limit if defined
+    if (p.storageLimitGb) {
+      displayFeatures.push(`${p.storageLimitGb} GB document storage`)
+    }
 
     // Fallback if absolutely no features are defined for this plan in DB yet
     if (displayFeatures.length === 0) {
@@ -79,6 +85,7 @@ export default async function OnboardingPlanPage() {
       priceYearlyInr: p.priceYearlyInr,
       patientLimit: p.patientLimit,
       doctorLimit: p.doctorLimit,
+      storageLimitGb: p.storageLimitGb,
       isFeatured: p.isFeatured,
       isDefaultFree: p.isDefaultFree,
       featureList: displayFeatures,

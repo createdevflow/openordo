@@ -9,7 +9,7 @@ import { togglePlatformFlag, toggleFeatureGlobal, createFeature, deleteFeature }
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { saveGlobalSettings, uploadBrandingAsset, sendTestEmailAction, setDefaultFreePlan } from "@/server/actions/admin/global-settings"
 import { updateAdminCredentials } from "@/server/actions/admin/settings"
-import { ShieldAlert, Zap, Package, Palette, User, AlertTriangle, Plus, Trash2, Globe, Mail } from "lucide-react"
+import { ShieldAlert, Zap, Package, Palette, User, AlertTriangle, Plus, Trash2, Globe, Mail, KeyRound, ExternalLink, Eye, EyeOff, Megaphone } from "lucide-react"
 
 const FEATURE_CATEGORIES = ["Core", "Scheduling", "Billing", "Communication", "Support"]
 
@@ -105,6 +105,29 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
     })
   }
 
+  // OAuth Settings State
+  const [oauthSettings, setOauthSettings] = useState({
+    AUTH_GOOGLE_ID: globalSettings.AUTH_GOOGLE_ID || "",
+    AUTH_GOOGLE_SECRET: globalSettings.AUTH_GOOGLE_SECRET || "",
+  })
+  const [showGoogleSecret, setShowGoogleSecret] = useState(false)
+  const [savingOauth, setSavingOauth] = useState(false)
+
+  const handleSaveOauth = async () => {
+    setSavingOauth(true)
+    toast.promise(
+      saveGlobalSettings(oauthSettings).then(res => {
+        if ((res as any).error) throw new Error((res as any).error)
+        return res
+      }),
+      {
+        loading: "Saving OAuth credentials…",
+        success: () => { setSavingOauth(false); return "Google OAuth credentials saved — restart the server to apply" },
+        error: (err: any) => { setSavingOauth(false); return err.message || "Failed to save" },
+      }
+    )
+  }
+
   // Global Settings State
   const [smtpSettings, setSmtpSettings] = useState({
     SMTP_HOST: globalSettings.SMTP_HOST || "",
@@ -121,13 +144,15 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
     SEO_META_DESC: globalSettings.SEO_META_DESC || "Automating your clinic",
     SEO_FAVICON_URL: globalSettings.SEO_FAVICON_URL || "",
     SEO_OG_IMAGE_URL: globalSettings.SEO_OG_IMAGE_URL || "",
+    demo_video_url: globalSettings.demo_video_url || "",
   })
   const [paymentSettings, setPaymentSettings] = useState({
     DEFAULT_TRIAL_DAYS: globalSettings.DEFAULT_TRIAL_DAYS || "14",
     DEFAULT_CURRENCY: globalSettings.DEFAULT_CURRENCY || "INR",
-    STRIPE_SECRET_KEY: globalSettings.STRIPE_SECRET_KEY || "",
-    STRIPE_WEBHOOK_SECRET: globalSettings.STRIPE_WEBHOOK_SECRET || "",
-    STRIPE_PUBLIC_KEY: globalSettings.STRIPE_PUBLIC_KEY || "",
+    RAZORPAY_KEY_SECRET: globalSettings.RAZORPAY_KEY_SECRET || "",
+    RAZORPAY_WEBHOOK_SECRET: globalSettings.RAZORPAY_WEBHOOK_SECRET || "",
+    RAZORPAY_KEY_ID: globalSettings.RAZORPAY_KEY_ID || "",
+    RAZORPAY_BYPASS_MODE: globalSettings.RAZORPAY_BYPASS_MODE || "false",
   })
 
   const [defaultFreePlanId, setDefaultFreePlanId] = useState(() => {
@@ -231,6 +256,8 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
                   { value: "billing", label: "Plans & Billing", icon: <Globe size={14} /> },
                   { value: "email", label: "Email & SMTP", icon: <Mail size={14} /> },
                   { value: "branding", label: "Branding & SEO", icon: <Palette size={14} /> },
+                  { value: "marketing", label: "Marketing", icon: <Megaphone size={14} /> },
+                  { value: "oauth", label: "OAuth & SSO", icon: <KeyRound size={14} /> },
                   { value: "account", label: "Account", icon: <User size={14} /> },
                   { value: "danger", label: "Danger Zone", icon: <AlertTriangle size={14} /> },
                 ].map(tab => (
@@ -417,23 +444,39 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
               <div className="adm-info-box" style={{ marginTop: 8 }}>
                 <Zap size={16} style={{ flexShrink: 0, marginTop: 2 }} />
                 <span>
-                  <strong>Stripe mode:</strong> {paymentSettings.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "🟢 Live" : "🟡 Test (no charges)"}
+                  <strong>Razorpay mode:</strong> {paymentSettings.RAZORPAY_BYPASS_MODE === "true" ? "🟠 Developer Bypass Enabled" : paymentSettings.RAZORPAY_KEY_ID?.startsWith("rzp_live_") ? "🔴 Live" : "🟡 Test (no charges)"}
                 </span>
               </div>
               <div style={{ marginTop: 16 }}>
-                <div className="adm-section-label" style={{ marginBottom: 16 }}>Payment Gateway (Stripe)</div>
+                <div className="adm-section-label" style={{ marginBottom: 16 }}>Payment Gateway (Razorpay)</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input 
+                      type="checkbox" 
+                      checked={paymentSettings.RAZORPAY_BYPASS_MODE === "true"} 
+                      onChange={e => setPaymentSettings(p => ({...p, RAZORPAY_BYPASS_MODE: e.target.checked ? "true" : "false"}))}
+                      style={{ cursor: "pointer" }}
+                    />
+                    <label className="adm-label" style={{ marginBottom: 0, cursor: "pointer" }}>
+                      Enable Developer Bypass Mode
+                    </label>
+                  </div>
+                  {paymentSettings.RAZORPAY_BYPASS_MODE === "true" && (
+                    <div className="text-[13px] text-amber-600 bg-amber-50 p-3 rounded-lg border border-amber-200">
+                      <strong>Bypass Mode Active:</strong> Checkout flows will instantly simulate a successful payment and provision the item without calling Razorpay.
+                    </div>
+                  )}
                   <div>
-                    <label className="adm-label">Stripe Public Key</label>
-                    <input className="adm-input" value={paymentSettings.STRIPE_PUBLIC_KEY} onChange={e => setPaymentSettings(p => ({...p, STRIPE_PUBLIC_KEY: e.target.value}))} placeholder="pk_test_..." />
+                    <label className="adm-label">Razorpay Key ID</label>
+                    <input className="adm-input" value={paymentSettings.RAZORPAY_KEY_ID} onChange={e => setPaymentSettings(p => ({...p, RAZORPAY_KEY_ID: e.target.value}))} placeholder="rzp_test_..." />
                   </div>
                   <div>
-                    <label className="adm-label">Stripe Secret Key</label>
-                    <input className="adm-input" type="password" value={paymentSettings.STRIPE_SECRET_KEY} onChange={e => setPaymentSettings(p => ({...p, STRIPE_SECRET_KEY: e.target.value}))} placeholder="sk_test_..." />
+                    <label className="adm-label">Razorpay Key Secret</label>
+                    <input className="adm-input" type="password" value={paymentSettings.RAZORPAY_KEY_SECRET} onChange={e => setPaymentSettings(p => ({...p, RAZORPAY_KEY_SECRET: e.target.value}))} placeholder="..." />
                   </div>
                   <div>
-                    <label className="adm-label">Stripe Webhook Secret</label>
-                    <input className="adm-input" type="password" value={paymentSettings.STRIPE_WEBHOOK_SECRET} onChange={e => setPaymentSettings(p => ({...p, STRIPE_WEBHOOK_SECRET: e.target.value}))} placeholder="whsec_..." />
+                    <label className="adm-label">Razorpay Webhook Secret</label>
+                    <input className="adm-input" type="password" value={paymentSettings.RAZORPAY_WEBHOOK_SECRET} onChange={e => setPaymentSettings(p => ({...p, RAZORPAY_WEBHOOK_SECRET: e.target.value}))} placeholder="..." />
                   </div>
                 </div>
               </div>
@@ -548,6 +591,132 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
               <button className="adm-btn adm-btn-primary" style={{ alignSelf: "flex-start" }} onClick={() => handleSaveGlobal(seoSettings)} disabled={savingGlobal}>
                 {savingGlobal ? "Saving..." : "Save Branding & SEO"}
               </button>
+            </div>
+          </Tabs.Content>
+
+          {/* ── Marketing ── */}
+          <Tabs.Content value="marketing" className="adm-tab-content">
+            <div style={{ marginBottom: 24 }}>
+              <div className="adm-section-label" style={{ marginBottom: 4 }}>Marketing & Content</div>
+              <p style={{ fontSize: 13.5, color: "var(--adm-muted)", margin: 0 }}>
+                Configure content and assets for the public marketing site.
+              </p>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 600 }}>
+              <div>
+                <label className="adm-label">Demo Video URL</label>
+                <div style={{ fontSize: 12, color: "var(--adm-muted)", marginBottom: 8 }}>
+                  YouTube Embed or direct URL shown on the Request a Demo page.
+                </div>
+                <input
+                  className="adm-input"
+                  type="text"
+                  value={seoSettings.demo_video_url || ""}
+                  onChange={e => setSeoSettings(p => ({ ...p, demo_video_url: e.target.value }))}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                />
+              </div>
+
+              <button className="adm-btn adm-btn-primary" style={{ alignSelf: "flex-start" }} onClick={() => handleSaveGlobal({ demo_video_url: seoSettings.demo_video_url })} disabled={savingGlobal}>
+                {savingGlobal ? "Saving..." : "Save Marketing Settings"}
+              </button>
+            </div>
+          </Tabs.Content>
+
+          {/* ── OAuth & SSO ── */}
+          <Tabs.Content value="oauth" className="adm-tab-content">
+            <div style={{ marginBottom: 24 }}>
+              <div className="adm-section-label" style={{ marginBottom: 4 }}>OAuth & Single Sign-On</div>
+              <p style={{ fontSize: 13.5, color: "var(--adm-muted)", margin: 0 }}>
+                Configure OAuth provider credentials. Values saved here override the corresponding <code style={{ fontFamily: "monospace", background: "var(--adm-bg)", padding: "2px 5px", borderRadius: 4 }}>.env</code> variables at runtime — no redeploy needed.
+              </p>
+            </div>
+
+            {/* Google OAuth */}
+            <div style={{ background: "var(--adm-bg)", border: "1px solid var(--adm-border)", borderRadius: 10, padding: 20, marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                {/* Google G mark */}
+                <svg width="20" height="20" viewBox="0 0 18 18" aria-hidden="true">
+                  <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4" />
+                  <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853" />
+                  <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05" />
+                  <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335" />
+                </svg>
+                <div className="adm-section-label" style={{ margin: 0 }}>Google OAuth 2.0</div>
+                <a
+                  href="https://console.cloud.google.com/apis/credentials"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4, fontSize: 12.5, color: "var(--adm-accent)", textDecoration: "none" }}
+                >
+                  <ExternalLink size={12} /> Google Cloud Console
+                </a>
+              </div>
+
+              {/* Redirect URI guidance */}
+              <div style={{ background: "rgba(30,70,56,0.06)", border: "1px solid rgba(30,70,56,0.15)", borderRadius: 8, padding: "12px 14px", marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--adm-accent)", marginBottom: 6 }}>Authorized Redirect URIs (add both to your Google OAuth client)</div>
+                <div style={{ fontFamily: "monospace", fontSize: 12, color: "var(--adm-text)", display: "flex", flexDirection: "column", gap: 3 }}>
+                  <span>http://localhost:3000/api/auth/callback/google</span>
+                  <span>https://openordo.com/api/auth/callback/google</span>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 520 }}>
+                <div>
+                  <label className="adm-label">Client ID</label>
+                  <input
+                    className="adm-input"
+                    type="text"
+                    value={oauthSettings.AUTH_GOOGLE_ID}
+                    onChange={e => setOauthSettings(p => ({ ...p, AUTH_GOOGLE_ID: e.target.value }))}
+                    placeholder="123456789-abc.apps.googleusercontent.com"
+                    spellCheck={false}
+                    autoComplete="off"
+                  />
+                </div>
+                <div>
+                  <label className="adm-label">Client Secret</label>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      className="adm-input"
+                      type={showGoogleSecret ? "text" : "password"}
+                      value={oauthSettings.AUTH_GOOGLE_SECRET}
+                      onChange={e => setOauthSettings(p => ({ ...p, AUTH_GOOGLE_SECRET: e.target.value }))}
+                      placeholder="GOCSPX-…"
+                      spellCheck={false}
+                      autoComplete="new-password"
+                      style={{ paddingRight: 36 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowGoogleSecret(v => !v)}
+                      style={{
+                        position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                        background: "none", border: "none", cursor: "pointer",
+                        color: "var(--adm-muted)", display: "flex", alignItems: "center", padding: 0
+                      }}
+                      aria-label={showGoogleSecret ? "Hide secret" : "Show secret"}
+                    >
+                      {showGoogleSecret ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <button
+                    className="adm-btn adm-btn-primary"
+                    onClick={handleSaveOauth}
+                    disabled={savingOauth || !oauthSettings.AUTH_GOOGLE_ID || !oauthSettings.AUTH_GOOGLE_SECRET}
+                  >
+                    {savingOauth ? "Saving…" : "Save Google Credentials"}
+                  </button>
+                  {oauthSettings.AUTH_GOOGLE_ID && (
+                    <span style={{ fontSize: 12, color: "var(--adm-muted)" }}>✓ Credentials on file</span>
+                  )}
+                </div>
+              </div>
             </div>
           </Tabs.Content>
 

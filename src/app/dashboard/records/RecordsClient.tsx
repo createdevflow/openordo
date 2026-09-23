@@ -25,6 +25,8 @@ export function RecordsClient({ records, patients, doctors, clinic }: any) {
 
   async function saveRecord(data: any, file: File | null) {
     let documentUrl = ""
+    let documentSize: number | undefined = undefined
+    let documentName: string | undefined = undefined
 
     if (file) {
       setIsUploading(true)
@@ -43,6 +45,8 @@ export function RecordsClient({ records, patients, doctors, clinic }: any) {
         
         const json = await res.json()
         documentUrl = json.url
+        documentSize = json.sizeBytes
+        documentName = json.originalFilename
       } catch (err) {
         console.error(err)
         showAlert({ title: "Upload Failed", body: "Failed to upload document", tone: "danger" })
@@ -54,7 +58,7 @@ export function RecordsClient({ records, patients, doctors, clinic }: any) {
 
     startTransition(async () => {
       try {
-        await createRecordAction({ ...data, documentUrl })
+        await createRecordAction({ ...data, documentUrl, documentSize, documentName })
         setModalOpen(false)
       } catch (err) {
         console.error(err)

@@ -124,6 +124,7 @@ async function main() {
       description: "Add live HD video visits to any appointment. Patients join via a secure link — no app download needed. Built on Daily.co for crystal-clear, HIPAA-ready calls.",
       category: "Clinical",
       icon: "Video",
+      kind: "FEATURE_UNLOCK",
       priceMonthlyINR: 99900,   // ₹999/mo
       priceMonthlyUSD: 1499,    // $14.99/mo
       priceYearlyINR:  899900,  // ₹8,999/yr
@@ -138,6 +139,7 @@ async function main() {
       description: "Real-time stock tracking with reorder alerts. Log usage against visits, receive low-stock notifications, and generate consumption reports — all without a spreadsheet.",
       category: "Operations",
       icon: "Package",
+      kind: "FEATURE_UNLOCK",
       priceOneTimeINR: 499900,  // ₹4,999 one-time
       priceOneTimeUSD: 5999,    // $59.99 one-time
       priceMonthlyINR: 49900,   // ₹499/mo
@@ -152,6 +154,7 @@ async function main() {
       description: "Replace free-text notes with a guided prescription builder — drug autocomplete, dosage, frequency, and duration rows. Prints as a branded PDF ready for the patient to take to a pharmacy.",
       category: "Clinical",
       icon: "FileSignature",
+      kind: "FEATURE_UNLOCK",
       priceOneTimeINR: 299900,  // ₹2,999 one-time
       priceOneTimeUSD: 3999,    // $39.99 one-time
       priceMonthlyINR: 29900,   // ₹299/mo
@@ -160,6 +163,46 @@ async function main() {
       priceYearlyUSD:  4499,    // $44.99/yr
       isActive: true,
       sortOrder: 3,
+    },
+    // ─── New add-ons ────────────────────────────────────────────────────────────
+    {
+      slug: "extra-doctor-seat",
+      name: "Extra Doctor Seat",
+      tagline: "Grow your team beyond your plan's base doctor limit.",
+      description: "Add one additional doctor slot to your clinic. Purchase multiple units to add multiple seats — each active unit raises your doctor cap by 1. Useful for growing practices that need more staff without upgrading plans.",
+      category: "Operations",
+      icon: "UserPlus",
+      kind: "LIMIT_MODIFIER",
+      priceMonthlyINR: 49900,   // ₹499/mo per seat
+      priceMonthlyUSD: 900,     // $9/mo per seat
+      isActive: true,
+      sortOrder: 4,
+    },
+    {
+      slug: "branded-booking-page",
+      name: "Branded Booking Page",
+      tagline: "Your clinic's booking page, your logo, your domain.",
+      description: "Unlock custom branding on your public booking page — add your logo, clinic colors, and a custom domain. Requires the Online Booking Page feature (Practice plan or higher). Makes your first patient impression professional and on-brand.",
+      category: "Operations",
+      icon: "Palette",
+      kind: "FEATURE_UNLOCK",
+      priceMonthlyINR: 99900,   // ₹999/mo
+      priceMonthlyUSD: 1900,    // $19/mo
+      isActive: true,
+      sortOrder: 5,
+    },
+    {
+      slug: "document-storage",
+      name: "Document & Report Storage",
+      tagline: "+10 GB of secure document storage per unit.",
+      description: "Expand your clinic's document and report storage. Each unit adds 10 GB to your base 5 GB quota. Purchase multiple units for even more capacity. All files are stored securely and accessible from patient records.",
+      category: "Operations",
+      icon: "HardDrive",
+      kind: "LIMIT_MODIFIER",
+      priceMonthlyINR: 69900,   // ₹699/mo per 10GB
+      priceMonthlyUSD: 1400,    // $14/mo per 10GB
+      isActive: true,
+      sortOrder: 6,
     },
   ]
 
@@ -172,18 +215,20 @@ async function main() {
         description: plugin.description,
         category: plugin.category,
         icon: plugin.icon,
-        priceOneTimeINR: plugin.priceOneTimeINR ?? null,
-        priceOneTimeUSD: plugin.priceOneTimeUSD ?? null,
+        kind: plugin.kind,
+        priceOneTimeINR: (plugin as any).priceOneTimeINR ?? null,
+        priceOneTimeUSD: (plugin as any).priceOneTimeUSD ?? null,
         priceMonthlyINR: plugin.priceMonthlyINR ?? null,
         priceMonthlyUSD: plugin.priceMonthlyUSD ?? null,
-        priceYearlyINR: plugin.priceYearlyINR ?? null,
-        priceYearlyUSD: plugin.priceYearlyUSD ?? null,
+        priceYearlyINR: (plugin as any).priceYearlyINR ?? null,
+        priceYearlyUSD: (plugin as any).priceYearlyUSD ?? null,
         isActive: plugin.isActive,
         sortOrder: plugin.sortOrder,
       },
-      create: plugin,
+      create: plugin as any,
     })
   }
+
 
   console.log("✅ Seed complete")
 }

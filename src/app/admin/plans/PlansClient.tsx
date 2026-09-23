@@ -91,6 +91,7 @@ export function PlansClient({ plans }: { plans: any[] }) {
                     <td style={{ fontSize: 12.5, color: "var(--adm-muted)" }}>
                       <div>Pts: <b>{p.patientLimit || "∞"}</b></div>
                       <div>Docs: <b>{p.doctorLimit || "∞"}</b></div>
+                      <div>Storage: <b>{p.storageLimitGb ? `${p.storageLimitGb}GB` : "∞"}</b></div>
                     </td>
                     <td>
                       <span className={`adm-badge ${p.isActive ? "adm-badge-green" : "adm-badge-gray"}`}>

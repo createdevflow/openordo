@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useTransition } from "react"
-import { CheckCircle, XCircle, Clock, Users } from "lucide-react"
+import { CheckCircle, XCircle, Clock, Users, Search } from "lucide-react"
 import { confirmBookingAction, rejectBookingAction } from "@/server/actions/bookings"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 
@@ -22,6 +22,9 @@ const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
 
 export function BookingsClient({ bookings, doctors }: any) {
   const [filter, setFilter] = useState("PENDING")
+  const [searchTerm, setSearchTerm] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
   const [isPending, startTransition] = useTransition()
   const { showAlert } = useConfirm()
 
@@ -29,7 +32,16 @@ export function BookingsClient({ bookings, doctors }: any) {
 
   const filtered = bookings
     .filter((b: any) => filter === "ALL" || b.status === filter)
+    .filter((b: any) => {
+      if (!searchTerm) return true
+      const q = searchTerm.toLowerCase()
+      const dName = doctorName(b.doctorId).toLowerCase()
+      return b.name.toLowerCase().includes(q) || (b.email || "").toLowerCase().includes(q) || dName.includes(q)
+    })
     .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage))
+  const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
   const pendingCount = bookings.filter((b: any) => b.status === "PENDING").length
 
@@ -62,10 +74,20 @@ export function BookingsClient({ bookings, doctors }: any) {
         </div>
       </div>
 
-      <div className="cw-toolbar">
+      <div className="cw-toolbar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft w-4 h-4" />
+          <input 
+            type="text" 
+            placeholder="Search requests..." 
+            value={searchTerm} 
+            onChange={e => {setSearchTerm(e.target.value); setCurrentPage(1)}}
+            className="cw-input !pl-9 w-48 sm:w-64 !m-0 !py-1.5"
+          />
+        </div>
         <div className="cw-chip-filter">
           {["PENDING", "CONFIRMED", "REJECTED", "ALL"].map(s => (
-            <button key={s} className={`cw-chip ${filter === s ? "active" : ""}`} onClick={() => setFilter(s)}>
+            <button key={s} className={`cw-chip ${filter === s ? "active" : ""}`} onClick={() => {setFilter(s); setCurrentPage(1)}}>
               {s[0] + s.slice(1).toLowerCase()}
               {s === "PENDING" && pendingCount > 0 && (
                 <span style={{
@@ -100,7 +122,7 @@ export function BookingsClient({ bookings, doctors }: any) {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((b: any) => {
+                {paginated.map((b: any) => {
                   const sc = STATUS_COLORS[b.status] || STATUS_COLORS.PENDING
                   return (
                     <tr key={b.id}>
@@ -158,6 +180,15 @@ export function BookingsClient({ bookings, doctors }: any) {
                 })}
               </tbody>
             </table>
+            {filtered.length > 0 && (
+              <div className="flex flex-col sm:flex-row justify-between items-center mt-4 text-[13.5px] text-ink-soft gap-4 p-4 border-t border-line bg-white">
+                <div>Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length} entries</div>
+                <div className="flex items-center gap-2">
+                  <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1.5 border border-line rounded bg-white hover:bg-paper-raised disabled:opacity-50 text-ink transition-colors font-medium">Previous</button>
+                  <button disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1.5 border border-line rounded bg-white hover:bg-paper-raised disabled:opacity-50 text-ink transition-colors font-medium">Next</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

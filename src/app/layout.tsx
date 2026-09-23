@@ -72,6 +72,7 @@ export default function RootLayout({
             className: "bg-forest-dark text-white px-5 py-3 rounded-lg text-[13.5px] font-medium flex items-center gap-2 shadow-[0_10px_30px_rgba(0,0,0,0.25)] border-0",
           }}
         />
+        <script src="https://checkout.razorpay.com/v1/checkout.js" async></script>
       </body>
     </html>
   );

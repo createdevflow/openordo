@@ -116,7 +116,7 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "160px 1fr" }}>
                   <span style={{ color: "var(--adm-muted)" }}>Payment Method</span>
-                  <span>{primaryClinic.subscription?.stripeCustomerId ? "On File" : "None"}</span>
+                  <span>{primaryClinic.subscription?.razorpayCustomerId ? "On File" : "None"}</span>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "160px 1fr" }}>
                   <span style={{ color: "var(--adm-muted)" }}>Autopay</span>

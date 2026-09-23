@@ -32,6 +32,7 @@ export function PlanBuilderClient({
   
   const [patientLimit, setPatientLimit] = useState(plan?.patientLimit ?? "")
   const [doctorLimit, setDoctorLimit] = useState(plan?.doctorLimit ?? "")
+  const [storageLimitGb, setStorageLimitGb] = useState(plan?.storageLimitGb ?? "")
   const [isFeatured, setIsFeatured] = useState(plan?.isFeatured ?? false)
   const [isActive, setIsActive] = useState(plan?.isActive ?? true)
   const [isDefaultFree, setIsDefaultFree] = useState(plan?.isDefaultFree ?? false)
@@ -71,6 +72,7 @@ export function PlanBuilderClient({
       priceYearlyInr: priceYearlyInr !== "" ? Number(priceYearlyInr) : null,
       patientLimit: patientLimit !== "" ? Number(patientLimit) : null,
       doctorLimit: doctorLimit !== "" ? Number(doctorLimit) : null,
+      storageLimitGb: storageLimitGb !== "" ? Number(storageLimitGb) : null,
       features: JSON.stringify(bullets.filter(b => b.trim())),
       isFeatured, isActive, isDefaultFree,
       sortOrder: Number(sortOrder),
@@ -151,7 +153,7 @@ export function PlanBuilderClient({
             </div>
 
             <div className="adm-section-label" style={{ marginTop: 8 }}>Limits & Settings</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 80px", gap: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 80px", gap: 12 }}>
               <div>
                 <label className="adm-label">Patient Limit (blank = ∞)</label>
                 <input className="adm-input adm-mono" type="number" value={patientLimit} onChange={e => setPatientLimit(e.target.value)} />
@@ -161,7 +163,11 @@ export function PlanBuilderClient({
                 <input className="adm-input adm-mono" type="number" value={doctorLimit} onChange={e => setDoctorLimit(e.target.value)} />
               </div>
               <div>
-                <label className="adm-label">Sort Order</label>
+                <label className="adm-label">Storage Limit GB (blank = ∞)</label>
+                <input className="adm-input adm-mono" type="number" value={storageLimitGb} onChange={e => setStorageLimitGb(e.target.value)} />
+              </div>
+              <div>
+                <label className="adm-label">Sort</label>
                 <input className="adm-input adm-mono" type="number" value={sortOrder} onChange={e => setSortOrder(e.target.value)} />
               </div>
             </div>

@@ -127,10 +127,10 @@ export default async function AdminClinicDetailPage({ params }: { params: Promis
                       <span className="adm-mono">{new Date(clinic.subscription.currentPeriodEnd).toLocaleDateString("en-IN")}</span>
                     </div>
                   )}
-                  {clinic.subscription.stripeCustomerId && (
+                  {clinic.subscription.razorpayCustomerId && (
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ color: "var(--adm-muted)" }}>Stripe customer</span>
-                      <span className="adm-mono" style={{ fontSize: 12 }}>{clinic.subscription.stripeCustomerId}</span>
+                      <span style={{ color: "var(--adm-muted)" }}>Razorpay customer</span>
+                      <span className="adm-mono" style={{ fontSize: 12 }}>{clinic.subscription.razorpayCustomerId}</span>
                     </div>
                   )}
                 </div>

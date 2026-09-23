@@ -1,7 +1,10 @@
 import { db } from "@/lib/db"
 import { UsersClient } from "./UsersClient"
+import { cleanupExpiredDemosAction } from "@/server/actions/demo"
 
 export default async function AdminUsersPage() {
+  await cleanupExpiredDemosAction()
+
   const users = await db.user.findMany({
     orderBy: { createdAt: "desc" },
     select: {

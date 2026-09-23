@@ -12,7 +12,14 @@ export default async function PricingPage() {
   try {
     dbPlans = await db.plan.findMany({
       where: { isActive: true },
-      orderBy: { sortOrder: "asc" }
+      orderBy: { sortOrder: "asc" },
+      include: {
+        planFeatures: {
+          where: { included: true },
+          include: { feature: true },
+          orderBy: { feature: { name: "asc" } }
+        }
+      }
     })
     const trialSetting = await db.globalSetting.findUnique({ where: { key: "DEFAULT_TRIAL_DAYS" } })
     if (trialSetting) defaultTrialDays = parseInt(trialSetting.value, 10)
@@ -23,57 +30,73 @@ export default async function PricingPage() {
   // Fallback to real default plans if DB query fails
   if (!dbPlans || dbPlans.length === 0) {
     dbPlans = [
-      { id: "starter", name: "Starter", slug: "starter", priceMonthlyUsd: 0, priceMonthlyInr: 0, patientLimit: 200, doctorLimit: 1, isFeatured: false },
-      { id: "practice", name: "Practice", slug: "practice", priceMonthlyUsd: 39, priceMonthlyInr: 1990, patientLimit: null, doctorLimit: 6, isFeatured: true },
-      { id: "clinic-group", name: "Clinic Group", slug: "clinic-group", priceMonthlyUsd: 89, priceMonthlyInr: 4990, patientLimit: null, doctorLimit: null, isFeatured: false }
+      { id: "free", name: "Free", slug: "free", priceMonthlyUsd: 0, priceMonthlyInr: 0, patientLimit: 200, doctorLimit: 1, isFeatured: false, planFeatures: [] },
+      { id: "practice", name: "Practice", slug: "practice", priceMonthlyUsd: 39, priceMonthlyInr: 1990, patientLimit: null, doctorLimit: 6, isFeatured: true, planFeatures: [] },
+      { id: "clinic", name: "Clinic", slug: "clinic", priceMonthlyUsd: 89, priceMonthlyInr: 4990, patientLimit: null, doctorLimit: null, isFeatured: false, planFeatures: [] }
     ]
   }
 
   const plans: PlanItem[] = dbPlans.map((p: any) => {
-    let featuresList: string[] = []
-    const slug = (p.slug || p.name || "").toLowerCase()
+    // 1. Admin-assigned features from the feature catalog
+    const catalogFeatures: string[] = (p.planFeatures || [])
+      .filter((pf: any) => pf.feature?.isGloballyEnabled !== false)
+      .map((pf: any) => pf.feature?.name || "")
+      .filter(Boolean)
 
-    if (slug.includes("starter")) {
-      featuresList = [
-        "1 Doctor account",
-        `Up to ${p.patientLimit || 200} patient records`,
-        "Visual appointment calendar",
-        "Patient medical history & charts",
-        "Doctor profile & working hours",
-        "Automated daily data backups"
-      ]
-    } else if (slug.includes("practice")) {
-      featuresList = [
-        `Up to ${p.doctorLimit || 6} Doctor accounts`,
-        "Unlimited patient records & charts",
-        "Visual appointment calendar",
-        "Public online booking page link",
-        "Invoicing & itemized billing",
-        "Automated SMS & email reminders",
-        "Automated waitlist management"
-      ]
-    } else {
-      featuresList = [
-        "Unlimited Doctor accounts",
-        "Unlimited patient records & charts",
-        "All Practice plan features included",
-        "Multi-doctor simultaneous scheduling",
-        "Insurance tracking & claims",
-        "Monthly & annual revenue analytics",
-        "Clinic data export (CSV/PDF)",
-        "Dedicated priority onboarding"
-      ]
+    // 2. Append custom marketing bullets
+    let customBullets: string[] = []
+    try {
+      if (p.features) {
+        const parsed = JSON.parse(p.features)
+        if (Array.isArray(parsed)) customBullets = parsed
+      }
+    } catch (e) {}
+
+    let featuresList = [...catalogFeatures, ...customBullets]
+
+    // Always append storage limit if defined
+    if (p.storageLimitGb) {
+      featuresList.push(`${p.storageLimitGb} GB document storage`)
+    }
+
+    // 3. Hardcoded fallback only if nothing defined in admin
+    if (featuresList.length === 0) {
+      const slug = (p.slug || p.name || "").toLowerCase()
+      if (slug.includes("free") || slug.includes("starter")) {
+        featuresList = [
+          p.doctorLimit ? `Up to ${p.doctorLimit} doctor login` : "1 Doctor account",
+          p.patientLimit ? `Up to ${p.patientLimit} patient records` : "Basic patient records",
+          "Appointment calendar",
+          "Patient medical history & charts",
+        ]
+      } else if (slug.includes("practice")) {
+        featuresList = [
+          p.doctorLimit ? `Up to ${p.doctorLimit} doctor accounts` : "Multiple doctor accounts",
+          "Unlimited patient records & charts",
+          "Online booking page",
+          "Invoicing & billing",
+        ]
+      } else {
+        featuresList = [
+          "Unlimited doctor accounts",
+          "Unlimited patient records & charts",
+          "All lower plan features included",
+          "Revenue analytics",
+          "Data export (CSV/PDF)",
+        ]
+      }
     }
 
     return {
       id: p.id,
       name: p.name,
-      slug: p.slug || slug,
+      slug: p.slug || (p.name || "").toLowerCase(),
       description: p.description || "",
       priceMonthlyUsd: p.priceMonthlyUsd,
       priceMonthlyInr: p.priceMonthlyInr,
       patientLimit: p.patientLimit,
       doctorLimit: p.doctorLimit,
+      storageLimitGb: p.storageLimitGb,
       isFeatured: Boolean(p.isFeatured),
       featuresList
     }

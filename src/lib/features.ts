@@ -177,25 +177,38 @@ export async function hasFeature(clinicId: string, featureKey: string): Promise<
 }
 
 /**
- * Checks if the clinic can add another doctor based on their plan limit.
+ * Checks if the clinic can add another doctor based on their effective limit
+ * (plan limit + Extra Doctor Seat plugin quantity).
  */
-export async function canAddDoctor(clinicId: string): Promise<{ allowed: boolean; current: number; limit: number | null; message?: string }> {
+export async function canAddDoctor(clinicId: string): Promise<{
+  allowed: boolean
+  current: number
+  limit: number | null
+  extraSeats: number
+  message?: string
+}> {
+  const { getEffectiveDoctorLimit } = await import("./plugins")
   const details = await getClinicSubscriptionDetails(clinicId)
   const current = await db.doctor.count({ where: { clinicId } })
+  const { effectiveLimit, extraSeats } = await getEffectiveDoctorLimit(clinicId, details.doctorLimit)
 
-  if (details.doctorLimit !== null && current >= details.doctorLimit) {
+  if (effectiveLimit !== null && current >= effectiveLimit) {
+    const baseMsg = `Your ${details.planName} plan allows ${details.doctorLimit} base doctor${details.doctorLimit === 1 ? "" : "s"}`
+    const extraMsg = extraSeats > 0 ? ` + ${extraSeats} extra seat${extraSeats > 1 ? "s" : ""}` : ""
     return {
       allowed: false,
       current,
-      limit: details.doctorLimit,
-      message: `You have reached the maximum of ${details.doctorLimit} doctor${details.doctorLimit > 1 ? "s" : ""} on the ${details.planName} plan. Upgrade to add more.`
+      limit: effectiveLimit,
+      extraSeats,
+      message: `${baseMsg}${extraMsg} (${effectiveLimit} total). Purchase more Extra Doctor Seats or upgrade your plan.`
     }
   }
 
   return {
     allowed: true,
     current,
-    limit: details.doctorLimit
+    limit: effectiveLimit,
+    extraSeats,
   }
 }
 

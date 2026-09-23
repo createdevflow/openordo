@@ -40,33 +40,104 @@ function PurchaseModal({ plugin, currency, onClose, onSuccess }: PurchaseModalPr
   }
 
   const [selected, setSelected] = useState<"ONE_TIME" | "MONTHLY" | "YEARLY">(models[0]?.value ?? "ONE_TIME")
+  const [quantity, setQuantity] = useState(1)
   const [loading, setLoading] = useState(false)
+
+  const isLimitModifier = (plugin as any).kind === "LIMIT_MODIFIER"
+  const basePrice = currency === "INR"
+    ? (selected === "MONTHLY" ? plugin.priceMonthlyINR : plugin.priceYearlyINR)
+    : (selected === "MONTHLY" ? plugin.priceMonthlyUSD : plugin.priceYearlyUSD)
+  const totalPrice = basePrice ? basePrice * quantity : 0
 
   const handlePurchase = async () => {
     setLoading(true)
     try {
-      const priceId = 
-        selected === "ONE_TIME" ? plugin.stripePriceIdOneTime :
-        selected === "MONTHLY" ? plugin.stripePriceIdMonthly :
-        plugin.stripePriceIdYearly
-
-      if (!priceId) throw new Error("This plugin pricing model is not configured for Stripe checkout.")
-
-      const res = await fetch("/api/stripe/checkout", {
+      const isOneTime = selected === "ONE_TIME"
+      let endpoint = isOneTime ? "/api/razorpay/order" : "/api/razorpay/subscription"
+      
+      const payload: any = {
+        type: "PLUGIN",
+        itemId: plugin.id,
+        quantity,
+      }
+      
+      if (!isOneTime) {
+        const planId = selected === "MONTHLY" ? plugin.razorpayPlanIdMonthly : plugin.razorpayPlanIdYearly
+        payload.planId = planId
+      }
+      
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "PLUGIN",
-          itemId: plugin.id,
-          priceId
-        })
+        body: JSON.stringify(payload)
       })
 
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error || "Failed to create checkout session")
+      if (!res.ok) throw new Error(json.error || "Failed to create order")
 
-      if (json.url) {
-        window.location.href = json.url
+      if (json.bypass) {
+        // Simulate backend verify directly for bypass
+        const verifyRes = await fetch("/api/razorpay/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            razorpay_payment_id: "bypass_payment",
+            razorpay_order_id: isOneTime ? "bypass_order" : undefined,
+            razorpay_subscription_id: !isOneTime ? "bypass_sub" : undefined,
+            razorpay_signature: "bypass_sig",
+            type: "PLUGIN",
+            itemId: plugin.id,
+            isOneTime,
+            quantity,
+          })
+        })
+        if (verifyRes.ok) {
+          toast.success(`${plugin.name} added to your clinic (Developer Bypass)!`)
+          onSuccess()
+        } else {
+          toast.error("Bypass provisioning failed")
+        }
+        return
+      }
+
+      if (json.id) {
+        const options: any = {
+          key: json.keyId,
+          name: "OpenORDO",
+          description: `Purchase ${plugin.name}`,
+          handler: async function (response: any) {
+            try {
+              const verifyRes = await fetch("/api/razorpay/verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  ...response,
+                  type: "PLUGIN",
+                  itemId: plugin.id,
+                  isOneTime
+                })
+              })
+              const verifyJson = await verifyRes.json()
+              if (!verifyRes.ok) throw new Error(verifyJson.error)
+              toast.success(`${plugin.name} added to your clinic!`)
+              onSuccess()
+            } catch (err: any) {
+              toast.error(err.message || "Payment verification failed")
+            }
+          },
+          theme: { color: "#006240" }
+        }
+
+        if (isOneTime) {
+          options.order_id = json.id
+          // amount is not strictly needed for checkout.js if order_id is present, but good practice
+          options.amount = json.amount
+        } else {
+          options.subscription_id = json.id
+        }
+
+        const rzp = new (window as any).Razorpay(options)
+        rzp.open()
       } else {
         toast.success(`${plugin.name} added to your clinic!`)
         onSuccess()
@@ -117,6 +188,35 @@ function PurchaseModal({ plugin, currency, onClose, onSuccess }: PurchaseModalPr
           ))}
         </div>
 
+        {/* Quantity picker for LIMIT_MODIFIER plugins */}
+        {isLimitModifier && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ink-soft)", marginBottom: 10, textTransform: "uppercase", letterSpacing: ".04em" }}>Quantity</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <button
+                className="cw-btn cw-btn-ghost cw-btn-icon"
+                onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                style={{ width: 36, height: 36, borderRadius: 8, fontSize: 18, fontWeight: 700 }}
+              >−</button>
+              <span style={{ fontSize: 20, fontWeight: 700, minWidth: 32, textAlign: "center" }}>{quantity}</span>
+              <button
+                className="cw-btn cw-btn-ghost cw-btn-icon"
+                onClick={() => setQuantity(q => Math.min(20, q + 1))}
+                style={{ width: 36, height: 36, borderRadius: 8, fontSize: 18, fontWeight: 700 }}
+              >+</button>
+              <span style={{ fontSize: 13, color: "var(--ink-soft)", marginLeft: 4 }}>
+                {plugin.slug === "extra-doctor-seat" && `= +${quantity} doctor seat${quantity > 1 ? "s" : ""}`}
+                {plugin.slug === "document-storage" && `= +${quantity * 10} GB storage`}
+              </span>
+            </div>
+            {totalPrice > 0 && (
+              <div style={{ marginTop: 10, fontSize: 14, fontWeight: 700, color: "var(--forest)" }}>
+                Total: {formatAmt(totalPrice, currency)}/{selected === "MONTHLY" ? "mo" : "yr"}
+              </div>
+            )}
+          </div>
+        )}
+
         <div style={{ display: "flex", gap: 10 }}>
           <button
             className="cw-btn cw-btn-primary"
@@ -137,9 +237,12 @@ interface AddonsClientProps {
   availablePlugins: PluginCardData[]
   ownedPlugins: any[]
   currency: "INR" | "USD"
+  planHasOnlineBooking?: boolean
+  storageUsedGB?: number
+  storageQuotaGB?: number
 }
 
-export function AddonsClient({ availablePlugins, ownedPlugins, currency }: AddonsClientProps) {
+export function AddonsClient({ availablePlugins, ownedPlugins, currency, planHasOnlineBooking = false, storageUsedGB = 0, storageQuotaGB = 5 }: AddonsClientProps) {
   const router = useRouter()
   const { confirm } = useConfirm()
   const [purchasePlugin, setPurchasePlugin] = useState<PluginCardData | null>(null)
@@ -240,6 +343,31 @@ export function AddonsClient({ availablePlugins, ownedPlugins, currency }: Addon
                       </div>
 
                       <ExpandableDescription text={p.description || p.tagline} />
+
+                      {/* LIMIT_MODIFIER context lines */}
+                      {p.slug === "extra-doctor-seat" && cp.isEnabled && (
+                        <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, background: "#14b8a610", fontSize: 12.5, color: "#0d9488", fontWeight: 600 }}>
+                          +{cp.quantity} extra seat{cp.quantity > 1 ? "s" : ""} active
+                        </div>
+                      )}
+                      {p.slug === "document-storage" && cp.isEnabled && (() => {
+                        const pct = Math.min(100, (storageUsedGB / storageQuotaGB) * 100)
+                        const isNearFull = pct > 80
+                        return (
+                          <div style={{ marginTop: 10 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: isNearFull ? "#d97706" : "var(--ink-soft)", marginBottom: 4 }}>
+                              <span>Storage used</span>
+                              <span style={{ fontWeight: 600 }}>{storageUsedGB.toFixed(1)} GB of {storageQuotaGB} GB</span>
+                            </div>
+                            <div style={{ height: 6, borderRadius: 3, background: "var(--line)", overflow: "hidden" }}>
+                              <div style={{ height: "100%", width: `${pct}%`, background: isNearFull ? "#d97706" : "var(--forest)", borderRadius: 3, transition: "width .3s" }} />
+                            </div>
+                            {cp.quantity > 1 && (
+                              <div style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 4 }}>+{cp.quantity * 10} GB total extra ({cp.quantity} units)</div>
+                            )}
+                          </div>
+                        )
+                      })()}
                     </div>
 
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 16, borderTop: "1px solid var(--line)" }}>
@@ -267,29 +395,54 @@ export function AddonsClient({ availablePlugins, ownedPlugins, currency }: Addon
                         </div>
                       </div>
 
-                      <button
-                        style={{
-                          padding: "8px 24px", borderRadius: 8, fontSize: 13.5, fontWeight: 600,
-                          background: "transparent", color: "var(--forest)", border: "1.5px solid var(--forest)",
-                          cursor: "pointer", transition: "all .15s"
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = "var(--forest)";
-                          e.currentTarget.style.color = "#fff";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = "transparent";
-                          e.currentTarget.style.color = "var(--forest)";
-                        }}
-                        onClick={() => {
-                          if (p.slug === "e-prescriptions") router.push("/dashboard/prescriptions")
-                          else if (p.slug === "inventory-management") router.push("/dashboard/inventory")
-                          else if (p.slug === "video-consultation") router.push("/dashboard/appointments")
-                          else toast.info("Plugin configuration coming soon!")
-                        }}
-                      >
-                        Configure
-                      </button>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        {p.kind === "LIMIT_MODIFIER" && (
+                          <button
+                            style={{
+                              padding: "8px 16px", borderRadius: 8, fontSize: 13.5, fontWeight: 600,
+                              background: "transparent", color: "var(--forest)", border: "1.5px solid var(--forest)",
+                              cursor: "pointer", transition: "all .15s"
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = "var(--forest)";
+                              e.currentTarget.style.color = "#fff";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = "transparent";
+                              e.currentTarget.style.color = "var(--forest)";
+                            }}
+                            onClick={() => setPurchasePlugin(p)}
+                          >
+                            Add more
+                          </button>
+                        )}
+                        <button
+                          style={{
+                            padding: "8px 24px", borderRadius: 8, fontSize: 13.5, fontWeight: 600,
+                            background: "transparent", color: "var(--forest)", border: "1.5px solid var(--forest)",
+                            cursor: "pointer", transition: "all .15s"
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = "var(--forest)";
+                            e.currentTarget.style.color = "#fff";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = "transparent";
+                            e.currentTarget.style.color = "var(--forest)";
+                          }}
+                          onClick={() => {
+                            if (p.slug === "e-prescriptions") router.push("/dashboard/prescriptions")
+                            else if (p.slug === "inventory-management") router.push("/dashboard/inventory")
+                            else if (p.slug === "video-consultation") router.push("/dashboard/appointments")
+                            else if (p.slug === "extra-doctor-seat") router.push("/dashboard/doctors")
+                            else if (p.slug === "document-storage") router.push("/dashboard/records")
+                            else if (p.slug === "branded-booking-page") router.push("/dashboard/settings?tab=developer")
+                            else toast.info("Plugin configuration coming soon!")
+                          }}
+                        >
+                          Configure
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )
@@ -306,15 +459,43 @@ export function AddonsClient({ availablePlugins, ownedPlugins, currency }: Addon
               Add any of these to your clinic. You can enable or disable them anytime after purchase.
             </p>
             <div className="cw-addons-grid">
-              {availablePlugins.map((plugin) => (
-                <PluginCard
-                  key={plugin.id}
-                  plugin={plugin}
-                  currency={currency}
-                  variant="addons"
-                  onPurchase={(p) => setPurchasePlugin(p)}
-                />
-              ))}
+              {availablePlugins.map((plugin) => {
+                // Gate: Branded Booking Page requires online booking feature
+                if (plugin.slug === "branded-booking-page" && !planHasOnlineBooking) {
+                  return (
+                    <div key={plugin.id} style={{
+                      background: "var(--paper-raised)", border: "1.5px solid var(--line)",
+                      borderRadius: 16, padding: 24, opacity: 0.75, position: "relative", overflow: "hidden"
+                    }}>
+                      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "#6b7280" }} />
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 10, background: "#6b728015", color: "#6b7280", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          🎨
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 15 }}>{plugin.name}</div>
+                          <div style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>{plugin.tagline}</div>
+                        </div>
+                      </div>
+                      <div style={{ padding: "10px 14px", background: "#fef3c720", border: "1px solid #d97706", borderRadius: 8, fontSize: 12.5, color: "#92400e", lineHeight: 1.5 }}>
+                        🔒 <strong>Requires Practice plan or higher.</strong> This add-on only works with the Online Booking Page feature. Upgrade your plan to unlock it.
+                      </div>
+                      <a href="/dashboard/settings?tab=subscription" style={{ display: "inline-block", marginTop: 14, fontSize: 13, fontWeight: 600, color: "var(--forest)", textDecoration: "underline" }}>
+                        Upgrade plan →
+                      </a>
+                    </div>
+                  )
+                }
+                return (
+                  <PluginCard
+                    key={plugin.id}
+                    plugin={plugin}
+                    currency={currency}
+                    variant="addons"
+                    onPurchase={(p) => setPurchasePlugin(p)}
+                  />
+                )
+              })}
             </div>
           </section>
         )}

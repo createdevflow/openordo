@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useTransition } from "react"
-import { Plus, X, Download, Lock } from "lucide-react"
+import { Plus, X, Download, Lock, Search } from "lucide-react"
 import { currency, fmtDateShort, StatusBadge, toISO } from "@/components/DashboardHelpers"
 import { createInvoiceAction, markInvoicePaidAction } from "@/server/actions/billing"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
@@ -19,6 +19,9 @@ export function BillingClient({
 }: any) {
   const [printingInvoice, setPrintingInvoice] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState("all")
+  const [searchTerm, setSearchTerm] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
   const [modalOpen, setModalOpen] = useState(initialAction === "new")
   const [isPending, startTransition] = useTransition()
   const { confirm, showAlert } = useConfirm()
@@ -33,7 +36,18 @@ export function BillingClient({
   const totalPending = mappedInvoices.filter((i: any) => i.status.toLowerCase() === "unpaid").reduce((s: number, i: any) => s + i.items.reduce((a: number, it: any) => a + Number(it.amount), 0), 0)
   const patientName = (id: string) => patients.find((p: any) => p.id === id)?.name || "Unknown"
 
-  const filtered = mappedInvoices.filter((i: any) => statusFilter === "all" || i.status.toLowerCase() === statusFilter).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  const filtered = mappedInvoices.filter((i: any) => statusFilter === "all" || i.status.toLowerCase() === statusFilter)
+    .filter((i: any) => {
+      if (!searchTerm) return true
+      const pName = patientName(i.patientId).toLowerCase()
+      const invId = (i.displayId || "").toLowerCase()
+      const q = searchTerm.toLowerCase()
+      return pName.includes(q) || invId.includes(q)
+    })
+    .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage))
+  const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
   function exportRevenueCSV() {
     const rows = [
@@ -74,7 +88,47 @@ export function BillingClient({
   function createInvoice(data: any) {
     startTransition(async () => {
       try {
-        await createInvoiceAction(data)
+        // 1. Create the invoice first so it gets a displayId
+        const newInvoice = await createInvoiceAction(data)
+        
+        // 2. Secretly render the invoice template to generate PDF
+        try {
+          const html2pdf = (await import("html2pdf.js")).default
+          const ReactDOMServer = (await import("react-dom/server")).default
+          
+          const patient = patients.find((p: any) => p.id === data.patientId)
+          const htmlString = ReactDOMServer.renderToString(
+            <InvoicePrintTemplate invoice={newInvoice} clinic={clinic} patient={patient} />
+          )
+          
+          const container = document.createElement("div")
+          container.innerHTML = htmlString
+          
+          // Use html2pdf to generate blob
+          const pdfBlob = await html2pdf().from(container).outputPdf("blob")
+          const file = new File([pdfBlob], `${newInvoice.displayId}.pdf`, { type: "application/pdf" })
+          
+          const formData = new FormData()
+          formData.append("file", file)
+          
+          const res = await fetch("/api/upload", { method: "POST", body: formData })
+          if (res.ok) {
+            const json = await res.json()
+            if (json.url) {
+              const { createPatientDocumentAction } = await import("@/server/actions/documents")
+              await createPatientDocumentAction({
+                patientId: data.patientId,
+                name: `Invoice ${newInvoice.displayId}`,
+                type: "INVOICE",
+                sizeBytes: json.sizeBytes || file.size,
+                url: json.url
+              })
+            }
+          }
+        } catch (pdfErr) {
+          console.error("Failed to generate/upload invoice PDF:", pdfErr)
+        }
+
         setModalOpen(false)
       } catch (err) {
         console.error(err)
@@ -97,11 +151,23 @@ export function BillingClient({
         </div>
       </div>
 
-      <div className="cw-toolbar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div className="cw-chip-filter">
-          {["all", "paid", "unpaid"].map(s => (
-            <button key={s} className={`cw-chip ${statusFilter === s ? "active" : ""}`} onClick={() => setStatusFilter(s)}>{s === "all" ? "All" : s[0].toUpperCase() + s.slice(1)}</button>
-          ))}
+      <div className="cw-toolbar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
+        <div className="flex flex-wrap gap-4 items-center">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft w-4 h-4" />
+            <input 
+              type="text" 
+              placeholder="Search invoices..." 
+              value={searchTerm} 
+              onChange={e => {setSearchTerm(e.target.value); setCurrentPage(1)}}
+              className="cw-input !pl-9 w-48 sm:w-64 !m-0 !py-1.5"
+            />
+          </div>
+          <div className="cw-chip-filter">
+            {["all", "paid", "unpaid"].map(s => (
+              <button key={s} className={`cw-chip ${statusFilter === s ? "active" : ""}`} onClick={() => {setStatusFilter(s); setCurrentPage(1);}}>{s === "all" ? "All" : s[0].toUpperCase() + s.slice(1)}</button>
+            ))}
+          </div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {hasRevenueReports ? (
@@ -124,7 +190,7 @@ export function BillingClient({
           <table className="cw-table">
             <thead><tr><th>Invoice</th><th>Patient</th><th>Date</th><th>Items</th><th>Amount</th><th>Status</th><th></th></tr></thead>
             <tbody>
-              {filtered.map((inv: any) => {
+              {paginated.map((inv: any) => {
                 const total = inv.items.reduce((s: number, it: any) => s + Number(it.amount), 0);
                 return (
                   <tr key={inv.id}>
@@ -150,6 +216,15 @@ export function BillingClient({
               })}
             </tbody>
           </table>
+          {filtered.length > 0 && (
+            <div className="flex flex-col sm:flex-row justify-between items-center mt-4 text-[13.5px] text-ink-soft gap-4 p-4 border-t border-line">
+              <div>Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length} entries</div>
+              <div className="flex items-center gap-2">
+                <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1.5 border border-line rounded bg-white hover:bg-paper-raised disabled:opacity-50 text-ink transition-colors font-medium">Previous</button>
+                <button disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1.5 border border-line rounded bg-white hover:bg-paper-raised disabled:opacity-50 text-ink transition-colors font-medium">Next</button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

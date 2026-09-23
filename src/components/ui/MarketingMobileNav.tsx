@@ -34,7 +34,7 @@ export function MarketingMobileNav({ sessionRole }: { sessionRole?: string | nul
                   <Button variant="ghost" className="w-full justify-center bg-paper-raised">Log in</Button>
                 </Link>
                 <Link onClick={() => setOpen(false)} href="/register">
-                  <Button className="w-full justify-center">Start free</Button>
+                  <Button className="w-full justify-center bg-[#1a382c] hover:bg-[#142c23]">Request a demo</Button>
                 </Link>
               </>
             )}

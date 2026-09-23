@@ -4,6 +4,8 @@ import React, { useState, Suspense } from "react"
 import { useActionState, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { registerAccountAction } from "@/server/actions/auth"
+import { GoogleButton } from "@/components/ui/GoogleButton"
+import { OAuthDivider } from "@/components/ui/OAuthDivider"
 import Link from "next/link"
 import { Eye, EyeOff, ChevronDown, Check } from "lucide-react"
 import { Input } from "@/components/ui/Input"
@@ -47,10 +49,22 @@ function getPasswordStrength(password: string): { score: number; label: string; 
   return { score, label: "Very strong", color: "#1E4638" }
 }
 
+const OAUTH_ERROR_MESSAGES: Record<string, string | null> = {
+  OAuthAccountNotLinked:
+    "That email is already registered with a password. Please sign in with your email and password instead.",
+  OAuthSignInError: null,
+  OAuthCallbackError: null,
+  Callback: null,
+}
+
 function RegisterForm() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const planParam = searchParams.get("plan") || ""
+  const oauthErrorCode = searchParams.get("error") || ""
+  const oauthError = oauthErrorCode
+    ? (OAUTH_ERROR_MESSAGES[oauthErrorCode] ?? "Sign-up failed. Please try again.")
+    : null
 
   const planInfo: Record<string, { name: string; badge: string }> = {
     starter: { name: "Starter Plan", badge: "Forever Free" },
@@ -97,7 +111,7 @@ function RegisterForm() {
       <p className="text-[14.5px] text-ink-soft mb-6">Start your free trial today. No card required.</p>
 
       {selectedInfo && (
-        <div className="mb-6 rounded-lg border border-line bg-paper-raised p-3.5 flex items-center justify-between shadow-xs">
+        <div className="mb-4 rounded-lg border border-line bg-paper-raised p-3.5 flex items-center justify-between shadow-xs">
           <div>
             <div className="text-[11px] font-bold uppercase tracking-wider text-moss">Selected Plan</div>
             <div className="text-[15px] font-bold text-ink">{selectedInfo.name}</div>
@@ -105,6 +119,17 @@ function RegisterForm() {
           <span className="rounded-full bg-forest/10 px-3 py-1 text-[12px] font-semibold text-forest">
             {selectedInfo.badge}
           </span>
+        </div>
+      )}
+
+      {/* Google sign-up — skips account creation + email verification */}
+      <GoogleButton label="Sign up with Google" callbackUrl="/onboarding/clinic" />
+
+      <OAuthDivider />
+
+      {oauthError && (
+        <div className="mb-4 bg-coral-soft text-coral p-3 rounded-md text-[13px] font-medium">
+          {oauthError}
         </div>
       )}
 

@@ -7,7 +7,7 @@ import { createDoctorAction, updateDoctorAction, deleteDoctorAction } from "@/se
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import Link from "next/link"
 
-export function DoctorsClient({ doctors, appointments, doctorLimit = null, planName = "Starter" }: any) {
+export function DoctorsClient({ doctors, appointments, doctorLimit = null, planLimit = null, extraSeats = 0, planName = "Starter" }: any) {
   const [modalOpen, setModalOpen] = useState(false)
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
   const [editing, setEditing] = useState<any>(null)
@@ -88,6 +88,11 @@ export function DoctorsClient({ doctors, appointments, doctorLimit = null, planN
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>
             {doctors.length}{doctorLimit !== null ? ` / ${doctorLimit}` : ""} staff members
+          {extraSeats > 0 && (
+            <span style={{ marginLeft: 4, fontSize: 11, color: "var(--forest)", fontWeight: 600 }}>
+              (+{extraSeats} extra seat{extraSeats > 1 ? "s" : ""})
+            </span>
+          )}
           </span>
           <span style={{ 
             fontSize: 11.5, 
@@ -98,7 +103,7 @@ export function DoctorsClient({ doctors, appointments, doctorLimit = null, planN
             fontWeight: 600,
             border: "1px solid var(--line)"
           }}>
-            {planName} plan {isLimitReached ? "(Limit reached)" : ""}
+            {planName} plan {extraSeats > 0 && `(${planLimit ?? "∞"} base + ${extraSeats} seats)`} {isLimitReached ? "— Limit reached" : ""}
           </span>
         </div>
         <button 
@@ -126,6 +131,11 @@ export function DoctorsClient({ doctors, appointments, doctorLimit = null, planN
           <div>
             <div style={{ fontWeight: 600, fontSize: 13.5, color: "#6B4C15" }}>
               Doctor quota reached ({doctors.length} of {doctorLimit})
+              {extraSeats > 0 && (
+                <span style={{ fontWeight: 400, fontSize: 12, marginLeft: 6 }}>
+                  — {planLimit} base + {extraSeats} extra seat{extraSeats > 1 ? "s" : ""}
+                </span>
+              )}
             </div>
             <div style={{ fontSize: 12.5, color: "#8E6924", marginTop: 2 }}>
               Your {planName} plan allows a maximum of {doctorLimit} doctor{doctorLimit > 1 ? "s" : ""}. Upgrade to add more doctors.

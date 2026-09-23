@@ -7,7 +7,7 @@ import { createPlugin, updatePlugin } from "@/server/actions/admin/plugins"
 import { PluginCard } from "@/components/ui/PluginCard"
 
 const CATEGORIES = ["Clinical", "Operations"]
-const ICONS = ["Video", "Package", "FileSignature", "Puzzle", "Zap", "Activity", "Heart", "Microscope"]
+const ICONS = ["Video", "Package", "FileSignature", "Puzzle", "Zap", "Activity", "Heart", "Microscope", "UserPlus", "Palette", "HardDrive"]
 
 interface PluginFormProps {
   plugin?: any // existing plugin data for edit mode
@@ -24,6 +24,7 @@ export function PluginForm({ plugin }: PluginFormProps) {
     description: plugin?.description ?? "",
     category: plugin?.category ?? "Clinical",
     icon: plugin?.icon ?? "Puzzle",
+    kind: plugin?.kind ?? "FEATURE_UNLOCK",
     isActive: plugin?.isActive ?? true,
     isComingSoon: plugin?.isComingSoon ?? false,
     sortOrder: plugin?.sortOrder ?? 0,
@@ -75,6 +76,7 @@ export function PluginForm({ plugin }: PluginFormProps) {
         description: form.description,
         category: form.category,
         icon: form.icon,
+        kind: form.kind,
         isActive: form.isActive,
         isComingSoon: form.isComingSoon,
         sortOrder: Number(form.sortOrder),
@@ -150,6 +152,19 @@ export function PluginForm({ plugin }: PluginFormProps) {
                   {ICONS.map(i => <option key={i}>{i}</option>)}
                 </select>
               </div>
+            </div>
+
+            <div className="adm-field">
+              <label className="adm-label">Plugin Kind</label>
+              <select className="adm-input" value={form.kind} onChange={e => field("kind", e.target.value)}>
+                <option value="FEATURE_UNLOCK">FEATURE_UNLOCK — Turns a capability on/off</option>
+                <option value="LIMIT_MODIFIER">LIMIT_MODIFIER — Increases a numeric limit (stackable)</option>
+              </select>
+              {form.kind === "LIMIT_MODIFIER" && (
+                <p style={{ fontSize: 12, color: "var(--adm-muted)", marginTop: 4 }}>
+                  Clinics can purchase multiple units. Each unit increments the quantity on their ClinicPlugin row.
+                </p>
+              )}
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>

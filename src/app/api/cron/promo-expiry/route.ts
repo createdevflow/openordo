@@ -45,7 +45,7 @@ export async function GET(request: Request) {
       where: {
         status: "TRIALING",
         trialEndsAt: { lt: now },
-        stripeSubscriptionId: null,  // No Stripe subscription = no payment set up
+        razorpaySubscriptionId: null,  // No Razorpay subscription = no payment set up
       }
     })
     console.log(`Found ${expiredTrials.length} expired trials without payment method`)
@@ -75,7 +75,7 @@ export async function GET(request: Request) {
       where: {
         cancelAtPeriodEnd: true,
         currentPeriodEnd: { lt: now },
-        stripeSubscriptionId: null,  // If Stripe is set, it handles this via webhook
+        razorpaySubscriptionId: null,  // If Razorpay is set, it handles this via webhook
       }
     })
     console.log(`Found ${cancelledPeriodEnded.length} cancelled subscriptions past period end`)

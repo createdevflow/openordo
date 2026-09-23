@@ -60,3 +60,20 @@ export async function updateAdminCredentials({
   }
   return updateAdminCredentialsAction(fakeFormData)
 }
+
+export async function updateGlobalSettingAction(key: string, value: string) {
+  try {
+    const session = await requireSuperAdmin()
+    await db.globalSetting.upsert({
+      where: { key },
+      update: { value },
+      create: { key, value }
+    })
+    await logAudit(session.user.id!, "UPDATE_GLOBAL_SETTING", "GlobalSetting", key)
+    revalidatePath("/admin/settings")
+    revalidatePath("/request-demo") // Revalidate the marketing page
+    return { ok: true }
+  } catch (e: any) {
+    return { ok: false, error: e.message }
+  }
+}

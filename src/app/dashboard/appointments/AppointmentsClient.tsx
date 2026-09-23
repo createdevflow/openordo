@@ -23,6 +23,9 @@ export function AppointmentsClient({
   const [selectedDate, setSelectedDate] = useState(isoToday)
   const [statusFilter, setStatusFilter] = useState("all")
   const [doctorFilter, setDoctorFilter] = useState("all")
+  const [searchTerm, setSearchTerm] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<any>(null)
   const [isPending, startTransition] = useTransition()
@@ -48,9 +51,22 @@ export function AppointmentsClient({
     .filter((a: any) => a.dateString === selectedDate && (doctorFilter === "all" || a.doctorId === doctorFilter))
     .sort((a: any, b: any) => a.time.localeCompare(b.time))
 
+  const patientName = (id: string) => patients.find((p: any) => p.id === id)?.name || "Unknown"
+  const doctorName = (id: string) => doctors.find((d: any) => d.id === id)?.name || "Unknown"
+
   const listFiltered = mappedAppointments
     .filter((a: any) => (statusFilter === "all" || a.status === statusFilter) && (doctorFilter === "all" || a.doctorId === doctorFilter))
+    .filter((a: any) => {
+      if (!searchTerm) return true
+      const pName = patientName(a.patientId).toLowerCase()
+      const dName = doctorName(a.doctorId).toLowerCase()
+      const q = searchTerm.toLowerCase()
+      return pName.includes(q) || dName.includes(q) || (a.reason || "").toLowerCase().includes(q)
+    })
     .sort((a: any, b: any) => (b.dateString + b.time).localeCompare(a.dateString + a.time))
+
+  const totalPages = Math.max(1, Math.ceil(listFiltered.length / itemsPerPage))
+  const paginatedList = listFiltered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
   function saveAppointment(data: any) {
     startTransition(async () => {
@@ -80,8 +96,6 @@ export function AppointmentsClient({
     })
   }
 
-  const patientName = (id: string) => patients.find((p: any) => p.id === id)?.name || "Unknown"
-  const doctorName = (id: string) => doctors.find((d: any) => d.id === id)?.name || "Unknown"
 
   return (
     <div>
@@ -216,17 +230,29 @@ export function AppointmentsClient({
         <div className="cw-panel">
           <div className="cw-panel-head">
             <h3>All appointments</h3>
-            <div className="cw-chip-filter">
-              {["all", "scheduled", "completed", "cancelled", "noshow"].map(s => (
-                <button key={s} className={`cw-chip ${statusFilter === s ? "active" : ""}`} onClick={() => setStatusFilter(s)}>{s === "all" ? "All" : s === "noshow" ? "No-show" : s[0].toUpperCase() + s.slice(1)}</button>
-              ))}
+            <div className="flex flex-wrap gap-4 items-center">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft w-4 h-4" />
+                <input 
+                  type="text" 
+                  placeholder="Search appointments..." 
+                  value={searchTerm} 
+                  onChange={e => {setSearchTerm(e.target.value); setCurrentPage(1)}}
+                  className="cw-input !pl-9 w-48 sm:w-64 !m-0 !py-1.5"
+                />
+              </div>
+              <div className="cw-chip-filter">
+                {["all", "scheduled", "completed", "cancelled", "noshow"].map(s => (
+                  <button key={s} className={`cw-chip ${statusFilter === s ? "active" : ""}`} onClick={() => {setStatusFilter(s); setCurrentPage(1);}}>{s === "all" ? "All" : s === "noshow" ? "No-show" : s[0].toUpperCase() + s.slice(1)}</button>
+                ))}
+              </div>
             </div>
           </div>
           <div className="cw-table-wrap">
             <table className="cw-table">
               <thead><tr><th>Patient</th><th>Doctor</th><th>Date & time</th><th>Reason</th><th>Status</th><th></th></tr></thead>
               <tbody>
-                {listFiltered.map((a: any) => (
+                {paginatedList.map((a: any) => (
                   <tr key={a.id}>
                     <td style={{ fontWeight: 600 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -283,6 +309,15 @@ export function AppointmentsClient({
                 ))}
               </tbody>
             </table>
+            {listFiltered.length > 0 && (
+              <div className="flex flex-col sm:flex-row justify-between items-center mt-4 text-[13.5px] text-ink-soft gap-4 p-4 border-t border-line">
+                <div>Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, listFiltered.length)} of {listFiltered.length} entries</div>
+                <div className="flex items-center gap-2">
+                  <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1.5 border border-line rounded bg-white hover:bg-paper-raised disabled:opacity-50 text-ink transition-colors font-medium">Previous</button>
+                  <button disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1.5 border border-line rounded bg-white hover:bg-paper-raised disabled:opacity-50 text-ink transition-colors font-medium">Next</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

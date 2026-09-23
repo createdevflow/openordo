@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useTransition } from "react"
-import { Search, Plus, Users, Pencil, Trash2, X, Phone, Mail, MapPin, Droplet, Lock, ArrowUpRight } from "lucide-react"
+import { Search, Plus, Users, Pencil, Trash2, X, Phone, Mail, MapPin, Droplet, Lock, ArrowUpRight, Eye } from "lucide-react"
 import { initials, fmtDate, fmtDateShort, fmtTime12, currency, StatusBadge } from "@/components/DashboardHelpers"
 import { createPatientAction, updatePatientAction, deletePatientAction } from "@/server/actions/patients"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
@@ -13,12 +13,15 @@ export function PatientsClient({
   records, 
   invoices, 
   doctors,
+  prescriptions,
   initialSearch = "",
   patientLimit = null,
   planName = "Starter",
   hasBilling = false
 }: any) {
   const [search, setSearch] = useState(initialSearch)
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
   const [modalOpen, setModalOpen] = useState(false)
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
   const [editing, setEditing] = useState<any>(null)
@@ -33,6 +36,9 @@ export function PatientsClient({
     p.displayId.toLowerCase().includes(search.toLowerCase()) ||
     p.phone.includes(search)
   )
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage))
+  const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
   const selected = initialPatients.find((p: any) => p.id === selectedPatientId)
 
@@ -80,7 +86,7 @@ export function PatientsClient({
         <div className="cw-toolbar-left" style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div className="cw-search-box">
             <Search size={15} color="#8B8A7E" />
-            <input placeholder="Search by name, ID or phone…" value={search} onChange={e => setSearch(e.target.value)} />
+            <input placeholder="Search by name, ID or phone…" value={search} onChange={e => {setSearch(e.target.value); setCurrentPage(1)}} />
           </div>
           <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>
             {initialPatients.length}{patientLimit !== null ? ` / ${patientLimit}` : ""} patients
@@ -151,7 +157,7 @@ export function PatientsClient({
                 <tr><th>Patient</th><th>Age / Gender</th><th>Contact</th><th>Condition</th><th>Joined</th><th></th></tr>
               </thead>
               <tbody>
-                {filtered.map((p: any) => (
+                {paginated.map((p: any) => (
                   <tr key={p.id} className="clickable" onClick={() => setSelectedPatientId(p.id)}>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -183,6 +189,15 @@ export function PatientsClient({
                 ))}
               </tbody>
             </table>
+            {filtered.length > 0 && (
+              <div className="flex flex-col sm:flex-row justify-between items-center mt-4 text-[13.5px] text-ink-soft gap-4 p-4 border-t border-line">
+                <div>Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length} entries</div>
+                <div className="flex items-center gap-2">
+                  <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1.5 border border-line rounded bg-white hover:bg-paper-raised disabled:opacity-50 text-ink transition-colors font-medium">Previous</button>
+                  <button disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1.5 border border-line rounded bg-white hover:bg-paper-raised disabled:opacity-50 text-ink transition-colors font-medium">Next</button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -197,6 +212,7 @@ export function PatientsClient({
           appointments={appointments.filter((a: any) => a.patientId === selected.id)}
           records={records.filter((r: any) => r.patientId === selected.id)}
           invoices={invoices.filter((i: any) => i.patientId === selected.id)}
+          prescriptions={prescriptions.filter((p: any) => p.patientId === selected.id)}
           doctors={doctors}
           hasBilling={hasBilling}
           onClose={() => setSelectedPatientId(null)}
@@ -284,7 +300,7 @@ function PatientModal({ initial, onClose, onSave, isPending }: any) {
   )
 }
 
-function PatientDrawer({ patient, appointments, records, invoices, doctors, hasBilling, onClose, onEdit }: any) {
+function PatientDrawer({ patient, appointments, records, invoices, doctors, prescriptions, hasBilling, onClose, onEdit }: any) {
   const [tab, setTab] = useState("history")
   const docName = (id: string) => doctors.find((d: any) => d.id === id)?.name || "—"
 
@@ -344,17 +360,26 @@ function PatientDrawer({ patient, appointments, records, invoices, doctors, hasB
 
           {tab === "records" && (
             records.length === 0 ? <div className="cw-empty"><p>No medical records yet.</p></div> :
-            records.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((r: any) => (
+            records.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((r: any) => {
+              const rx = prescriptions?.find((p: any) => p.recordId === r.id || (new Date(p.date).getTime() === new Date(r.date).getTime()))
+              return (
               <div className="cw-record-card" key={r.id}>
                 <div className="rhead">
                   <span style={{ fontWeight: 700, fontSize: 13.5 }}>{r.diagnosis}</span>
                   <span className="rdate">{fmtDateShort(r.date)}</span>
                 </div>
-                <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginBottom: 4 }}><b>Prescription:</b> {r.prescription || "None"}</div>
+                <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginBottom: rx ? 8 : 4 }}><b>Prescription:</b> {r.prescription || "None"}</div>
+                {rx && (
+                  <div style={{ marginBottom: 6 }}>
+                    <Link href={`/dashboard/prescriptions/${rx.id}`} className="cw-btn cw-btn-ghost cw-btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 8px", background: "var(--paper)", border: "1px solid var(--line)" }}>
+                      <Eye size={12} /> View Prescription
+                    </Link>
+                  </div>
+                )}
                 <div style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>{r.notes || ""}</div>
                 <div style={{ fontSize: 11.5, color: "var(--moss)", marginTop: 8 }}>{docName(r.doctorId)}</div>
               </div>
-            ))
+            )})
           )}
 
           {tab === "billing" && (

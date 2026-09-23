@@ -1,6 +1,7 @@
 import { db } from "@/lib/db"
 import { requireClinicId } from "@/lib/auth-utils"
 import { hasFeature, getClinicSubscriptionDetails } from "@/lib/features"
+import { getEffectiveDoctorLimit } from "@/lib/plugins"
 import { FeatureGate } from "@/components/ui/FeatureGate"
 import { DoctorsClient } from "./DoctorsClient"
 
@@ -17,12 +18,17 @@ export default async function DoctorsPage() {
     getClinicSubscriptionDetails(clinicId)
   ])
 
+  const { effectiveLimit, extraSeats } = await getEffectiveDoctorLimit(clinicId, planDetails.doctorLimit)
+
   return (
     <DoctorsClient 
       doctors={doctors}
       appointments={appointments}
-      doctorLimit={planDetails.doctorLimit}
+      doctorLimit={effectiveLimit}
+      planLimit={planDetails.doctorLimit}
+      extraSeats={extraSeats}
       planName={planDetails.planName}
     />
   )
 }
+

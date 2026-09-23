@@ -59,7 +59,8 @@ export async function archivePlugin(id: string) {
 export async function grantPluginToClinic(
   clinicId: string,
   pluginId: string,
-  pricingModel: "ONE_TIME" | "MONTHLY" | "YEARLY"
+  pricingModel: "ONE_TIME" | "MONTHLY" | "YEARLY",
+  quantity: number = 1
 ) {
   try {
     const session = await requireSuperAdmin()
@@ -67,7 +68,7 @@ export async function grantPluginToClinic(
     // Upsert so it's idempotent (re-granting resets to ACTIVE)
     await db.clinicPlugin.upsert({
       where: { clinicId_pluginId: { clinicId, pluginId } },
-      update: { status: "ACTIVE", isEnabled: true, grantedByAdmin: true, pricingModel },
+      update: { status: "ACTIVE", isEnabled: true, grantedByAdmin: true, pricingModel, quantity },
       create: {
         clinicId,
         pluginId,
@@ -75,6 +76,7 @@ export async function grantPluginToClinic(
         status: "ACTIVE",
         isEnabled: true,
         grantedByAdmin: true,
+        quantity,
       },
     })
 

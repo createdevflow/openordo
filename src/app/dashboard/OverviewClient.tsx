@@ -6,7 +6,7 @@ import { AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContai
 import { currency, fmtDateShort, fmtTime12, initials, StatusBadge, toISO } from "@/components/DashboardHelpers"
 import Link from "next/link"
 
-export function OverviewClient({ clinic, patients, appointments, invoices, doctors, planDetails }: any) {
+export function OverviewClient({ clinic, patients, appointments, invoices, doctors, planDetails, storageStats }: any) {
   const [showPopup, setShowPopup] = useState(false)
   const [copied, setCopied] = useState(false)
   const [isClient, setIsClient] = useState(false)
@@ -206,16 +206,46 @@ export function OverviewClient({ clinic, patients, appointments, invoices, docto
         </div>
       )}
 
-      <div className="cw-stat-grid">
-        {stats.map(s => (
-          <div className="cw-stat-card" key={s.label}>
-            <div className="top">
-              <div className="icon" style={{ background: s.tint, color: s.color }}><s.icon size={15} /></div>
+      <div className="cw-grid-2" style={{ marginBottom: 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          {stats.map(s => (
+            <div className="cw-stat-card" key={s.label} style={{ margin: 0 }}>
+              <div className="top">
+                <div className="icon" style={{ background: s.tint, color: s.color }}><s.icon size={15} /></div>
+              </div>
+              <div className="val">{s.value}</div>
+              <div className="lbl">{s.label}</div>
             </div>
-            <div className="val">{s.value}</div>
-            <div className="lbl">{s.label}</div>
+          ))}
+        </div>
+
+        <div className="cw-panel">
+          <div className="cw-panel-head"><h3>Today's schedule</h3></div>
+          <div className="cw-panel-body">
+            {todays.length === 0 && <div className="cw-empty" style={{ padding: "24px 0" }}><p>No appointments today.</p></div>}
+            {todays.slice(0, 5).map((a: any) => {
+              const p = patients.find((pp: any) => pp.id === a.patientId)
+              return (
+                <div key={a.id} className="cw-list-item">
+                  <div className="cw-list-content">
+                    <div className="title">{p ? p.name : "Unknown"}</div>
+                    <div className="subtitle">{fmtTime12(a.time)} · {a.visitType === "VIDEO" ? "Video call" : "In-person"}</div>
+                  </div>
+                  <div className="cw-list-action">
+                    <StatusBadge status={a.status} type={a.visitType} />
+                  </div>
+                </div>
+              )
+            })}
+            {todays.length > 5 && (
+              <div style={{ padding: "12px 20px", borderTop: "1px solid var(--line)", textAlign: "center" }}>
+                <Link href="/dashboard/appointments" style={{ fontSize: 13, color: "var(--forest)", fontWeight: 600, textDecoration: "none" }}>
+                  View all {todays.length} appointments
+                </Link>
+              </div>
+            )}
           </div>
-        ))}
+        </div>
       </div>
 
       <div className="cw-grid-2">
@@ -241,26 +271,73 @@ export function OverviewClient({ clinic, patients, appointments, invoices, docto
             </ResponsiveContainer>
           </div>
         </div>
-
-        <div className="cw-panel">
-          <div className="cw-panel-head"><h3>Today's schedule</h3></div>
-          <div className="cw-panel-body">
-            {todays.length === 0 && <div className="cw-empty" style={{ padding: "24px 0" }}><p>No appointments today.</p></div>}
-            {todays.slice(0, 5).map((a: any) => {
-              const p = patients.find((pp: any) => pp.id === a.patientId)
-              return (
-                <div className="cw-list-row" key={a.id}>
-                  <div className="cw-avatar" style={{ background: p?.colorTag || "#1E4638", width: 32, height: 32, fontSize: 11.5 }}>{initials(p?.name || "?")}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{p?.name}</div>
-                    <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>{fmtTime12(a.time)} · {a.reason}</div>
+        {(() => {
+          const storage = storageStats || { usedBytes: 0, totalBytes: 0, breakdown: { labReportsBytes: 0, xraysBytes: 0, prescriptionsBytes: 0, othersBytes: 0 } };
+          const formatBytesGB = (bytes: number) => {
+            if (!bytes) return "0.0 GB";
+            const gb = bytes / (1024*1024*1024);
+            if (gb > 0 && gb < 0.1) return "< 0.1 GB";
+            return gb.toFixed(1) + " GB";
+          };
+          const formatBytesToDisplay = (bytes: number) => {
+            if (!bytes) return "0 GB";
+            const gb = bytes / (1024*1024*1024);
+            if (gb < 1) {
+              const mb = bytes / (1024*1024);
+              if (mb < 1) return (bytes / 1024).toFixed(1) + " KB";
+              return mb.toFixed(1) + " MB";
+            }
+            return gb.toFixed(1) + " GB";
+          };
+          const totalGB = storage.totalBytes > 0 ? (storage.totalBytes / (1024*1024*1024)).toFixed(0) : "0";
+          const pct = storage.totalBytes > 0 ? Math.min(100, (storage.usedBytes / storage.totalBytes) * 100).toFixed(0) : "0";
+          
+          return (
+            <div className="cw-panel">
+              <div className="cw-panel-head">
+                <h3>Storage Overview</h3>
+              </div>
+              <div className="cw-panel-body" style={{ padding: "24px" }}>
+                <div style={{ background: "var(--paper-raised)", borderRadius: 12, padding: "16px 20px", marginBottom: 32 }}>
+                  <div style={{ fontSize: 13, color: "var(--ink-soft)", marginBottom: 4 }}>Total Used:</div>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: "var(--ink)" }}>
+                    {formatBytesToDisplay(storage.usedBytes)} {storage.totalBytes > 0 && <span style={{ color: "var(--ink-soft)", fontWeight: 600 }}>({pct}% of {totalGB} GB)</span>}
                   </div>
-                  <StatusBadge status={a.status} />
                 </div>
-              )
-            })}
-          </div>
-        </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "24px 16px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <div style={{ fontSize: 13.5, color: "var(--ink-soft)", marginBottom: 12, fontWeight: 500 }}>{formatBytesGB(storage.breakdown?.labReportsBytes)}</div>
+                    <div style={{ width: "100%", height: 6, background: "var(--ink)", borderRadius: 4, marginBottom: 16 }}></div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--ink-soft)" }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--ink)" }}></span> Lab Reports
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <div style={{ fontSize: 13.5, color: "var(--ink-soft)", marginBottom: 12, fontWeight: 500 }}>{formatBytesGB(storage.breakdown?.xraysBytes)}</div>
+                    <div style={{ width: "100%", height: 6, background: "var(--coral)", borderRadius: 4, marginBottom: 16 }}></div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--ink-soft)" }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--coral)" }}></span> X-Rays
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <div style={{ fontSize: 13.5, color: "var(--ink-soft)", marginBottom: 12, fontWeight: 500 }}>{formatBytesGB(storage.breakdown?.prescriptionsBytes)}</div>
+                    <div style={{ width: "100%", height: 6, background: "var(--moss)", borderRadius: 4, marginBottom: 16 }}></div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--ink-soft)" }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--moss)" }}></span> Prescriptions
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <div style={{ fontSize: 13.5, color: "var(--ink-soft)", marginBottom: 12, fontWeight: 500 }}>{formatBytesGB(storage.breakdown?.othersBytes)}</div>
+                    <div style={{ width: "100%", height: 6, background: "var(--blue)", borderRadius: 4, marginBottom: 16 }}></div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--ink-soft)" }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--blue)" }}></span> Others
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       <div className="cw-grid-2" style={{ marginTop: 16 }}>

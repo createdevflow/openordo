@@ -17,6 +17,87 @@ export async function hasActivePlugin(clinicId: string, slug: string): Promise<b
 }
 
 /**
+ * Returns the effective doctor limit for a clinic:
+ * planLimit (null = unlimited) + sum of quantity from active Extra Doctor Seat plugins.
+ * Returns null if the effective limit is unlimited.
+ */
+export async function getEffectiveDoctorLimit(
+  clinicId: string,
+  planLimit: number | null
+): Promise<{ effectiveLimit: number | null; extraSeats: number }> {
+  const extraSeatPlugin = await db.clinicPlugin.findFirst({
+    where: {
+      clinicId,
+      plugin: { slug: "extra-doctor-seat" },
+      status: "ACTIVE",
+      isEnabled: true,
+    },
+    select: { quantity: true },
+  })
+
+  const extraSeats = extraSeatPlugin?.quantity ?? 0
+
+  if (planLimit === null) {
+    return { effectiveLimit: null, extraSeats }
+  }
+
+  return { effectiveLimit: planLimit + extraSeats, extraSeats }
+}
+
+const BASE_STORAGE_BYTES = 5 * 1024 * 1024 * 1024 // 5 GB
+const STORAGE_PER_UNIT_BYTES = 10 * 1024 * 1024 * 1024 // 10 GB per unit
+
+/**
+ * Returns storage quota and current usage for a clinic.
+ * Base = 5 GB. Each active Document Storage unit adds 10 GB.
+ */
+export async function getEffectiveStorageQuota(clinicId: string): Promise<{
+  quotaBytes: number
+  usedBytes: number
+  quotaGB: number
+  usedGB: number
+}> {
+  const storagePlugin = await db.clinicPlugin.findFirst({
+    where: {
+      clinicId,
+      plugin: { slug: "document-storage" },
+      status: "ACTIVE",
+      isEnabled: true,
+    },
+    select: { quantity: true },
+  })
+
+  const extraUnits = storagePlugin?.quantity ?? 0
+  const quotaBytes = BASE_STORAGE_BYTES + extraUnits * STORAGE_PER_UNIT_BYTES
+
+  // Sum all tracked file sizes for this clinic
+  const usageAgg = await db.storageUsage.aggregate({
+    where: { clinicId },
+    _sum: { bytes: true },
+  })
+  const usedBytes = usageAgg._sum.bytes ?? 0
+
+  return {
+    quotaBytes,
+    usedBytes,
+    quotaGB: quotaBytes / (1024 * 1024 * 1024),
+    usedGB: usedBytes / (1024 * 1024 * 1024),
+  }
+}
+
+/**
+ * Returns the quantity of an active LIMIT_MODIFIER plugin for a clinic.
+ * Returns 0 if not purchased or inactive.
+ */
+export async function getActivePluginQuantity(clinicId: string, slug: string): Promise<number> {
+  const cp = await db.clinicPlugin.findFirst({
+    where: { clinicId, plugin: { slug }, status: "ACTIVE", isEnabled: true },
+    select: { quantity: true },
+  })
+  return cp?.quantity ?? 0
+}
+
+/**
  * Returns all active plugins (platform-wide) sorted by sortOrder.
  */
 export async function listActivePlugins() {

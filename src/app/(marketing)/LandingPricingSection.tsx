@@ -13,6 +13,7 @@ export type PlanItem = {
   priceMonthlyInr: number
   patientLimit?: number | null
   doctorLimit?: number | null
+  storageLimitGb?: number | null
   isFeatured?: boolean
   featuresList: string[]
 }

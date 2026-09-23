@@ -12,6 +12,8 @@ export async function createRecordAction(data: {
   prescription?: string
   notes?: string
   documentUrl?: string
+  documentSize?: number
+  documentName?: string
 }) {
   const clinicId = await requireClinicId()
 
@@ -27,6 +29,19 @@ export async function createRecordAction(data: {
       documentUrl: data.documentUrl
     }
   })
+
+  if (data.documentUrl && data.documentSize !== undefined) {
+    await db.patientDocument.create({
+      data: {
+        clinicId,
+        patientId: data.patientId,
+        name: data.documentName || "Medical Record Document",
+        type: "OTHER", // Can be refined later
+        sizeBytes: data.documentSize,
+        url: data.documentUrl
+      }
+    })
+  }
 
   revalidatePath("/dashboard/records")
   revalidatePath("/dashboard/patients")

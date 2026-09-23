@@ -8,6 +8,9 @@ export async function createInvoiceAction(data: {
   patientId: string
   date: string
   items: { desc: string, amount: number }[]
+  documentUrl?: string
+  documentSize?: number
+  documentName?: string
 }) {
   const clinicId = await requireClinicId()
 
@@ -24,6 +27,19 @@ export async function createInvoiceAction(data: {
       status: "unpaid"
     }
   })
+
+  if (data.documentUrl && data.documentSize !== undefined) {
+    await db.patientDocument.create({
+      data: {
+        clinicId,
+        patientId: data.patientId,
+        name: data.documentName || `Invoice ${displayId}`,
+        type: "INVOICE",
+        sizeBytes: data.documentSize,
+        url: data.documentUrl
+      }
+    })
+  }
 
   revalidatePath("/dashboard/billing")
   revalidatePath("/dashboard/patients")

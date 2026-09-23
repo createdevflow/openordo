@@ -23,8 +23,8 @@ export default async function PaymentSetupPage() {
 
   if (!subscription) redirect("/onboarding/plan")
 
-  const { getStripePublicKey } = await import("@/lib/stripe-utils")
-  const stripePublishableKey = await getStripePublicKey()
+  const { getRazorpayKeyId } = await import("@/lib/razorpay-utils")
+  const razorpayKeyId = await getRazorpayKeyId()
 
   const globalSetting = await db.globalSetting.findUnique({ where: { key: "DEFAULT_TRIAL_DAYS" } })
   const defaultTrialDays = parseInt(globalSetting?.value || "14", 10)
@@ -67,10 +67,12 @@ export default async function PaymentSetupPage() {
           </div>
         </div>
 
-        <PaymentSetupForm
-          clinicId={clinicId}
-          userId={user.id}
-          stripePublishableKey={stripePublishableKey}
+        <PaymentSetupForm 
+          clinicId={clinicId} 
+          userId={user.id} 
+          razorpayKeyId={razorpayKeyId}
+          planId={subscription.plan.id}
+          razorpayPlanId={subscription.plan.razorpayPlanIdMonthly}
           planName={subscription.plan.name}
           trialEndsAt={trialEndsAt?.toISOString() || ""}
         />

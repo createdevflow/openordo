@@ -17,6 +17,9 @@ export async function createPrescriptionAction(data: {
     notes?: string
   }>
   recordId?: string
+  documentUrl?: string
+  documentSize?: number
+  documentName?: string
 }) {
   const clinicId = await requireClinicId()
   const hasPlugin = await hasActivePlugin(clinicId, "e-prescriptions")
@@ -34,6 +37,19 @@ export async function createPrescriptionAction(data: {
       recordId: data.recordId || null
     }
   })
+
+  if (data.documentUrl && data.documentSize !== undefined) {
+    await db.patientDocument.create({
+      data: {
+        clinicId,
+        patientId: data.patientId,
+        name: data.documentName || `Prescription ${prescription.id.substring(0,6)}`,
+        type: "PRESCRIPTION",
+        sizeBytes: data.documentSize,
+        url: data.documentUrl
+      }
+    })
+  }
 
   revalidatePath("/dashboard/prescriptions")
   revalidatePath("/dashboard/records")

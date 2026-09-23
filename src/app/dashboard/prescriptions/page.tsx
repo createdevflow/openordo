@@ -1,4 +1,4 @@
-import { requireClinicId } from "@/lib/auth-utils"
+import { requireClinicId, requireUser } from "@/lib/auth-utils"
 import { hasActivePlugin } from "@/lib/plugins"
 import { db } from "@/lib/db"
 import { PluginUpsellCard } from "@/components/ui/PluginCard"
@@ -9,6 +9,7 @@ export default async function PrescriptionsPage({ searchParams }: { searchParams
   const resolvedParams = await searchParams
 
   const hasPlugin = await hasActivePlugin(clinicId, "e-prescriptions")
+  const user = await requireUser()
 
   if (!hasPlugin) {
     return (
@@ -43,6 +44,7 @@ export default async function PrescriptionsPage({ searchParams }: { searchParams
       patients={patients}
       doctors={doctors}
       clinic={clinic}
+      clinicEmail={user.email}
       initialAction={resolvedParams?.action}
       initialPatientId={resolvedParams?.patientId}
     />

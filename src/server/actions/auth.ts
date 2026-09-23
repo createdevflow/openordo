@@ -9,6 +9,27 @@ import { cookies, headers } from "next/headers"
 import { sendVerificationOtp, sendPasswordResetEmail } from "@/lib/email"
 import { checkRateLimit, applyProgressiveDelay } from "@/lib/rate-limit"
 
+// ── Google OAuth sign-in ──────────────────────────────────────────────────────
+export async function googleSignInAction(callbackUrl?: string) {
+  // Determine where to send the user after Google auth completes.
+  // The signIn callback in auth.ts will create/link the user; the jwt callback
+  // will load onboardingStep. We default to /dashboard — Auth.js will naturally
+  // redirect to /onboarding/clinic if the session shows incomplete onboarding
+  // (handled by the dashboard layout / middleware).
+  const redirectTo = callbackUrl && callbackUrl.startsWith("/") ? callbackUrl : "/dashboard"
+  try {
+    await signIn("google", { redirectTo })
+  } catch (error) {
+    // NEXT_REDIRECT must be re-thrown — it IS the success path
+    if (error instanceof Error && error.message === "NEXT_REDIRECT") throw error
+    if (error instanceof AuthError) {
+      // OAuthCallbackError = user closed the popup — not an error to surface
+      if (error.type === "OAuthCallbackError" || error.type === "OAuthSignInError") return
+    }
+    throw error
+  }
+}
+
 export async function loginAction(prevState: any, formData: FormData) {
   const rawIdentifier = ((formData.get("identifier") || formData.get("email")) as string)?.trim()
   const password = formData.get("password") as string

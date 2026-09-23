@@ -59,9 +59,8 @@ export interface PluginCardData {
   priceMonthlyUSD: number | null
   priceYearlyINR: number | null
   priceYearlyUSD: number | null
-  stripePriceIdOneTime?: string | null
-  stripePriceIdMonthly?: string | null
-  stripePriceIdYearly?: string | null
+  razorpayPlanIdMonthly?: string | null
+  razorpayPlanIdYearly?: string | null
   isComingSoon?: boolean
 }
 

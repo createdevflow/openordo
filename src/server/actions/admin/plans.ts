@@ -19,7 +19,17 @@ export async function createPlan(data: any) {
 export async function updatePlan(id: string, data: any) {
   try {
     const session = await requireSuperAdmin()
-    // TODO: integrate stripe if price changes
+    const existing = await db.plan.findUnique({ where: { id }, select: { priceMonthlyInr: true, priceMonthlyUsd: true } })
+    
+    // If price changed, clear the Razorpay plan ID so a new one is auto-created at the correct price
+    const priceChanged = existing && (
+      (data.priceMonthlyInr !== undefined && data.priceMonthlyInr !== existing.priceMonthlyInr) ||
+      (data.priceMonthlyUsd !== undefined && data.priceMonthlyUsd !== existing.priceMonthlyUsd)
+    )
+    if (priceChanged) {
+      data = { ...data, razorpayPlanIdMonthly: null, razorpayPlanIdYearly: null }
+    }
+
     await db.plan.update({ where: { id }, data })
     await logAudit(session.user.id!, "UPDATE_PLAN", "Plan", id, { updates: Object.keys(data) })
     revalidatePath("/admin/plans")

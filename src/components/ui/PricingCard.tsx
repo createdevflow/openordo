@@ -12,44 +12,43 @@ export type PricingCardProps = {
 
 export function PricingCard({ plan, promo, hideCta = false, currency = "USD" }: PricingCardProps) {
   const isPromoTarget = promo && promo.targetPlanId === plan.id
-  let featureList: string[] = []
-  try {
-    featureList = typeof plan.features === 'string' ? JSON.parse(plan.features) : plan.features || []
-  } catch {
-    featureList = []
+
+  // Use pre-built featuresList from server (admin-assigned) if available
+  let featureList: string[] = plan.featuresList || []
+
+  // Fallback: try to parse from plan.features JSON (custom marketing bullets)
+  if (!featureList || featureList.length === 0) {
+    try {
+      featureList = typeof plan.features === 'string' ? JSON.parse(plan.features) : plan.features || []
+    } catch {
+      featureList = []
+    }
   }
 
+  // Last resort hardcoded fallback
   if (!featureList || featureList.length === 0) {
     const slug = (plan.slug || plan.name || "").toLowerCase()
-    if (slug.includes("starter")) {
+    if (slug.includes("free") || slug.includes("starter")) {
       featureList = [
-        "1 Doctor account",
-        `Up to ${plan.patientLimit || 200} patient records`,
-        "Visual appointment calendar",
+        plan.doctorLimit ? `Up to ${plan.doctorLimit} doctor login` : "1 Doctor account",
+        plan.patientLimit ? `Up to ${plan.patientLimit} patient records` : "Basic patient records",
+        "Appointment calendar",
         "Patient medical history & charts",
-        "Doctor profile & working hours",
-        "Automated daily data backups"
       ]
     } else if (slug.includes("practice")) {
       featureList = [
-        `Up to ${plan.doctorLimit || 6} Doctor accounts`,
+        plan.doctorLimit ? `Up to ${plan.doctorLimit} doctor accounts` : "Multiple doctor accounts",
         "Unlimited patient records & charts",
-        "Visual appointment calendar",
-        "Public online booking page link",
-        "Invoicing & itemized billing",
-        "Automated SMS & email reminders",
-        "Automated waitlist management"
+        "Online booking page",
+        "Invoicing & billing",
       ]
     } else {
       featureList = [
-        "Unlimited Doctor accounts",
+        "Unlimited doctor accounts",
         "Unlimited patient records & charts",
-        "All Practice plan features included",
-        "Multi-doctor simultaneous scheduling",
-        "Insurance tracking & claims",
-        "Monthly & annual revenue analytics",
-        "Clinic data export (CSV/PDF)",
-        "Dedicated priority onboarding"
+        "All lower plan features included",
+        "Revenue analytics",
+        "Data export (CSV/PDF)",
       ]
     }
   }

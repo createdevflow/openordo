@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useTransition, useEffect } from "react"
+import React, { useState, useTransition, useEffect, useRef } from "react"
 import { 
   updateClinicSettingsAction, 
   updateUserSettingsAction, 
@@ -11,18 +11,24 @@ import {
   exportClinicDataAction,
   cancelSubscriptionAction
 } from "@/server/actions/settings"
-import { Copy, RefreshCw, Eye, EyeOff, ExternalLink, Lock, Check, ArrowUpRight, Sparkles, Download, Calendar, Receipt, Users, X, FileText } from "lucide-react"
+import { saveBookingPageConfig } from "@/server/actions/bookingPageConfig"
+import { Copy, RefreshCw, Eye, EyeOff, ExternalLink, Lock, Check, ArrowUpRight, Sparkles, Download, Calendar, Receipt, Users, X, FileText, Palette, Globe, Plus, Trash2, ImagePlus } from "lucide-react"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
+import { toast } from "sonner"
+import { StorageTab } from "./StorageTab"
 
 export function SettingsClient({ 
   initialClinic, 
   initialUser,
   planDetails,
   allPlans = [],
-  initialTab = "clinic"
+  initialTab = "clinic",
+  hasBrandedBooking = false,
+  initialBookingConfig = null,
+  doctors = [],
 }: any) {
   const { confirm, showAlert } = useConfirm()
-  const [tab, setTab] = useState(initialTab)
+  const [tab, setTab] = useState(initialTab === "booking" ? "developer" : initialTab)
 
   function handleTabChange(newTab: string) {
     setTab(newTab)
@@ -60,6 +66,30 @@ export function SettingsClient({
     country: initialClinic?.country || "US",
     config: initialBillingConfig
   })
+
+
+  // ── Booking Page Config State ────────────────────────────────────────────
+  const parseJsonSafe = (str: string | null | undefined, fallback: any) => {
+    try { return str ? JSON.parse(str) : fallback } catch { return fallback }
+  }
+  const [bpc, setBpc] = useState(() => ({
+    logoUrl:          initialBookingConfig?.logoUrl ?? "",
+    faviconUrl:       initialBookingConfig?.faviconUrl ?? "",
+    coverUrl:         initialBookingConfig?.coverUrl ?? "",
+    accentColor:      initialBookingConfig?.accentColor ?? "#1E4638",
+    displayName:      initialBookingConfig?.displayName ?? "",
+    tagline:          initialBookingConfig?.tagline ?? "",
+    aboutText:        initialBookingConfig?.aboutText ?? "",
+    showAddress:      initialBookingConfig?.showAddress ?? true,
+    showPhone:        initialBookingConfig?.showPhone ?? true,
+    showHours:        initialBookingConfig?.showHours ?? true,
+    bookableDoctorIds: parseJsonSafe(initialBookingConfig?.bookableDoctorIds, doctors.map((d: any) => d.id)) as string[],
+    appointmentTypes:  parseJsonSafe(initialBookingConfig?.appointmentTypes, ["General Checkup", "Follow-up", "New Patient Visit", "Urgent Care"]) as string[],
+    showPoweredBy:    initialBookingConfig?.showPoweredBy ?? true,
+    socialLinks:      parseJsonSafe(initialBookingConfig?.socialLinks, { website: "", instagram: "", facebook: "", twitter: "" }),
+  }))
+  const [isBpcSaving, setIsBpcSaving] = useState(false)
+  const [newApptType, setNewApptType] = useState("")
 
   const [isPending, startTransition] = useTransition()
   const [exportMessage, setExportMessage] = useState("")
@@ -167,16 +197,22 @@ export function SettingsClient({
 
   function handleDownloadAll() {
     if (!exportData) return
-    const suffix = getFilenameSuffix()
     const prefix = exportData.clinicSlug || "clinic"
-    downloadCSV(exportData.patientsCSV, `${prefix}_patients_${suffix}.csv`)
-    setTimeout(() => {
-      downloadCSV(exportData.appointmentsCSV, `${prefix}_appointments_${suffix}.csv`)
-    }, 250)
-    setTimeout(() => {
-      downloadCSV(exportData.invoicesCSV, `${prefix}_invoices_${suffix}.csv`)
-    }, 500)
-    setExportMessage(`Downloaded all 3 files (${exportRange === "custom" ? "Custom Range" : exportRange.toUpperCase()}).`)
+    
+    let query = `?range=${exportRange}`
+    if (exportRange === "custom" && customStart && customEnd) {
+      query += `&startDate=${customStart}&endDate=${customEnd}`
+    }
+    const zipUrl = `/api/export/all${query}`
+    
+    const a = document.createElement("a")
+    a.href = zipUrl
+    a.download = `${prefix}_complete_export.zip`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    
+    setExportMessage(`Full clinic data ZIP is preparing and will download shortly...`)
   }
 
   function handleClinicSave() {
@@ -246,28 +282,80 @@ export function SettingsClient({
           return
         }
         
-        const priceId = plan.stripePriceIdMonthly || plan.stripePriceIdYearly
-        if (!priceId) {
-          throw new Error("This plan is not configured for Stripe checkout. Please contact support.")
-        }
+        const plan_id = plan.razorpayPlanIdMonthly || plan.razorpayPlanIdYearly
         
-        const res = await fetch("/api/stripe/checkout", {
+        const res = await fetch("/api/razorpay/subscription", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             type: "PLAN",
             itemId: plan.id,
-            priceId: priceId
+            planId: plan_id
           })
         })
         
         const json = await res.json()
-        if (!res.ok) throw new Error(json.error || "Failed to create checkout session")
+        if (!res.ok) throw new Error(json.error || "Failed to create subscription")
         
-        if (json.url) {
-          window.location.href = json.url
+        if (json.isUpdate) {
+          showAlert({ title: "Success", body: "Plan updated! You will be charged the prorated difference on your next invoice.", tone: "primary" })
+          setTimeout(() => window.location.reload(), 2000)
+          return
+        }
+        
+        if (json.bypass) {
+          const verifyRes = await fetch("/api/razorpay/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              razorpay_payment_id: "bypass_payment",
+              razorpay_subscription_id: "bypass_sub",
+              razorpay_signature: "bypass_sig",
+              type: "PLAN",
+              itemId: plan.id,
+              isOneTime: false
+            })
+          })
+          if (verifyRes.ok) {
+            showAlert({ title: "Success", body: "Payment simulated successfully! (Developer Bypass)", tone: "primary" })
+            setTimeout(() => window.location.reload(), 1500)
+          } else {
+            showAlert({ title: "Verification Failed", body: "Bypass provisioning failed", tone: "danger" })
+          }
+          return
+        }
+
+        if (json.id) {
+          const options = {
+            key: json.keyId,
+            subscription_id: json.id,
+            name: "OpenORDO",
+            description: `Subscription for ${plan.name} Plan`,
+            handler: async function (response: any) {
+              try {
+                const verifyRes = await fetch("/api/razorpay/verify", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    ...response,
+                    type: "PLAN",
+                    itemId: plan.id,
+                    isOneTime: false
+                  })
+                })
+                const verifyJson = await verifyRes.json()
+                if (!verifyRes.ok) throw new Error(verifyJson.error)
+                showAlert({ title: "Success", body: "Payment successful! Your plan is activated.", tone: "primary" })
+                setTimeout(() => window.location.reload(), 2000)
+              } catch (err: any) {
+                showAlert({ title: "Verification Failed", body: err.message || "Payment verification failed", tone: "danger" })
+              }
+            },
+            theme: { color: "#006240" }
+          };
+          const rzp = new (window as any).Razorpay(options)
+          rzp.open()
         } else {
-          // Fallback if no URL
           window.location.reload()
         }
       } catch (err: any) {
@@ -298,7 +386,7 @@ export function SettingsClient({
   return (
     <div className="flex flex-col gap-6 w-full">
       {initialClinic.status === "LOCKED_CANCELLED" && (
-        <div className="bg-coral-soft border border-coral/30 rounded-xl p-5 max-w-[1000px]">
+        <div className="bg-coral-soft border border-coral/30 rounded-xl p-5">
           <div className="flex items-start gap-3">
             <span className="text-coral font-bold mt-0.5">!</span>
             <div>
@@ -311,49 +399,55 @@ export function SettingsClient({
           </div>
         </div>
       )}
-      <div className="flex flex-col lg:flex-row gap-8 max-w-[1000px]">
-      <aside className="w-full lg:w-[220px] flex-shrink-0 lg:sticky lg:top-24 lg:self-start z-10 bg-paper">
-        <nav className="flex flex-col gap-1">
+      <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
+      <aside className="w-full lg:w-[220px] flex-shrink-0 sticky top-[64px] lg:top-24 lg:self-start z-10 bg-paper py-3 -mx-4 px-4 lg:mx-0 lg:px-0 lg:py-0 border-b border-line lg:border-none overflow-x-auto no-scrollbar">
+        <nav className="flex flex-row lg:flex-col gap-2 min-w-max">
           <button 
             onClick={() => handleTabChange("clinic")}
-            className={`w-full text-left px-3 py-2 rounded-md ${tab === "clinic" ? "bg-paper-raised font-semibold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "font-medium text-ink-soft hover:text-ink hover:bg-paper-raised"}`}
+            className={`text-left whitespace-nowrap px-3 py-2 rounded-md ${tab === "clinic" ? "bg-paper-raised font-semibold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "font-medium text-ink-soft hover:text-ink hover:bg-paper-raised"}`}
           >
             Clinic Profile
           </button>
           <button 
             onClick={() => handleTabChange("subscription")}
-            className={`w-full text-left px-3 py-2 rounded-md ${tab === "subscription" ? "bg-paper-raised font-semibold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "font-medium text-ink-soft hover:text-ink hover:bg-paper-raised"}`}
+            className={`text-left whitespace-nowrap px-3 py-2 rounded-md ${tab === "subscription" ? "bg-paper-raised font-semibold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "font-medium text-ink-soft hover:text-ink hover:bg-paper-raised"}`}
           >
             Subscription & Plan
           </button>
           <button 
             onClick={() => handleTabChange("billing")}
-            className={`w-full text-left px-3 py-2 rounded-md ${tab === "billing" ? "bg-paper-raised font-semibold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "font-medium text-ink-soft hover:text-ink hover:bg-paper-raised"}`}
+            className={`text-left whitespace-nowrap px-3 py-2 rounded-md ${tab === "billing" ? "bg-paper-raised font-semibold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "font-medium text-ink-soft hover:text-ink hover:bg-paper-raised"}`}
           >
             Billing & Compliance
           </button>
           <button 
             onClick={() => handleTabChange("account")}
-            className={`w-full text-left px-3 py-2 rounded-md ${tab === "account" ? "bg-paper-raised font-semibold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "font-medium text-ink-soft hover:text-ink hover:bg-paper-raised"}`}
+            className={`text-left whitespace-nowrap px-3 py-2 rounded-md ${tab === "account" ? "bg-paper-raised font-semibold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "font-medium text-ink-soft hover:text-ink hover:bg-paper-raised"}`}
           >
             Account & Export
           </button>
           <button 
+            onClick={() => handleTabChange("storage")}
+            className={`text-left whitespace-nowrap px-3 py-2 rounded-md ${tab === "storage" ? "bg-paper-raised font-semibold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "font-medium text-ink-soft hover:text-ink hover:bg-paper-raised"}`}
+          >
+            Storage & Vaults
+          </button>
+          <button 
             onClick={() => handleTabChange("notifs")}
-            className={`w-full text-left px-3 py-2 rounded-md ${tab === "notifs" ? "bg-paper-raised font-semibold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "font-medium text-ink-soft hover:text-ink hover:bg-paper-raised"}`}
+            className={`text-left whitespace-nowrap px-3 py-2 rounded-md ${tab === "notifs" ? "bg-paper-raised font-semibold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "font-medium text-ink-soft hover:text-ink hover:bg-paper-raised"}`}
           >
             Notifications
           </button>
           <button 
             onClick={() => handleTabChange("developer")}
-            className={`w-full text-left px-3 py-2 rounded-md ${tab === "developer" ? "bg-paper-raised font-semibold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "font-medium text-ink-soft hover:text-ink hover:bg-paper-raised"}`}
+            className={`text-left whitespace-nowrap px-3 py-2 rounded-md ${tab === "developer" ? "bg-paper-raised font-semibold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "font-medium text-ink-soft hover:text-ink hover:bg-paper-raised"}`}
           >
             Developer & Booking
           </button>
         </nav>
       </aside>
       
-      <main className="flex-1 w-full max-w-4xl pt-1">
+      <main className="flex-1 w-full min-w-0 pt-1">
       {tab === "clinic" && (
         <div className="bg-white border border-line rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.02)] overflow-hidden">
           <div className="px-6 py-5 border-b border-line bg-paper-raised">
@@ -512,9 +606,35 @@ export function SettingsClient({
                     ? `₹${plan.priceMonthlyInr?.toLocaleString("en-IN") || 0}/mo`
                     : `$${plan.priceMonthlyUsd || 0}/mo`
 
-                  const includedFeatures = plan.planFeatures
-                    ?.filter((pf: any) => pf.included)
-                    ?.map((pf: any) => pf.feature.name) || []
+                  const catalogFeatures = (plan.planFeatures || [])
+                    .filter((pf: any) => pf.feature?.isGloballyEnabled !== false)
+                    .map((pf: any) => pf.feature?.name || "")
+                    .filter(Boolean)
+
+                  let customBullets: string[] = []
+                  try {
+                    if (plan.features) {
+                      const parsed = JSON.parse(plan.features)
+                      if (Array.isArray(parsed)) customBullets = parsed
+                    }
+                  } catch (e) {}
+
+                  let includedFeatures = [...catalogFeatures, ...customBullets]
+
+                  if (plan.storageLimitGb) {
+                    includedFeatures.push(`${plan.storageLimitGb} GB document storage`)
+                  }
+
+                  if (includedFeatures.length === 0) {
+                    const slug = (plan.slug || plan.name || "").toLowerCase()
+                    if (slug.includes("free") || slug.includes("starter")) {
+                      includedFeatures = ["Basic patient records", "Appointment calendar"]
+                    } else if (slug.includes("practice")) {
+                      includedFeatures = ["Multiple doctor accounts", "Online booking page", "Invoicing"]
+                    } else {
+                      includedFeatures = ["Unlimited doctors", "Revenue analytics", "Data export"]
+                    }
+                  }
 
                   return (
                     <div 
@@ -737,6 +857,7 @@ export function SettingsClient({
           </div>
         </div>
       )}
+      {tab === "storage" && <StorageTab />}
 
       {tab === "account" && (
         <div className="bg-white border border-line rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.02)] overflow-hidden">
@@ -869,18 +990,6 @@ export function SettingsClient({
   style="border-radius:12px;border:1px solid #DAD6C9;"
 ></iframe>`
 
-        const apiSnippet = `curl -X POST https://yourdomain.com/api/book/v1 \\
-  -H "Content-Type: application/json" \\
-  -H "X-API-Key: ${apiKey || "YOUR_API_KEY"}" \\
-  -d '{
-    "name": "John Doe",
-    "email": "john@example.com",
-    "phone": "+91 9876543210",
-    "date": "2024-12-20",
-    "time": "10:00",
-    "reason": "General checkup"
-  }'`
-
         function copyToClipboard(text: string) {
           navigator.clipboard.writeText(text).then(() => showAlert({ title: "Copied", body: "Copied to clipboard", tone: "primary" }))
         }
@@ -926,9 +1035,311 @@ export function SettingsClient({
           URL.revokeObjectURL(url)
         }
 
+        async function handleSaveBpc() {
+          setIsBpcSaving(true)
+          try {
+            await saveBookingPageConfig({
+              ...bpc,
+              socialLinks: bpc.socialLinks,
+            })
+            toast.success("Booking page settings saved")
+          } catch (err: any) {
+            toast.error(err.message || "Failed to save")
+          } finally {
+            setIsBpcSaving(false)
+          }
+        }
+
+        async function handleImageUpload(field: "logoUrl" | "faviconUrl" | "coverUrl", file: File) {
+          const fd = new FormData()
+          fd.append("file", file)
+          const res = await fetch("/api/upload", { method: "POST", body: fd })
+          if (!res.ok) { toast.error("Upload failed"); return }
+          const { url } = await res.json()
+          setBpc(prev => ({ ...prev, [field]: url }))
+        }
+
+        function ImageUploadField({ label, field, value, hint }: { label: string; field: "logoUrl" | "faviconUrl" | "coverUrl"; value: string; hint?: string }) {
+          return (
+            <div className="cw-field !mb-0">
+              <label>{label}</label>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                {value ? (
+                  <div style={{ position: "relative", display: "inline-block" }}>
+                    <img src={value} alt={label} style={{ height: field === "coverUrl" ? 60 : 40, width: field === "coverUrl" ? 120 : 40, objectFit: "cover", borderRadius: field === "coverUrl" ? 6 : "50%", border: "1px solid var(--line)" }} />
+                    <button
+                      type="button"
+                      onClick={() => setBpc(prev => ({ ...prev, [field]: "" }))}
+                      style={{ position: "absolute", top: -6, right: -6, background: "var(--coral)", color: "#fff", border: "none", borderRadius: "50%", width: 18, height: 18, fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                    ><X size={10} /></button>
+                  </div>
+                ) : null}
+                <label style={{ cursor: "pointer" }}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ display: "none" }}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleImageUpload(field, f) }}
+                  />
+                  <span className="cw-btn cw-btn-ghost cw-btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <ImagePlus size={13} /> {value ? "Change" : "Upload"}
+                  </span>
+                </label>
+                {hint && <span style={{ fontSize: 11.5, color: "var(--ink-soft)" }}>{hint}</span>}
+              </div>
+            </div>
+          )
+        }
+
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {/* Public Booking Link */}
+
+            {/* ── SECTION A: Branded Booking Page Config ── */}
+            <div className="bg-white border border-line rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.02)] overflow-hidden">
+              <div className="px-6 py-5 border-b border-line bg-paper-raised flex justify-between items-start">
+                <div>
+                  <h3 className="text-[17px] font-bold m-0 text-ink flex items-center gap-2">
+                    <Palette size={17} style={{ color: "var(--forest)" }} /> Branded Booking Page
+                  </h3>
+                  <p className="text-[13px] text-ink-soft mt-1 mb-0">
+                    Customise your public booking page — logo, colours, content, and doctor availability.
+                  </p>
+                </div>
+                {hasBrandedBooking && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#2e6b3e", background: "#dceadd", padding: "3px 10px", borderRadius: 20 }}>Active</span>
+                )}
+              </div>
+
+              {!hasBrandedBooking ? (
+                /* Upsell card (amber pattern from CHARTWELL_PLUGINS_SPEC §4.3) */
+                <div className="p-6">
+                  <div style={{
+                    background: "var(--amber-soft)", border: "1px solid var(--amber)",
+                    borderRadius: 10, padding: "20px 22px",
+                    display: "flex", alignItems: "flex-start", gap: 16
+                  }}>
+                    <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(200,134,43,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <Palette size={20} style={{ color: "var(--amber)" }} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 14.5, color: "#6B4C15", marginBottom: 4 }}>
+                        Branded Booking Page Add-on Required
+                      </div>
+                      <p style={{ fontSize: 13, color: "#8E6924", margin: "0 0 14px", lineHeight: 1.6 }}>
+                        Unlock custom logo, accent colours, welcome text, and per-doctor availability on your public booking page.
+                        Your booking link is already live — this add-on lets you brand it.
+                      </p>
+                      <a href="/dashboard/addons" className="cw-btn cw-btn-sm" style={{ background: "var(--amber)", color: "#fff", border: "none", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        <ArrowUpRight size={13} /> View Add-on
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Full config form */
+                <div className="p-6 flex flex-col gap-6">
+
+                  {/* Visual Branding */}
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-soft)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 14 }}>Visual Branding</div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      <ImageUploadField label="Clinic Logo" field="logoUrl" value={bpc.logoUrl} hint="Shown top-left on the booking page" />
+                      <ImageUploadField label="Favicon" field="faviconUrl" value={bpc.faviconUrl} hint="32×32 browser tab icon" />
+                      <div className="md:col-span-2">
+                        <ImageUploadField label="Cover / Banner Image" field="coverUrl" value={bpc.coverUrl} hint="Wide banner shown above the booking form (1200×300 recommended)" />
+                      </div>
+                      <div className="cw-field !mb-0">
+                        <label>Accent Colour</label>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <input
+                            type="color"
+                            value={bpc.accentColor}
+                            onChange={e => setBpc(prev => ({ ...prev, accentColor: e.target.value }))}
+                            style={{ width: 44, height: 36, border: "1px solid var(--line)", borderRadius: 7, cursor: "pointer", padding: 2 }}
+                          />
+                          <input
+                            className="cw-input"
+                            value={bpc.accentColor}
+                            onChange={e => setBpc(prev => ({ ...prev, accentColor: e.target.value }))}
+                            placeholder="#1E4638"
+                            style={{ width: 110, fontFamily: "monospace", fontSize: 13 }}
+                          />
+                          <span style={{ fontSize: 12, color: "var(--ink-soft)" }}>Used for buttons and highlights</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ borderTop: "1px solid var(--line)" }} />
+
+                  {/* Content */}
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-soft)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 14 }}>Content</div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      <div className="cw-field !mb-0">
+                        <label>Display Name <span style={{ fontWeight: 400, color: "var(--ink-soft)" }}>(public-facing)</span></label>
+                        <input className="cw-input" value={bpc.displayName} onChange={e => setBpc(prev => ({ ...prev, displayName: e.target.value }))} placeholder={initialClinic?.name || "Your Clinic Name"} />
+                      </div>
+                      <div className="cw-field !mb-0">
+                        <label>Tagline</label>
+                        <input className="cw-input" value={bpc.tagline} onChange={e => setBpc(prev => ({ ...prev, tagline: e.target.value }))} placeholder="e.g. Expert care, close to home." />
+                      </div>
+                      <div className="cw-field !mb-0 md:col-span-2">
+                        <label>Welcome / About Text</label>
+                        <textarea className="cw-textarea" rows={3} value={bpc.aboutText} onChange={e => setBpc(prev => ({ ...prev, aboutText: e.target.value }))} placeholder="A short welcome message shown to patients before they book…" />
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 20, marginTop: 14 }}>
+                      {[
+                        { key: "showAddress", label: "Show address" },
+                        { key: "showPhone", label: "Show phone number" },
+                        { key: "showHours", label: "Show working hours" },
+                      ].map(({ key, label }) => (
+                        <label key={key} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13.5, cursor: "pointer" }}>
+                          <input
+                            type="checkbox"
+                            checked={(bpc as any)[key]}
+                            onChange={e => setBpc(prev => ({ ...prev, [key]: e.target.checked }))}
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                    <p style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 6 }}>
+                      Address, phone, and hours are pulled from your <button className="cw-link" onClick={() => handleTabChange("clinic")}>Clinic Profile</button> — edit them there.
+                    </p>
+                  </div>
+
+                  <div style={{ borderTop: "1px solid var(--line)" }} />
+
+                  {/* Booking Behaviour */}
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-soft)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 14 }}>Booking Behaviour</div>
+
+                    {/* Per-doctor toggles */}
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)", marginBottom: 10 }}>Publicly Bookable Doctors</div>
+                      {doctors.length === 0 ? (
+                        <p style={{ fontSize: 13, color: "var(--ink-soft)" }}>No doctors added yet. <a href="/dashboard/doctors" className="cw-link">Add doctors →</a></p>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          {doctors.map((d: any) => {
+                            const enabled = bpc.bookableDoctorIds.includes(d.id)
+                            return (
+                              <div key={d.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 8 }}>
+                                <div>
+                                  <div style={{ fontWeight: 600, fontSize: 13.5 }}>{d.name}</div>
+                                  <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>{d.specialty}</div>
+                                </div>
+                                <div
+                                  onClick={() => setBpc(prev => ({
+                                    ...prev,
+                                    bookableDoctorIds: enabled
+                                      ? prev.bookableDoctorIds.filter((id: string) => id !== d.id)
+                                      : [...prev.bookableDoctorIds, d.id]
+                                  }))}
+                                  style={{ width: 40, height: 22, borderRadius: 11, cursor: "pointer", background: enabled ? "var(--forest)" : "#d1d5db", position: "relative", transition: "background .15s", flexShrink: 0 }}
+                                >
+                                  <div style={{ position: "absolute", top: 2, left: enabled ? 20 : 2, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left .15s", boxShadow: "0 1px 3px rgba(0,0,0,.2)" }} />
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Appointment types */}
+                    <div>
+                      <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)", marginBottom: 6 }}>Appointment Types / Reasons</div>
+                      <p style={{ fontSize: 12.5, color: "var(--ink-soft)", marginBottom: 10 }}>Patients will pick from this list when booking. Leave empty to show a free-text field instead.</p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+                        {bpc.appointmentTypes.map((type: string, i: number) => (
+                          <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 20, fontSize: 13 }}>
+                            {type}
+                            <button type="button" onClick={() => setBpc(prev => ({ ...prev, appointmentTypes: prev.appointmentTypes.filter((_: string, j: number) => j !== i) }))} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--coral)", padding: 0, display: "flex" }}>
+                              <X size={12} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <input
+                          className="cw-input"
+                          value={newApptType}
+                          onChange={e => setNewApptType(e.target.value)}
+                          placeholder="e.g. Dental Cleaning"
+                          onKeyDown={e => {
+                            if (e.key === "Enter") {
+                              e.preventDefault()
+                              const v = newApptType.trim()
+                              if (v && !bpc.appointmentTypes.includes(v)) {
+                                setBpc(prev => ({ ...prev, appointmentTypes: [...prev.appointmentTypes, v] }))
+                              }
+                              setNewApptType("")
+                            }
+                          }}
+                          style={{ maxWidth: 240 }}
+                        />
+                        <button type="button" className="cw-btn cw-btn-ghost cw-btn-sm" onClick={() => {
+                          const v = newApptType.trim()
+                          if (v && !bpc.appointmentTypes.includes(v)) setBpc(prev => ({ ...prev, appointmentTypes: [...prev.appointmentTypes, v] }))
+                          setNewApptType("")
+                        }}><Plus size={13} /> Add</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ borderTop: "1px solid var(--line)" }} />
+
+                  {/* Footer */}
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-soft)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 14 }}>Footer</div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ marginBottom: 14 }}>
+                      {[
+                        { key: "website", icon: <Globe size={14} />, placeholder: "https://yourwebsite.com" },
+                        { key: "instagram", icon: <span style={{ fontSize: 14 }}>📸</span>, placeholder: "https://instagram.com/yourhandle" },
+                        { key: "facebook", icon: <span style={{ fontSize: 14 }}>📘</span>, placeholder: "https://facebook.com/yourpage" },
+                        { key: "twitter", icon: <span style={{ fontSize: 14 }}>🐦</span>, placeholder: "https://x.com/yourhandle" },
+                      ].map(({ key, icon, placeholder }) => (
+                        <div key={key} className="cw-field !mb-0">
+                          <label style={{ display: "flex", alignItems: "center", gap: 5 }}>{icon} {key.charAt(0).toUpperCase() + key.slice(1)}</label>
+                          <input
+                            className="cw-input"
+                            value={(bpc.socialLinks as any)[key] || ""}
+                            onChange={e => setBpc(prev => ({ ...prev, socialLinks: { ...prev.socialLinks, [key]: e.target.value } }))}
+                            placeholder={placeholder}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={bpc.showPoweredBy}
+                        onChange={e => setBpc(prev => ({ ...prev, showPoweredBy: e.target.checked }))}
+                        style={{ marginTop: 3 }}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13.5 }}>Show "Powered by OpenORDO" badge</div>
+                        <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>
+                          Uncheck to hide the badge from your booking page. Available because you have the Branded Booking add-on.
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Save */}
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <button className="cw-btn cw-btn-primary" onClick={handleSaveBpc} disabled={isBpcSaving}>
+                      {isBpcSaving ? <><RefreshCw size={14} style={{ animation: "spin 1s linear infinite" }} /> Saving…</> : <><Check size={14} /> Save Booking Page Settings</>}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ── SECTION B: Public Booking Link ── */}
             <div className="bg-white border border-line rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.02)] overflow-hidden">
               <div className="px-6 py-5 border-b border-line bg-paper-raised flex justify-between items-center">
                 <div>
@@ -1392,6 +1803,50 @@ export function SettingsClient({
                       <Download size={13} /> CSV
                     </button>
                   </div>
+
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px", border: "1px solid var(--line, #e2e8f0)", borderRadius: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 6,
+                        backgroundColor: "#fce7f3",
+                        color: "#be185d",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center"
+                      }}>
+                        <FileText size={16} />
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13.5, color: "var(--ink)" }}>Documents & Files</div>
+                        <div style={{ fontSize: 11.5, color: "var(--ink-soft)" }}>
+                          {exportData.counts?.documents || 0} document records (Physical files inside ZIP)
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      className="cw-btn cw-btn-ghost cw-btn-sm"
+                      onClick={() => {
+                        const prefix = exportData.clinicSlug || "clinic"
+                        let query = `?range=${exportRange}`
+                        if (exportRange === "custom" && customStart && customEnd) {
+                          query += `&startDate=${customStart}&endDate=${customEnd}`
+                        }
+                        const zipUrl = `/api/export/documents${query}`
+                        
+                        const a = document.createElement("a")
+                        a.href = zipUrl
+                        a.download = `${prefix}_documents.zip`
+                        document.body.appendChild(a)
+                        a.click()
+                        document.body.removeChild(a)
+                      }}
+                      style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12 }}
+                    >
+                      <Download size={13} /> ZIP
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div style={{ textAlign: "center", color: "var(--ink-soft)", padding: 20 }}>
@@ -1425,7 +1880,7 @@ export function SettingsClient({
                   disabled={isExportLoading}
                   style={{ display: "flex", alignItems: "center", gap: 6 }}
                 >
-                  <Download size={14} /> Download All (3 Files)
+                  <Download size={14} /> Download All
                 </button>
               )}
             </div>

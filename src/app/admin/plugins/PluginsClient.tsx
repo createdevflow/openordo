@@ -83,6 +83,7 @@ export function PluginsClient({ plugins }: { plugins: any[] }) {
                   <th>#</th>
                   <th>Name</th>
                   <th>Category</th>
+                  <th>Kind</th>
                   <th>Pricing Models</th>
                   <th>Status</th>
                   <th>Clinics Using</th>
@@ -111,6 +112,11 @@ export function PluginsClient({ plugins }: { plugins: any[] }) {
                       <td>
                         <span className={`adm-badge ${p.category === "Clinical" ? "adm-badge-blue" : "adm-badge-amber"}`}>
                           {p.category}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="adm-badge" style={{ background: "var(--adm-surface2)", color: "var(--adm-ink)" }}>
+                          {p.kind === "LIMIT_MODIFIER" ? "Limit" : "Feature"}
                         </span>
                       </td>
                       <td><PricingChips plugin={p} /></td>

@@ -2,12 +2,29 @@
 
 import { useState, useTransition } from "react"
 import { Settings, Shield, Key, Mail, User, CheckCircle } from "lucide-react"
-import { updateAdminCredentialsAction } from "@/server/actions/admin/settings"
+import { updateAdminCredentialsAction, updateGlobalSettingAction } from "@/server/actions/admin/settings"
 import { toast } from "sonner"
 
-export function SettingsClient({ admin }: { admin: any }) {
+export function SettingsClient({ admin, demoVideoUrl = "" }: { admin: any; demoVideoUrl?: string }) {
   const [isPending, startTransition] = useTransition()
   const [result, setResult] = useState<{ error?: string; success?: boolean } | null>(null)
+  const [videoUrl, setVideoUrl] = useState(demoVideoUrl)
+  
+  const handleSaveVideo = () => {
+    startTransition(async () => {
+      toast.promise(
+        updateGlobalSettingAction("demo_video_url", videoUrl).then((res) => {
+          if (!res.ok) throw new Error(res.error)
+          return res
+        }),
+        {
+          loading: "Saving...",
+          success: "Marketing settings updated",
+          error: (err) => err.message || "Failed to update",
+        }
+      )
+    })
+  }
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -146,6 +163,32 @@ export function SettingsClient({ admin }: { admin: any }) {
                 </button>
               </div>
             </form>
+          </div>
+
+
+          <div className="adm-card" style={{ padding: 24, marginTop: 24 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>Marketing & Content</h2>
+            <p style={{ fontSize: 14, color: "var(--adm-soft)", marginBottom: 20 }}>Configure assets for the public marketing site.</p>
+            
+            <div className="adm-form-group">
+              <label className="adm-label">Demo Video URL (YouTube Embed or direct URL)</label>
+              <input
+                className="adm-input"
+                type="text"
+                placeholder="https://www.youtube.com/watch?v=..."
+                value={videoUrl}
+                onChange={(e) => setVideoUrl(e.target.value)}
+              />
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+              <button
+                className="adm-btn adm-btn-primary"
+                onClick={handleSaveVideo}
+                disabled={isPending}
+              >
+                {isPending ? "Saving…" : "Save Settings"}
+              </button>
+            </div>
           </div>
         </div>
       </div>

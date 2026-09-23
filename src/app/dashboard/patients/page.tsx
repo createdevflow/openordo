@@ -12,12 +12,13 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pro
     return <FeatureGate featureName="Patient Management" />
   }
 
-  const [patients, appointments, records, invoices, doctors, planDetails] = await Promise.all([
+  const [patients, appointments, records, invoices, doctors, prescriptions, planDetails] = await Promise.all([
     db.patient.findMany({ where: { clinicId }, orderBy: { name: 'asc' } }),
     db.appointment.findMany({ where: { clinicId } }),
     db.medicalRecord.findMany({ where: { clinicId } }),
     db.invoice.findMany({ where: { clinicId } }),
     db.doctor.findMany({ where: { clinicId } }),
+    db.prescription.findMany({ where: { clinicId } }),
     getClinicSubscriptionDetails(clinicId)
   ])
 
@@ -28,6 +29,7 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pro
       records={records}
       invoices={invoices}
       doctors={doctors}
+      prescriptions={prescriptions}
       initialSearch={resolvedParams?.search || ""}
       patientLimit={planDetails.patientLimit}
       planName={planDetails.planName}

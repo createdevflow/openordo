@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Package, Plus, TrendingUp, TrendingDown, AlertTriangle, Pencil, Trash2, RefreshCw } from "lucide-react"
+import { Package, Plus, TrendingUp, TrendingDown, AlertTriangle, Pencil, Trash2, RefreshCw, Search } from "lucide-react"
 import { createInventoryItem, logInventoryTransaction, deleteInventoryItem } from "@/server/actions/inventory"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
@@ -144,8 +144,21 @@ export function InventoryClient({ items }: { items: InventoryItem[] }) {
   const { confirm } = useConfirm()
   const [showAdd, setShowAdd] = useState(false)
   const [adjustItem, setAdjustItem] = useState<InventoryItem | null>(null)
+  
+  const [searchTerm, setSearchTerm] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
-  const lowStock = items.filter(i => i.quantityOnHand <= i.reorderThreshold)
+  const filtered = items.filter(i => {
+    if (!searchTerm) return true
+    const q = searchTerm.toLowerCase()
+    return i.name.toLowerCase().includes(q) || (i.sku || "").toLowerCase().includes(q)
+  })
+
+  const lowStock = filtered.filter(i => i.quantityOnHand <= i.reorderThreshold)
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage))
+  const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
   const handleDelete = async (item: InventoryItem) => {
     const ok = await confirm({ title: `Delete ${item.name}?`, body: "This will remove all transaction history for this item.", tone: "danger" })
@@ -161,14 +174,26 @@ export function InventoryClient({ items }: { items: InventoryItem[] }) {
 
   return (
     <div className="cw" style={{ padding: "24px 28px", maxWidth: 1200, margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, flexWrap: "wrap", gap: 16 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", marginBottom: 4 }}>Inventory</h1>
-          <p style={{ fontSize: 13.5, color: "var(--ink-soft)" }}>{items.length} items · {lowStock.length} low stock</p>
+          <p style={{ fontSize: 13.5, color: "var(--ink-soft)" }}>{filtered.length} items · {lowStock.length} low stock</p>
         </div>
-        <button className="cw-btn cw-btn-primary" onClick={() => setShowAdd(true)}>
-          <Plus size={15} /> Add Item
-        </button>
+        <div className="flex flex-wrap gap-4 items-center">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft w-4 h-4" />
+            <input 
+              type="text" 
+              placeholder="Search items..." 
+              value={searchTerm} 
+              onChange={e => {setSearchTerm(e.target.value); setCurrentPage(1)}}
+              className="cw-input !pl-9 w-48 sm:w-64 !m-0 !py-1.5"
+            />
+          </div>
+          <button className="cw-btn cw-btn-primary" onClick={() => setShowAdd(true)}>
+            <Plus size={15} /> Add Item
+          </button>
+        </div>
       </div>
 
       {/* Low stock alert */}
@@ -182,7 +207,7 @@ export function InventoryClient({ items }: { items: InventoryItem[] }) {
         </div>
       )}
 
-      {items.length === 0 ? (
+      {filtered.length === 0 ? (
         <div style={{ textAlign: "center", padding: "60px 0", color: "var(--ink-soft)" }}>
           <Package size={36} style={{ opacity: 0.3, marginBottom: 12 }} />
           <p style={{ fontWeight: 600 }}>No inventory items yet</p>
@@ -202,7 +227,7 @@ export function InventoryClient({ items }: { items: InventoryItem[] }) {
               </tr>
             </thead>
             <tbody>
-              {items.map(item => {
+              {paginated.map(item => {
                 const isLow = item.quantityOnHand <= item.reorderThreshold
                 return (
                   <tr key={item.id} style={{ borderBottom: "1px solid var(--line)", background: isLow ? "#fffbeb" : undefined }}>
@@ -247,6 +272,15 @@ export function InventoryClient({ items }: { items: InventoryItem[] }) {
               })}
             </tbody>
           </table>
+          {filtered.length > 0 && (
+            <div className="flex flex-col sm:flex-row justify-between items-center text-[13.5px] text-ink-soft gap-4 p-4 border-t border-line bg-white">
+              <div>Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length} entries</div>
+              <div className="flex items-center gap-2">
+                <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1.5 border border-line rounded bg-white hover:bg-paper-raised disabled:opacity-50 text-ink transition-colors font-medium">Previous</button>
+                <button disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1.5 border border-line rounded bg-white hover:bg-paper-raised disabled:opacity-50 text-ink transition-colors font-medium">Next</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
