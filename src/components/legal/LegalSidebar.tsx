@@ -4,8 +4,8 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState } from "react"
 import { ChevronDown, ChevronUp } from "lucide-react"
-import type { LegalSlug } from "@/lib/legal"
-import { LEGAL_GROUPS, SLUG_LABELS } from "@/lib/legal"
+import type { LegalSlug } from "@/lib/legal-constants"
+import { LEGAL_GROUPS, SLUG_LABELS } from "@/lib/legal-constants"
 
 interface LegalSidebarProps {
   /** The slug of the currently rendered page. */

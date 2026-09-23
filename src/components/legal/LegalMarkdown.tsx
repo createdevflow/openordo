@@ -110,9 +110,14 @@ export function LegalMarkdown({ source }: LegalMarkdownProps) {
       <blockquote className="legal-blockquote">{children}</blockquote>
     ),
 
-    // ── Strong / Em ───────────────────────────────────────────────────────────
+    // ── Strong / Em / Del (Tokens) ────────────────────────────────────────────
     strong: ({ children }) => (
       <strong className="legal-strong">{children}</strong>
+    ),
+    del: ({ children }) => (
+      <span style={{ background: "var(--amber-soft,#F3E3C6)", padding: "0 3px", borderRadius: "3px", fontFamily: "monospace" }}>
+        {children}
+      </span>
     ),
   }
 
@@ -122,8 +127,6 @@ export function LegalMarkdown({ source }: LegalMarkdownProps) {
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeSlug]}
         components={components}
-        // Allow the span tags we insert for unresolved tokens in dev
-        rehypeOptions={{ allowDangerousHtml: true }}
       >
         {source}
       </ReactMarkdown>

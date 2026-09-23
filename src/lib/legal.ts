@@ -11,60 +11,10 @@
 import fs from "fs"
 import path from "path"
 import { LEGAL_CONFIG } from "./legal-config"
+import { LegalSlug, LEGAL_GROUPS, ALL_SLUGS, SLUG_LABELS } from "./legal-constants"
 
-// ── Slug definitions ──────────────────────────────────────────────────────────
-
-export type LegalSlug =
-  | "terms"
-  | "privacy"
-  | "dpa"
-  | "refund"
-  | "billing"
-  | "acceptable-use"
-  | "security"
-  | "sub-processors"
-  | "retention"
-  | "cookies"
-  | "medical-disclaimer"
-  | "hipaa"
-
-/**
- * Ordered list of slugs in sidebar groups.
- * Order within each group controls Previous/Next navigation.
- */
-export const LEGAL_GROUPS: { label: string; slugs: LegalSlug[] }[] = [
-  {
-    label: "Agreements",
-    slugs: ["terms", "privacy", "dpa", "hipaa", "billing", "refund", "acceptable-use"],
-  },
-  {
-    label: "Trust",
-    slugs: ["security", "sub-processors", "retention", "cookies"],
-  },
-  {
-    label: "Disclaimers",
-    slugs: ["medical-disclaimer"],
-  },
-]
-
-/** Flat ordered list of all 12 slugs (for prev/next). */
-export const ALL_SLUGS: LegalSlug[] = LEGAL_GROUPS.flatMap((g) => g.slugs)
-
-/** Human-readable titles for each slug (used in sidebar & metadata). */
-export const SLUG_LABELS: Record<LegalSlug, string> = {
-  terms: "Terms of Service",
-  privacy: "Privacy Policy",
-  dpa: "Data Processing Agreement",
-  refund: "Refund Policy",
-  billing: "Billing Terms",
-  "acceptable-use": "Acceptable Use Policy",
-  security: "Security & Trust",
-  "sub-processors": "Sub-processors",
-  retention: "Data Retention",
-  cookies: "Cookie Policy",
-  "medical-disclaimer": "Medical Disclaimer",
-  hipaa: "HIPAA Business Associate Agreement",
-}
+export type { LegalSlug }
+export { LEGAL_GROUPS, ALL_SLUGS, SLUG_LABELS }
 
 // ── File reading ──────────────────────────────────────────────────────────────
 
@@ -98,8 +48,8 @@ export function applyTokens(raw: string, slug: string): string {
     if (val !== undefined && val !== "") return val
     unresolved.push(key)
     if (process.env.NODE_ENV === "production") return ""
-    // Development: render visually highlighted span
-    return `<span data-token="${key}" style="background:var(--amber-soft,#F3E3C6);padding:0 3px;border-radius:3px;font-family:monospace">{{${key}}}</span>`
+    // Development: render visually highlighted span via remark-gfm strikethrough (del) mapping
+    return `~~{{${key}}}~~`
   })
 
   if (unresolved.length > 0) {
