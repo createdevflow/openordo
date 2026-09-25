@@ -4,6 +4,9 @@ import { db } from "@/lib/db"
 import { requireClinicId } from "@/lib/auth-utils"
 import { revalidatePath } from "next/cache"
 import { canAddPatient } from "@/lib/features"
+import { hasActivePlugin } from "@/lib/plugins"
+import { sendClinicScopedWhatsAppMessage } from "@/lib/whatsapp-send"
+import { fmtDateShort, fmtTime12 } from "@/components/DashboardHelpers"
 
 export async function createAppointmentAction(data: {
   patientId?: string
@@ -73,8 +76,43 @@ export async function createAppointmentAction(data: {
       status: "scheduled",
       visitType,
       roomId
+    },
+    include: {
+      patient: true,
+      doctor: true,
+      clinic: true
     }
   })
+
+  // Send WhatsApp confirmation fire-and-forget
+  if (appointment.patient.phone && appointment.patient.phone !== "—") {
+    hasActivePlugin(clinicId, "whatsapp-reminders").then(async (isActive) => {
+      if (!isActive) return
+      
+      const p = appointment.patient
+      const d = appointment.doctor
+      const c = appointment.clinic
+      
+      const vars = {
+        clinic_name: c.name,
+        clinic_address: c.address || "the clinic",
+        clinic_phone: c.phone || "our front desk",
+        patient_name: p.name,
+        doctor_name: `Dr. ${d.name}`,
+        date: fmtDateShort(appointment.date.toISOString().split("T")[0]),
+        time: fmtTime12(appointment.time),
+      }
+
+      await sendClinicScopedWhatsAppMessage({
+        toPhone: p.phone!,
+        eventType: "APPOINTMENT_CONFIRMATION",
+        variables: vars,
+        clinicId,
+        patientId: p.id,
+        appointmentId: appointment.id
+      })
+    }).catch(console.error)
+  }
 
   revalidatePath("/dashboard", "layout")
   return appointment
@@ -95,8 +133,38 @@ export async function updateAppointmentAction(id: string, data: {
     data: {
       ...data,
       ...(data.date ? { date: new Date(data.date) } : {})
+    },
+    include: {
+      patient: true,
+      doctor: true,
+      clinic: true
     }
   })
+
+  // Send WhatsApp rescheduled if date/time was modified
+  if ((data.date || data.time) && appointment.patient.phone && appointment.patient.phone !== "—") {
+    hasActivePlugin(clinicId, "whatsapp-reminders").then(async (isActive) => {
+      if (!isActive) return
+      const p = appointment.patient
+      const d = appointment.doctor
+      const c = appointment.clinic
+      const vars = {
+        clinic_name: c.name,
+        patient_name: p.name,
+        doctor_name: `Dr. ${d.name}`,
+        date: fmtDateShort(appointment.date.toISOString().split("T")[0]),
+        time: fmtTime12(appointment.time),
+      }
+      await sendClinicScopedWhatsAppMessage({
+        toPhone: p.phone!,
+        eventType: "APPOINTMENT_CANCELLED", // using this template for reschedule as per spec vars
+        variables: vars,
+        clinicId,
+        patientId: p.id,
+        appointmentId: appointment.id
+      })
+    }).catch(console.error)
+  }
 
   revalidatePath("/dashboard", "layout")
   return appointment
@@ -107,8 +175,38 @@ export async function updateAppointmentStatusAction(id: string, status: string) 
 
   const appointment = await db.appointment.update({
     where: { id, clinicId },
-    data: { status }
+    data: { status },
+    include: {
+      patient: true,
+      doctor: true,
+      clinic: true
+    }
   })
+
+  // Send WhatsApp cancellation
+  if (status === "cancelled" && appointment.patient.phone && appointment.patient.phone !== "—") {
+    hasActivePlugin(clinicId, "whatsapp-reminders").then(async (isActive) => {
+      if (!isActive) return
+      const p = appointment.patient
+      const d = appointment.doctor
+      const c = appointment.clinic
+      const vars = {
+        clinic_name: c.name,
+        patient_name: p.name,
+        doctor_name: `Dr. ${d.name}`,
+        date: fmtDateShort(appointment.date.toISOString().split("T")[0]),
+        time: fmtTime12(appointment.time),
+      }
+      await sendClinicScopedWhatsAppMessage({
+        toPhone: p.phone!,
+        eventType: "APPOINTMENT_CANCELLED",
+        variables: vars,
+        clinicId,
+        patientId: p.id,
+        appointmentId: appointment.id
+      })
+    }).catch(console.error)
+  }
 
   revalidatePath("/dashboard", "layout")
   return appointment

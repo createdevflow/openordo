@@ -1,15 +1,22 @@
 import { db } from "@/lib/db"
 import { SettingsShell } from "./SettingsShell"
+import { getWhatsAppSettings, getWhatsAppTemplateMappings, getWhatsAppActivitySummary } from "@/server/actions/admin/whatsapp-settings"
 
 export default async function AdminSettingsPage(props: { searchParams?: Promise<{ tab?: string }> }) {
   const searchParams = await props.searchParams
-  const initialTab = searchParams?.tab || "flags"
+  const initialTab = searchParams?.tab || "global"
   const [flags, features, plans, settingsList, videoSetting] = await Promise.all([
     db.platformFlag.findMany({ orderBy: [{ category: "asc" }, { label: "asc" }] }).catch(() => []),
     db.feature.findMany({ orderBy: [{ category: "asc" }, { name: "asc" }] }).catch(() => []),
     db.plan.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }).catch(() => []),
     db.globalSetting.findMany().catch(() => []),
     db.globalSetting.findUnique({ where: { key: "demo_video_url" } }).catch(() => null),
+  ])
+
+  const [waSettings, waTemplates, waActivity] = await Promise.all([
+    getWhatsAppSettings(),
+    getWhatsAppTemplateMappings(),
+    getWhatsAppActivitySummary(),
   ])
 
   const globalSettings = settingsList.reduce((acc: Record<string, string>, s) => {
@@ -27,6 +34,9 @@ export default async function AdminSettingsPage(props: { searchParams?: Promise<
       plans={plans}
       globalSettings={globalSettings}
       adminEmail={adminEmail}
+      waSettings={waSettings}
+      waTemplates={waTemplates}
+      waActivity={waActivity}
       initialTab={initialTab}
     />
   )

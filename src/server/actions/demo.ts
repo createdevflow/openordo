@@ -43,19 +43,33 @@ export async function generateDemoCredentialsAction(id: string) {
     let tempUserId = req.tempUserId
 
     if (!tempUserId) {
+      // Fetch demo default plan
+      const demoPlanSetting = await db.globalSetting.findUnique({ where: { key: "demo_default_plan_id" } })
+      const planId = demoPlanSetting?.value
+
       // 1. Create a dummy clinic
       const clinicName = `${req.companyName || req.firstName + "'s"} Demo Clinic`
       const clinicSlug = `demo-${randomBytes(6).toString("hex")}`
       
-      const clinic = await db.clinic.create({
-        data: {
-          name: clinicName,
-          slug: clinicSlug,
-          type: "Demo",
-          country: req.country || "US",
-          status: "ACTIVE"
+      const clinicData: any = {
+        name: clinicName,
+        slug: clinicSlug,
+        type: "Demo",
+        country: req.country || "US",
+        status: "ACTIVE"
+      }
+      
+      if (planId) {
+        clinicData.subscription = {
+          create: {
+            planId,
+            status: "ACTIVE",
+            currentPeriodEnd: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365) // 1 year
+          }
         }
-      })
+      }
+
+      const clinic = await db.clinic.create({ data: clinicData })
 
       // 2. Create a dummy user
       const dummyEmail = `demo_${randomBytes(6).toString("hex")}@demo.openordo.com`

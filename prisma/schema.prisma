@@ -13,6 +13,7 @@ model User {
   name              String
   email             String    @unique
   phone             String?
+  phoneVerifiedAt   DateTime? // set when phone OTP verified
   passwordHash      String?
   googleId          String?   @unique
   image             String?
@@ -86,6 +87,7 @@ model Plan {
   patientLimit          Int?
   doctorLimit           Int?
   storageLimitGb        Int?
+  bookingPageLimit      Int?   // null = unlimited booking entries per month
   features              String // JSON array of extra marketing bullets (extraBullets)
   isFeatured            Boolean  @default(false)
   isActive              Boolean  @default(true)
@@ -559,4 +561,68 @@ model AccountDeletionRequest {
   status    String   @default("PENDING") // PENDING, APPROVED, REJECTED
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ═══════════════════════════════════════════════════════════════
+// WhatsApp / Communications Integration
+// ═══════════════════════════════════════════════════════════════
+
+/// Singleton table — one row, always upserted on write.
+model PlatformCommunicationSettings {
+  id String @id @default(cuid())
+
+  whatsappNumber            String? // e.g. "+919800000000"
+  whatsappPhoneNumberId     String? // Meta Cloud API Phone Number ID
+  whatsappBusinessAccountId String? // Meta WABA ID
+  whatsappAccessToken       String? // AES-256-GCM encrypted at rest — never stored plain
+  whatsappWebhookVerifyToken String? // used to validate Meta webhook calls
+  whatsappConnected         Boolean  @default(false)
+  whatsappLastVerifiedAt    DateTime?
+  whatsappLastError         String? // last test-connection error message
+
+  otpChannel  String  @default("EMAIL") // "EMAIL" | "WHATSAPP" | "BOTH"
+  otpBothMode String? // "USER_CHOOSES" | "SEND_BOTH" — read only when otpChannel = "BOTH"
+
+  updatedAt DateTime @updatedAt
+}
+
+/// Maps internal event types to Meta-approved template names.
+/// Seeded with 5 inactive/empty rows — admin fills in real names after Meta approval.
+model WhatsAppTemplateMapping {
+  id               String  @id @default(cuid())
+  eventType        String  @unique // "OTP_VERIFICATION" | "APPOINTMENT_CONFIRMATION" | "APPOINTMENT_REMINDER" | "APPOINTMENT_CANCELLED" | "GENERAL_UPDATE"
+  metaTemplateName String  @default("") // exact name as approved in Meta Business Manager
+  variablesSchema  String  @default("[]") // JSON: documents expected variable order/names
+  isActive         Boolean @default(false) // inactive until admin fills in a real template name
+}
+
+/// Audit trail for every WhatsApp message sent through the platform.
+model WhatsAppMessageLog {
+  id            String   @id @default(cuid())
+  clinicId      String? // null for platform-level OTP sends not tied to a clinic
+  patientId     String?
+  appointmentId String?
+  userId        String? // set for OTP sends tied to a registering User
+  toPhone       String
+  eventType     String // "OTP_VERIFICATION" | "APPOINTMENT_CONFIRMATION" | etc.
+  status        String // "SENT" | "DELIVERED" | "READ" | "FAILED"
+  metaMessageId String?
+  errorMessage  String?
+  sentAt        DateTime @default(now())
+
+  @@index([clinicId])
+  @@index([sentAt])
+}
+
+/// Tracks the most-recent outbound context per (phone, clinic) pair.
+/// Used to route inbound replies to the correct clinic's inbox when two-way messaging is added.
+model WhatsAppConversationContext {
+  id            String   @id @default(cuid())
+  phone         String
+  clinicId      String
+  patientId     String?
+  lastMessageAt DateTime @default(now())
+
+  @@unique([phone, clinicId])
+  @@index([phone])
 }

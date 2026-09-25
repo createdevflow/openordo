@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { canAcceptBooking } from "@/lib/features"
 
 export async function POST(req: NextRequest) {
   try {
@@ -29,6 +30,15 @@ export async function POST(req: NextRequest) {
 
     if (!name || !email || !phone || !date || !time || !reason) {
       return NextResponse.json({ error: "Missing required fields: name, email, phone, date, time, reason" }, { status: 400 })
+    }
+
+    // Enforce booking page monthly limit
+    const limitCheck = await canAcceptBooking(clinic.id)
+    if (!limitCheck.allowed) {
+      return NextResponse.json(
+        { error: "Booking limit reached. This clinic is not accepting online bookings at this time." },
+        { status: 429 }
+      )
     }
 
     const booking = await db.bookingRequest.create({

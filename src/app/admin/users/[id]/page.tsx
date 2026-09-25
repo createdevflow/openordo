@@ -3,11 +3,12 @@ import { notFound } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, User, Building2, Calendar, ShieldCheck, Activity, CreditCard } from "lucide-react"
 import { UserProfileActions } from "./UserProfileActions"
+import { PlanAssignSection } from "./PlanAssignSection"
 
 export default async function AdminUserDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 
-  const [user, auditLogs] = await Promise.all([
+  const [user, auditLogs, allPlans] = await Promise.all([
     db.user.findUnique({
       where: { id },
       include: {
@@ -33,6 +34,11 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
       },
       orderBy: { createdAt: "desc" },
       take: 100
+    }),
+    db.plan.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: "asc" },
+      select: { id: true, name: true, slug: true, priceMonthlyInr: true, priceMonthlyUsd: true, isDefaultFree: true }
     })
   ])
 
@@ -213,6 +219,9 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
           </div>
         )}
       </div>
+
+      {/* Plan Assignment */}
+      <PlanAssignSection plans={allPlans} memberships={user.memberships} />
 
       {/* Activity Log */}
       <div className="adm-card" style={{ marginTop: 20 }}>

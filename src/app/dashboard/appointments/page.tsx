@@ -12,12 +12,13 @@ export default async function AppointmentsPage() {
     return <FeatureGate featureName="Appointment Calendar" />
   }
 
-  const [appointments, patients, doctors, planDetails, hasVideoPlugin] = await Promise.all([
+  const [appointments, patients, doctors, planDetails, hasVideoPlugin, hasWhatsAppPlugin] = await Promise.all([
     db.appointment.findMany({ where: { clinicId } }),
     db.patient.findMany({ where: { clinicId }, orderBy: { name: 'asc' } }),
     db.doctor.findMany({ where: { clinicId }, orderBy: { name: 'asc' } }),
     getClinicSubscriptionDetails(clinicId),
-    hasActivePlugin(clinicId, "video-consultation")
+    hasActivePlugin(clinicId, "video-consultation"),
+    hasActivePlugin(clinicId, "whatsapp-reminders")
   ])
 
   return (
@@ -28,6 +29,7 @@ export default async function AppointmentsPage() {
       hasMultiDoctor={planDetails.activeFeatures.includes("scheduling.multi_doctor")}
       planName={planDetails.planName}
       hasVideoPlugin={hasVideoPlugin}
+      hasWhatsAppPlugin={hasWhatsAppPlugin}
     />
   )
 }

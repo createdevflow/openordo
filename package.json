@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:export": "ts-node scripts/db-export.ts",
+    "db:sync": "ts-node scripts/db-sync.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

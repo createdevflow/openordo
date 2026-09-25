@@ -1,0 +1,543 @@
+{
+  "plans": [
+    {
+      "id": "cmu4edwdb0005lt6qhc8rmts4",
+      "name": "Clinic",
+      "slug": "clinic",
+      "description": "",
+      "priceMonthlyUsd": 2,
+      "priceYearlyUsd": 2,
+      "priceMonthlyInr": 20,
+      "priceYearlyInr": 200,
+      "patientLimit": null,
+      "doctorLimit": null,
+      "storageLimitGb": 5,
+      "bookingPageLimit": null,
+      "features": "[]",
+      "isFeatured": false,
+      "isActive": true,
+      "sortOrder": 3,
+      "isDefaultFree": false,
+      "razorpayPlanIdMonthly": null,
+      "razorpayPlanIdYearly": null,
+      "createdAt": "2026-09-16T17:51:47.998Z",
+      "updatedAt": "2026-09-25T15:12:26.665Z"
+    },
+    {
+      "id": "cmu4edab90003lt6q5bf9lrmb",
+      "name": "Practice",
+      "slug": "practice",
+      "description": "",
+      "priceMonthlyUsd": 1,
+      "priceYearlyUsd": 1,
+      "priceMonthlyInr": 10,
+      "priceYearlyInr": 100,
+      "patientLimit": null,
+      "doctorLimit": 6,
+      "storageLimitGb": 2,
+      "bookingPageLimit": null,
+      "features": "[]",
+      "isFeatured": true,
+      "isActive": true,
+      "sortOrder": 2,
+      "isDefaultFree": false,
+      "razorpayPlanIdMonthly": "plan_TfCQd5ESnkZfkh",
+      "razorpayPlanIdYearly": null,
+      "createdAt": "2026-09-16T17:51:19.413Z",
+      "updatedAt": "2026-09-25T15:12:26.665Z"
+    },
+    {
+      "id": "cmu4ebfpl0001lt6qwbrvgehl",
+      "name": "Free",
+      "slug": "free",
+      "description": "",
+      "priceMonthlyUsd": 0,
+      "priceYearlyUsd": null,
+      "priceMonthlyInr": 0,
+      "priceYearlyInr": null,
+      "patientLimit": 200,
+      "doctorLimit": 1,
+      "storageLimitGb": 1,
+      "bookingPageLimit": 2,
+      "features": "[]",
+      "isFeatured": false,
+      "isActive": true,
+      "sortOrder": 1,
+      "isDefaultFree": true,
+      "razorpayPlanIdMonthly": null,
+      "razorpayPlanIdYearly": null,
+      "createdAt": "2026-09-16T17:49:53.096Z",
+      "updatedAt": "2026-09-25T15:12:26.665Z"
+    }
+  ],
+  "features": [
+    {
+      "id": "cmu2z7y3h0005ft3cddkfkdc6",
+      "key": "core.patient_management",
+      "name": "Patient management",
+      "description": "Add, edit, search patients and medical history",
+      "category": "Core",
+      "isGloballyEnabled": true,
+      "createdAt": "2026-09-15T17:59:29.885Z",
+      "updatedAt": "2026-09-21T18:59:27.181Z"
+    },
+    {
+      "id": "cmu2z7y3m0006ft3cf5zbbywb",
+      "key": "core.appointment_calendar",
+      "name": "Appointment calendar",
+      "description": "Visual daily/weekly calendar and scheduling",
+      "category": "Core",
+      "isGloballyEnabled": true,
+      "createdAt": "2026-09-15T17:59:29.891Z",
+      "updatedAt": "2026-09-21T18:59:27.186Z"
+    },
+    {
+      "id": "cmu2z7y3q0007ft3cv1jqg6t8",
+      "key": "core.doctor_profiles",
+      "name": "Doctor profiles",
+      "description": "Manage doctor profiles, specialties, and working hours",
+      "category": "Core",
+      "isGloballyEnabled": true,
+      "createdAt": "2026-09-15T17:59:29.894Z",
+      "updatedAt": "2026-09-21T18:59:27.190Z"
+    },
+    {
+      "id": "cmu2z7y3u0008ft3cuu48l3i6",
+      "key": "scheduling.online_booking",
+      "name": "Online booking page",
+      "description": "Public booking link for patients to self-book appointments",
+      "category": "Scheduling",
+      "isGloballyEnabled": true,
+      "createdAt": "2026-09-15T17:59:29.899Z",
+      "updatedAt": "2026-09-21T18:59:27.193Z"
+    },
+    {
+      "id": "cmu2z7y3y0009ft3c7rlxytty",
+      "key": "scheduling.multi_doctor",
+      "name": "Multi-doctor scheduling",
+      "description": "Manage calendars across multiple doctors simultaneously",
+      "category": "Scheduling",
+      "isGloballyEnabled": true,
+      "createdAt": "2026-09-15T17:59:29.903Z",
+      "updatedAt": "2026-09-21T18:59:27.197Z"
+    },
+    {
+      "id": "cmu2z7y42000aft3c4w4kzr4z",
+      "key": "scheduling.waitlist",
+      "name": "Waitlist management",
+      "description": "Automated waitlist with SMS/email notifications",
+      "category": "Scheduling",
+      "isGloballyEnabled": true,
+      "createdAt": "2026-09-15T17:59:29.906Z",
+      "updatedAt": "2026-09-21T18:59:27.200Z"
+    },
+    {
+      "id": "cmu2z7y45000bft3c3lnzymcl",
+      "key": "billing.invoices",
+      "name": "Invoicing & billing",
+      "description": "Create and send invoices, track payment status",
+      "category": "Billing",
+      "isGloballyEnabled": true,
+      "createdAt": "2026-09-15T17:59:29.909Z",
+      "updatedAt": "2026-09-21T18:59:27.204Z"
+    },
+    {
+      "id": "cmu2z7y48000cft3cyfufxxsq",
+      "key": "billing.revenue_reports",
+      "name": "Revenue reports",
+      "description": "Monthly and annual revenue analytics and export",
+      "category": "Billing",
+      "isGloballyEnabled": true,
+      "createdAt": "2026-09-15T17:59:29.913Z",
+      "updatedAt": "2026-09-21T18:59:27.207Z"
+    },
+    {
+      "id": "cmu2z7y4c000dft3c5quxa073",
+      "key": "billing.insurance",
+      "name": "Insurance management",
+      "description": "Track and process insurance claims",
+      "category": "Billing",
+      "isGloballyEnabled": true,
+      "createdAt": "2026-09-15T17:59:29.916Z",
+      "updatedAt": "2026-09-21T18:59:27.210Z"
+    },
+    {
+      "id": "cmu2z7y4f000eft3c5lj4kmkt",
+      "key": "communication.reminders",
+      "name": "Appointment reminders",
+      "description": "Automated SMS and email reminders to patients",
+      "category": "Communication",
+      "isGloballyEnabled": true,
+      "createdAt": "2026-09-15T17:59:29.919Z",
+      "updatedAt": "2026-09-21T18:59:27.213Z"
+    },
+    {
+      "id": "cmu2z7y4i000fft3cslvg7hoq",
+      "key": "communication.patient_portal",
+      "name": "Patient portal",
+      "description": "Patients can view their records and upcoming appointments",
+      "category": "Communication",
+      "isGloballyEnabled": false,
+      "createdAt": "2026-09-15T17:59:29.922Z",
+      "updatedAt": "2026-09-21T18:59:27.216Z"
+    },
+    {
+      "id": "cmu2z7y4l000gft3cgucdjozw",
+      "key": "support.data_export",
+      "name": "Data export",
+      "description": "Export all clinic data as CSV or PDF",
+      "category": "Support",
+      "isGloballyEnabled": true,
+      "createdAt": "2026-09-15T17:59:29.926Z",
+      "updatedAt": "2026-09-21T18:59:27.219Z"
+    },
+    {
+      "id": "cmu2z7y4o000hft3ccvmmu5tc",
+      "key": "support.api_access",
+      "name": "API access",
+      "description": "REST API for custom integrations",
+      "category": "Support",
+      "isGloballyEnabled": false,
+      "createdAt": "2026-09-15T17:59:29.929Z",
+      "updatedAt": "2026-09-21T18:59:27.222Z"
+    }
+  ],
+  "planFeatures": [
+    {
+      "id": "cmud2nr0800125u2o2s5pduk0",
+      "planId": "cmu4edwdb0005lt6qhc8rmts4",
+      "featureId": "cmu2z7y3q0007ft3cv1jqg6t8",
+      "included": true
+    },
+    {
+      "id": "cmud2nr0800145u2of6wzte91",
+      "planId": "cmu4edwdb0005lt6qhc8rmts4",
+      "featureId": "cmu2z7y3h0005ft3cddkfkdc6",
+      "included": true
+    },
+    {
+      "id": "cmud2nr0800165u2o168xg1rc",
+      "planId": "cmu4edwdb0005lt6qhc8rmts4",
+      "featureId": "cmu2z7y3y0009ft3c7rlxytty",
+      "included": true
+    },
+    {
+      "id": "cmud2nr0800185u2o5ccrto6v",
+      "planId": "cmu4edwdb0005lt6qhc8rmts4",
+      "featureId": "cmu2z7y3u0008ft3cuu48l3i6",
+      "included": true
+    },
+    {
+      "id": "cmud2nr08001a5u2oicu9cian",
+      "planId": "cmu4edwdb0005lt6qhc8rmts4",
+      "featureId": "cmu2z7y42000aft3c4w4kzr4z",
+      "included": true
+    },
+    {
+      "id": "cmud2nr08001c5u2obo86kmum",
+      "planId": "cmu4edwdb0005lt6qhc8rmts4",
+      "featureId": "cmu2z7y4c000dft3c5quxa073",
+      "included": true
+    },
+    {
+      "id": "cmud2nr08001e5u2oup72vb19",
+      "planId": "cmu4edwdb0005lt6qhc8rmts4",
+      "featureId": "cmu2z7y45000bft3c3lnzymcl",
+      "included": true
+    },
+    {
+      "id": "cmud2nr08001g5u2ol358wtas",
+      "planId": "cmu4edwdb0005lt6qhc8rmts4",
+      "featureId": "cmu2z7y48000cft3cyfufxxsq",
+      "included": true
+    },
+    {
+      "id": "cmud2nr09001i5u2oprg95l09",
+      "planId": "cmu4edwdb0005lt6qhc8rmts4",
+      "featureId": "cmu2z7y4f000eft3c5lj4kmkt",
+      "included": true
+    },
+    {
+      "id": "cmud2nr09001k5u2ore8f69jq",
+      "planId": "cmu4edwdb0005lt6qhc8rmts4",
+      "featureId": "cmu2z7y4l000gft3cgucdjozw",
+      "included": true
+    },
+    {
+      "id": "cmud2nr09001m5u2oh9zvrt6q",
+      "planId": "cmu4edwdb0005lt6qhc8rmts4",
+      "featureId": "cmu2z7y3m0006ft3cf5zbbywb",
+      "included": true
+    },
+    {
+      "id": "cmud3oh9400047bb9bi18bweq",
+      "planId": "cmu4edab90003lt6q5bf9lrmb",
+      "featureId": "cmu2z7y3h0005ft3cddkfkdc6",
+      "included": true
+    },
+    {
+      "id": "cmud3oh9400067bb90def885w",
+      "planId": "cmu4edab90003lt6q5bf9lrmb",
+      "featureId": "cmu2z7y3m0006ft3cf5zbbywb",
+      "included": true
+    },
+    {
+      "id": "cmud3oh9400087bb9ukika89q",
+      "planId": "cmu4edab90003lt6q5bf9lrmb",
+      "featureId": "cmu2z7y3q0007ft3cv1jqg6t8",
+      "included": true
+    },
+    {
+      "id": "cmud3oh94000a7bb9m54rz2sa",
+      "planId": "cmu4edab90003lt6q5bf9lrmb",
+      "featureId": "cmu2z7y42000aft3c4w4kzr4z",
+      "included": true
+    },
+    {
+      "id": "cmud3oh94000c7bb9vixxe9q5",
+      "planId": "cmu4edab90003lt6q5bf9lrmb",
+      "featureId": "cmu2z7y45000bft3c3lnzymcl",
+      "included": true
+    },
+    {
+      "id": "cmud3oh94000e7bb9cr10774a",
+      "planId": "cmu4edab90003lt6q5bf9lrmb",
+      "featureId": "cmu2z7y4f000eft3c5lj4kmkt",
+      "included": true
+    },
+    {
+      "id": "cmuh3fqye0002f9u77ws37vot",
+      "planId": "cmu4ebfpl0001lt6qwbrvgehl",
+      "featureId": "cmu2z7y3h0005ft3cddkfkdc6",
+      "included": true
+    },
+    {
+      "id": "cmuh3fqye0004f9u7t0u90zku",
+      "planId": "cmu4ebfpl0001lt6qwbrvgehl",
+      "featureId": "cmu2z7y3m0006ft3cf5zbbywb",
+      "included": true
+    },
+    {
+      "id": "cmuh3fqye0006f9u7eyh5a0f9",
+      "planId": "cmu4ebfpl0001lt6qwbrvgehl",
+      "featureId": "cmu2z7y3q0007ft3cv1jqg6t8",
+      "included": true
+    },
+    {
+      "id": "cmuh3fqye0008f9u7m8n7wugl",
+      "planId": "cmu4ebfpl0001lt6qwbrvgehl",
+      "featureId": "cmu2z7y3u0008ft3cuu48l3i6",
+      "included": true
+    }
+  ],
+  "plugins": [
+    {
+      "id": "cmubm05xb002racdbt3poc7p0",
+      "slug": "extra-doctor-seat",
+      "name": "Extra Doctor Seat",
+      "tagline": "Grow your team beyond your plan's base doctor limit.",
+      "description": "Add one additional doctor slot to your clinic. Purchase multiple units to add multiple seats — each active unit raises your doctor cap by 1. Useful for growing practices that need more staff without upgrading plans.",
+      "category": "Operations",
+      "icon": "UserPlus",
+      "kind": "LIMIT_MODIFIER",
+      "priceOneTimeINR": null,
+      "priceOneTimeUSD": null,
+      "priceMonthlyINR": 49900,
+      "priceMonthlyUSD": 900,
+      "priceYearlyINR": null,
+      "priceYearlyUSD": null,
+      "isActive": true,
+      "isComingSoon": false,
+      "sortOrder": 4,
+      "razorpayPlanIdMonthly": "plan_TfCsFEKF6GSsSn",
+      "razorpayPlanIdYearly": null,
+      "createdAt": "2026-09-21T18:59:27.360Z",
+      "updatedAt": "2026-09-22T19:59:54.349Z"
+    },
+    {
+      "id": "cmu2z7y52000jft3c7m0oosa2",
+      "slug": "inventory-management",
+      "name": "Inventory Management",
+      "tagline": "Never run out of stock — track every vial, strip, and box.",
+      "description": "Real-time stock tracking with reorder alerts. Log usage against visits, receive low-stock notifications, and generate consumption reports — all without a spreadsheet.",
+      "category": "Operations",
+      "icon": "Package",
+      "kind": "FEATURE_UNLOCK",
+      "priceOneTimeINR": 499900,
+      "priceOneTimeUSD": 5999,
+      "priceMonthlyINR": 49900,
+      "priceMonthlyUSD": 799,
+      "priceYearlyINR": null,
+      "priceYearlyUSD": null,
+      "isActive": true,
+      "isComingSoon": false,
+      "sortOrder": 2,
+      "razorpayPlanIdMonthly": "plan_TfCsY0cZegKFq6",
+      "razorpayPlanIdYearly": null,
+      "createdAt": "2026-09-15T17:59:29.943Z",
+      "updatedAt": "2026-09-22T20:00:11.557Z"
+    },
+    {
+      "id": "cmu2z7y4x000ift3caiuq0g1b",
+      "slug": "video-consultation",
+      "name": "Video Consultation",
+      "tagline": "See patients face-to-face, anywhere in the world.",
+      "description": "Add live HD video visits to any appointment. Patients join via a secure link — no app download needed. Built on Daily.co for crystal-clear, HIPAA-ready calls.",
+      "category": "Clinical",
+      "icon": "Video",
+      "kind": "FEATURE_UNLOCK",
+      "priceOneTimeINR": null,
+      "priceOneTimeUSD": null,
+      "priceMonthlyINR": 99900,
+      "priceMonthlyUSD": 1499,
+      "priceYearlyINR": 899900,
+      "priceYearlyUSD": 12999,
+      "isActive": true,
+      "isComingSoon": false,
+      "sortOrder": 1,
+      "razorpayPlanIdMonthly": null,
+      "razorpayPlanIdYearly": null,
+      "createdAt": "2026-09-15T17:59:29.937Z",
+      "updatedAt": "2026-09-25T14:50:12.475Z"
+    },
+    {
+      "id": "cmuh3b2170000sqvuwqw9nmy6",
+      "slug": "booking-capacity",
+      "name": "Extra Booking Capacity",
+      "tagline": "Increase your monthly online booking quota",
+      "description": "Each unit adds 50 extra booking slots per month to your plan booking limit.",
+      "category": "Operations",
+      "icon": "CalendarPlus",
+      "kind": "LIMIT_MODIFIER",
+      "priceOneTimeINR": 19900,
+      "priceOneTimeUSD": 299,
+      "priceMonthlyINR": null,
+      "priceMonthlyUSD": null,
+      "priceYearlyINR": null,
+      "priceYearlyUSD": null,
+      "isActive": true,
+      "isComingSoon": false,
+      "sortOrder": 10,
+      "razorpayPlanIdMonthly": null,
+      "razorpayPlanIdYearly": null,
+      "createdAt": "2026-09-25T15:02:39.884Z",
+      "updatedAt": "2026-09-25T15:02:39.884Z"
+    },
+    {
+      "id": "cmu2z7y57000kft3chkkk1u87",
+      "slug": "e-prescriptions",
+      "name": "E-Prescriptions",
+      "tagline": "Structured, signed, printable prescriptions in seconds.",
+      "description": "Replace free-text notes with a guided prescription builder — drug autocomplete, dosage, frequency, and duration rows. Prints as a branded PDF ready for the patient to take to a pharmacy.",
+      "category": "Clinical",
+      "icon": "FileSignature",
+      "kind": "FEATURE_UNLOCK",
+      "priceOneTimeINR": 299900,
+      "priceOneTimeUSD": 3999,
+      "priceMonthlyINR": 29900,
+      "priceMonthlyUSD": 499,
+      "priceYearlyINR": 269900,
+      "priceYearlyUSD": 4499,
+      "isActive": true,
+      "isComingSoon": false,
+      "sortOrder": 3,
+      "razorpayPlanIdMonthly": null,
+      "razorpayPlanIdYearly": null,
+      "createdAt": "2026-09-15T17:59:29.947Z",
+      "updatedAt": "2026-09-22T19:59:30.904Z"
+    },
+    {
+      "id": "cmubm05xf002sacdbkt9xbzy2",
+      "slug": "branded-booking-page",
+      "name": "Branded Booking Page",
+      "tagline": "Your clinic's booking page, your logo, your domain.",
+      "description": "Unlock custom branding on your public booking page — add your logo, clinic colors, and a custom domain. Requires the Online Booking Page feature (Practice plan or higher). Makes your first patient impression professional and on-brand.",
+      "category": "Operations",
+      "icon": "Palette",
+      "kind": "FEATURE_UNLOCK",
+      "priceOneTimeINR": null,
+      "priceOneTimeUSD": null,
+      "priceMonthlyINR": 99900,
+      "priceMonthlyUSD": 1900,
+      "priceYearlyINR": null,
+      "priceYearlyUSD": null,
+      "isActive": true,
+      "isComingSoon": false,
+      "sortOrder": 5,
+      "razorpayPlanIdMonthly": null,
+      "razorpayPlanIdYearly": null,
+      "createdAt": "2026-09-21T18:59:27.364Z",
+      "updatedAt": "2026-09-22T19:59:30.904Z"
+    },
+    {
+      "id": "cmubm05xl002tacdb0dhk8ozs",
+      "slug": "document-storage",
+      "name": "Document & Report Storage",
+      "tagline": "+10 GB of secure document storage per unit.",
+      "description": "Expand your clinic's document and report storage. Each unit adds 10 GB to your base 5 GB quota. Purchase multiple units for even more capacity. All files are stored securely and accessible from patient records.",
+      "category": "Operations",
+      "icon": "HardDrive",
+      "kind": "LIMIT_MODIFIER",
+      "priceOneTimeINR": null,
+      "priceOneTimeUSD": null,
+      "priceMonthlyINR": 69900,
+      "priceMonthlyUSD": 1400,
+      "priceYearlyINR": null,
+      "priceYearlyUSD": null,
+      "isActive": true,
+      "isComingSoon": false,
+      "sortOrder": 6,
+      "razorpayPlanIdMonthly": null,
+      "razorpayPlanIdYearly": null,
+      "createdAt": "2026-09-21T18:59:27.370Z",
+      "updatedAt": "2026-09-22T19:59:30.904Z"
+    }
+  ],
+  "platformFlags": [
+    {
+      "id": "cmu2z7y2u0000ft3cc1c3e6ep",
+      "key": "PUBLIC_REGISTRATION",
+      "label": "New clinic signups",
+      "description": "When off, /register shows a 'Signups are temporarily paused' page instead of the form.",
+      "category": "Access",
+      "enabled": true,
+      "updatedAt": "2026-09-21T18:59:27.160Z"
+    },
+    {
+      "id": "cmu2z7y320001ft3cwdw8ftwg",
+      "key": "PROMOTIONS_MODULE",
+      "label": "Promotions engine",
+      "description": "When off, no promo banner or redemption appears anywhere, even if a Promo row is Live.",
+      "category": "Modules",
+      "enabled": true,
+      "updatedAt": "2026-09-21T18:59:27.168Z"
+    },
+    {
+      "id": "cmu2z7y350002ft3cacnhjs0g",
+      "key": "STRIPE_CHECKOUT",
+      "label": "Paid checkout",
+      "description": "When off, only the default free plan is selectable platform-wide; paid plan buttons show 'Contact us'.",
+      "category": "Billing",
+      "enabled": true,
+      "updatedAt": "2026-09-21T18:59:27.172Z"
+    },
+    {
+      "id": "cmu2z7y390003ft3cz4mm4ec1",
+      "key": "PATIENT_SELF_EXPORT",
+      "label": "Clinic data export",
+      "description": "When off, hides the 'Export clinic data' button in clinic Settings.",
+      "category": "Modules",
+      "enabled": true,
+      "updatedAt": "2026-09-21T18:59:27.175Z"
+    },
+    {
+      "id": "cmu2z7y3c0004ft3cxf70vzry",
+      "key": "MAINTENANCE_MODE",
+      "label": "Maintenance mode",
+      "description": "When on, every non-admin route shows a maintenance page. /admin stays accessible.",
+      "category": "Platform",
+      "enabled": false,
+      "updatedAt": "2026-09-21T18:59:27.178Z"
+    }
+  ]
+}
