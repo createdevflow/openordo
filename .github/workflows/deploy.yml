@@ -71,6 +71,9 @@ jobs:
             echo "🔄 Pushing DB schema..."
             docker compose run --rm openordo-app node node_modules/prisma/build/index.js db push --accept-data-loss
 
+            echo "📥 Syncing Plugins and Plans..."
+            docker compose run --rm openordo-app npm run db:sync
+
             echo "🧹 Pruning unused Docker images..."
             docker image prune -f
 
