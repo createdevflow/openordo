@@ -50,7 +50,7 @@ Unless the law requires otherwise, we do not refund:
 - renewals that you did not cancel before the renewal date (though please contact us within **72 hours** of an unexpected renewal charge and we will consider it in good faith, especially if you have not used the service since renewal);
 - partial months or unused time after you cancel or downgrade;
 - accounts suspended or terminated for breach of the [Terms](/legal/terms) or the [Acceptable Use Policy](/legal/acceptable-use);
-- fees for third-party services (for example bank fees, foreign exchange fees, or Stripe fees on your card);
+- fees for third-party services (for example bank fees, foreign exchange fees, or Razorpay fees on your card);
 - disagreements about clinical results, patient outcomes or business results;
 - downgrades: moving to a cheaper plan does not create a refund for the current period.
 
@@ -68,7 +68,7 @@ Unless the law requires otherwise, we do not refund:
 
 ## 7. How refunds are paid
 
-- Refunds go to the **original payment method** through Stripe, in the **original currency**. We cannot refund to a different card or account.
+- Refunds go to the **original payment method** through Razorpay, in the **original currency**. We cannot refund to a different card or account.
 - Banks usually take **5 to 10 business days** (sometimes longer) to show the refund after we issue it.
 - We refund the amount you paid net of any non-refundable taxes; where we can, we also refund the tax and issue a credit note.
 - Exchange rate differences between the payment date and refund date are not our responsibility.

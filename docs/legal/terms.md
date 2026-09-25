@@ -48,7 +48,7 @@ OpenORDO is **software for clinics**. We are not a healthcare provider, hospital
 OpenORDO offers a free **Starter** plan and paid plans, plus paid add-ons. Prices, limits, billing cycles, taxes, free trials and promotions are set out in the [Billing Terms](/legal/billing), and refunds in the [Refund Policy](/legal/refund). In summary:
 
 - Paid subscriptions renew automatically until cancelled.
-- Payments are processed by Stripe. OpenORDO does not store your full card number.
+- Payments are processed by Razorpay. OpenORDO does not store your full card number.
 - Plan limits (for example patient and doctor caps) are enforced by the Service. If you reach a limit you will be asked to upgrade before adding more.
 - We may change prices or plan contents on notice as described in the Billing Terms.
 
@@ -124,7 +124,7 @@ OpenORDO, its software, design system, logo and content are owned by us and our 
 
 ## 13. Third-party services
 
-The Service relies on third-party providers (for example payments, email, hosting and video). Their services are subject to their own terms. Google sign-in, Stripe checkout and video calls involve those providers directly. We are not responsible for third-party services outside our control, but we are responsible for the providers we appoint as sub-processors to the extent stated in the DPA.
+The Service relies on third-party providers (for example payments, email, hosting and video). Their services are subject to their own terms. Google sign-in, Razorpay checkout and video calls involve those providers directly. We are not responsible for third-party services outside our control, but we are responsible for the providers we appoint as sub-processors to the extent stated in the DPA.
 
 ## 14. Warranties and disclaimers
 

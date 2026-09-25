@@ -20,11 +20,11 @@ These are required for the service to work and cannot be switched off in our sys
 
 | Cookie | Purpose | Duration | Set by |
 |---|---|---|---|
-| Session token (`authjs.session-token`, `__Secure-authjs.session-token` on HTTPS) | Keeps you signed in and carries your session (user, role, clinic, onboarding step) | Session, up to 30 days | OpenORDO (Auth.js) |
-| CSRF token (`authjs.csrf-token`, `__Host-authjs.csrf-token`) | Protects sign-in and forms against cross-site request forgery | Session | OpenORDO (Auth.js) |
-| Callback URL (`authjs.callback-url`) | Remembers where to send you after you sign in | Session | OpenORDO (Auth.js) |
-| OAuth state / PKCE cookies (`authjs.state`, `authjs.pkce.code_verifier`) | Secure the "Continue with Google" sign-in flow | Minutes | OpenORDO (Auth.js) |
-| Signup intent (for example `intent=video-consultation`) | Remembers which add-on you clicked before you registered, so we can take you to it after onboarding | Short-lived (up to 24 hours) | OpenORDO |
+| Session token | Keeps you signed in and carries your session (user, role, clinic, onboarding step) | Session, up to 30 days | OpenORDO |
+| CSRF token | Protects sign-in and forms against cross-site request forgery | Session | OpenORDO |
+| Callback URL | Remembers where to send you after you sign in | Session | OpenORDO |
+| OAuth state / PKCE cookies | Secure the "Continue with Google" sign-in flow | Minutes | OpenORDO |
+| Signup intent | Remembers which add-on you clicked before you registered, so we can take you to it after onboarding | Short-lived (up to 24 hours) | OpenORDO |
 | Interface preferences (for example the last active Settings tab, theme, and dismissed banners) | Remembers simple display choices on your device | Up to 12 months | OpenORDO (browser storage) |
 | Security and load balancing cookies | Routing and protecting the service from abuse | Session | Hosting provider |
 
@@ -32,7 +32,7 @@ These are required for the service to work and cannot be switched off in our sys
 
 | Provider | When | Purpose |
 |---|---|---|
-| **Stripe** | On Stripe's hosted checkout and billing portal pages (which are on Stripe's domain) | Fraud prevention, payment security and session management. Governed by Stripe's own cookie policy. |
+| **Razorpay** | On Razorpay's hosted checkout and billing portal pages (which are on Razorpay's domain) | Fraud prevention, payment security and session management. Governed by Razorpay's own cookie policy. |
 | **Google** | When you choose "Continue with Google" | Google sets its own cookies on Google's sign-in page. Governed by Google's policies. |
 | **Video provider** (Video Provider) | Only during a video consultation, if the clinic uses that add-on | Connection quality and session management for the call. |
 
