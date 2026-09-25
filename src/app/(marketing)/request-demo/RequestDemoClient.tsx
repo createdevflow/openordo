@@ -26,7 +26,7 @@ export function RequestDemoClient({ videoUrl }: { videoUrl: string | null }) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setStatus("LOADING")
-    const res = await createDemoRequestAction(formData)
+    const res = await createDemoRequestAction(formData, window.location.origin)
     if (res.error) {
       setErrorMsg(res.error)
       setStatus("ERROR")
