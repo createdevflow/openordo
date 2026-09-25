@@ -7,8 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:export": "npx --yes ts-node scripts/db-export.ts",
-    "db:sync": "npx --yes ts-node scripts/db-sync.ts"
+    "db:export": "node scripts/db-export.mjs",
+    "db:sync": "node scripts/db-sync.mjs"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
