@@ -1,9 +1,10 @@
 "use client"
 
 import React, { useState, useTransition } from "react"
-import { CheckCircle, XCircle, Clock, Users, Search } from "lucide-react"
+import { CheckCircle, XCircle, Clock, Users, Search, AlertTriangle, TrendingUp, ExternalLink } from "lucide-react"
 import { confirmBookingAction, rejectBookingAction } from "@/server/actions/bookings"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
+import Link from "next/link"
 
 function fmtDate(d: string) {
   return new Date(d + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
@@ -20,7 +21,103 @@ const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   REJECTED: { bg: "var(--coral-soft)", color: "var(--coral)" },
 }
 
-export function BookingsClient({ bookings, doctors }: any) {
+interface BookingUsage {
+  current: number
+  limit: number | null
+  extraCapacity: number
+  effectiveLimit: number | null
+  planName: string
+  nearingLimit: boolean
+  overLimit: boolean
+}
+
+function BookingLimitBanner({ usage }: { usage: BookingUsage }) {
+  if (!usage.effectiveLimit) return null // unlimited — no banner needed
+
+  const pct = Math.min(100, Math.round((usage.current / usage.effectiveLimit) * 100))
+  const remaining = Math.max(0, usage.effectiveLimit - usage.current)
+  const isOver = usage.overLimit
+  const isNearing = usage.nearingLimit && !isOver
+
+  if (!isNearing && !isOver) return null
+
+  const barColor = isOver ? "#dc2626" : "#d97706"
+  const bgColor = isOver ? "rgba(220,38,38,0.06)" : "rgba(217,119,6,0.06)"
+  const borderColor = isOver ? "rgba(220,38,38,0.25)" : "rgba(217,119,6,0.25)"
+  const textColor = isOver ? "#dc2626" : "#92400e"
+  const iconColor = isOver ? "#dc2626" : "#d97706"
+
+  return (
+    <div style={{
+      display: "flex", flexDirection: "column", gap: 10,
+      background: bgColor,
+      border: `1px solid ${borderColor}`,
+      borderRadius: 10,
+      padding: "14px 18px",
+      marginBottom: 20,
+    }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+        <AlertTriangle size={18} style={{ color: iconColor, flexShrink: 0, marginTop: 1 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: textColor, marginBottom: 3 }}>
+            {isOver
+              ? `Booking limit reached — new requests are paused`
+              : `Approaching your monthly booking limit`}
+          </div>
+          <div style={{ fontSize: 13, color: textColor, opacity: 0.85 }}>
+            {isOver
+              ? `You've used all ${usage.effectiveLimit} bookings this month on the ${usage.planName} plan.`
+              : `${remaining} of ${usage.effectiveLimit} bookings remaining this month (${usage.planName} plan).`}
+            {" "}To keep receiving bookings, upgrade your plan or purchase extra capacity.
+          </div>
+        </div>
+      </div>
+
+      {/* Usage bar */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{
+          flex: 1, height: 6, borderRadius: 99,
+          background: "rgba(0,0,0,0.08)", overflow: "hidden"
+        }}>
+          <div style={{
+            width: `${pct}%`, height: "100%",
+            background: barColor,
+            borderRadius: 99,
+            transition: "width 0.4s ease",
+          }} />
+        </div>
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: textColor, whiteSpace: "nowrap" }}>
+          {usage.current} / {usage.effectiveLimit}
+        </span>
+      </div>
+
+      {/* Action buttons */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        <Link href="/dashboard/billing" style={{
+          display: "inline-flex", alignItems: "center", gap: 6,
+          padding: "5px 14px", borderRadius: 7, fontSize: 12.5, fontWeight: 600,
+          background: isOver ? "#dc2626" : "#d97706", color: "#fff",
+          textDecoration: "none",
+        }}>
+          <TrendingUp size={13} /> Upgrade Plan
+        </Link>
+        <Link href="/dashboard/addons" style={{
+          display: "inline-flex", alignItems: "center", gap: 6,
+          padding: "5px 14px", borderRadius: 7, fontSize: 12.5, fontWeight: 600,
+          background: "transparent",
+          border: `1px solid ${borderColor}`,
+          color: textColor,
+          textDecoration: "none",
+        }}>
+          <ExternalLink size={13} /> Buy Extra Capacity
+        </Link>
+      </div>
+    </div>
+  )
+}
+
+export function BookingsClient({ bookings, doctors, bookingUsage }: { bookings: any[]; doctors: any[]; bookingUsage?: BookingUsage }) {
+
   const [filter, setFilter] = useState("PENDING")
   const [searchTerm, setSearchTerm] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
@@ -58,6 +155,9 @@ export function BookingsClient({ bookings, doctors }: any) {
 
   return (
     <div>
+      {/* Booking limit warning banner */}
+      {bookingUsage && <BookingLimitBanner usage={bookingUsage} />}
+
       {/* Stats */}
       <div className="cw-stat-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", marginBottom: 22 }}>
         <div className="cw-stat-card">

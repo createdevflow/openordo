@@ -38,6 +38,7 @@ export interface ClinicPlanDetails {
   billingCycle: string
   doctorLimit: number | null
   patientLimit: number | null
+  bookingPageLimit: number | null
   activeFeatures: string[]
   isDefaultFree: boolean
   promoId?: string | null
@@ -90,6 +91,7 @@ export async function getClinicSubscriptionDetails(clinicId: string): Promise<Cl
       billingCycle: "monthly",
       doctorLimit: defaultPlan?.doctorLimit ?? 1,
       patientLimit: defaultPlan?.patientLimit ?? 200,
+      bookingPageLimit: defaultPlan?.bookingPageLimit ?? null,
       activeFeatures: features,
       isDefaultFree: true,
       promoId: null,
@@ -110,6 +112,7 @@ export async function getClinicSubscriptionDetails(clinicId: string): Promise<Cl
 
   let doctorLimit = plan.doctorLimit
   let patientLimit = plan.patientLimit
+  let bookingPageLimit = plan.bookingPageLimit
 
   // Feature Override Engine for Active Promos
   if (subscription.promoId && subscription.promoExpiresAt && new Date(subscription.promoExpiresAt).getTime() > Date.now()) {
@@ -139,6 +142,7 @@ export async function getClinicSubscriptionDetails(clinicId: string): Promise<Cl
       
       doctorLimit = promo.targetPlan.doctorLimit
       patientLimit = promo.targetPlan.patientLimit
+      bookingPageLimit = promo.targetPlan.bookingPageLimit
     }
   }
 
@@ -150,6 +154,7 @@ export async function getClinicSubscriptionDetails(clinicId: string): Promise<Cl
     billingCycle: subscription.billingCycle,
     doctorLimit,
     patientLimit,
+    bookingPageLimit,
     activeFeatures: features,
     isDefaultFree: plan.isDefaultFree,
     promoId: subscription.promoId,
@@ -233,4 +238,73 @@ export async function canAddPatient(clinicId: string): Promise<{ allowed: boolea
     current,
     limit: details.patientLimit
   }
+}
+
+/**
+ * Returns booking usage stats and limit info for a clinic.
+ * Counts bookings created in the current calendar month.
+ * Extra capacity from "booking-capacity" LIMIT_MODIFIER addons is also counted.
+ */
+export async function getBookingUsage(clinicId: string): Promise<{
+  current: number
+  limit: number | null          // null = unlimited
+  extraCapacity: number
+  effectiveLimit: number | null
+  planName: string
+  nearingLimit: boolean         // >= 80%
+  overLimit: boolean
+}> {
+  const details = await getClinicSubscriptionDetails(clinicId)
+
+  // Count bookings in the current month
+  const now = new Date()
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+  const current = await db.bookingRequest.count({
+    where: { clinicId, createdAt: { gte: monthStart } }
+  })
+
+  // Extra capacity from addon
+  const addon = await db.clinicPlugin.findFirst({
+    where: {
+      clinicId,
+      status: "ACTIVE",
+      plugin: { slug: "booking-capacity" }
+    },
+    include: { plugin: true }
+  })
+  const extraCapacity = addon ? addon.quantity * 50 : 0 // each unit = 50 extra bookings/month
+
+  const basePlanLimit = details.bookingPageLimit
+  const effectiveLimit = basePlanLimit !== null ? basePlanLimit + extraCapacity : null
+
+  return {
+    current,
+    limit: basePlanLimit,
+    extraCapacity,
+    effectiveLimit,
+    planName: details.planName,
+    nearingLimit: effectiveLimit !== null && current >= Math.floor(effectiveLimit * 0.8),
+    overLimit: effectiveLimit !== null && current >= effectiveLimit
+  }
+}
+
+/**
+ * Checks if the clinic can accept a new booking entry right now.
+ */
+export async function canAcceptBooking(clinicId: string): Promise<{
+  allowed: boolean
+  current: number
+  effectiveLimit: number | null
+  message?: string
+}> {
+  const usage = await getBookingUsage(clinicId)
+  if (usage.overLimit) {
+    return {
+      allowed: false,
+      current: usage.current,
+      effectiveLimit: usage.effectiveLimit,
+      message: `You have reached your monthly booking limit of ${usage.effectiveLimit} on the ${usage.planName} plan.`
+    }
+  }
+  return { allowed: true, current: usage.current, effectiveLimit: usage.effectiveLimit }
 }

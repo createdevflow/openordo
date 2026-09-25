@@ -7,6 +7,7 @@ import { createPlan, updatePlan, updatePlanFeatures } from "@/server/actions/adm
 import { Check, CheckCircle2, Plus, X } from "lucide-react"
 
 const FEATURE_CATEGORIES = ["Core", "Scheduling", "Billing", "Communication", "Support"]
+const BOOKING_FEATURE_KEY = "scheduling.online_booking"
 
 export function PlanBuilderClient({
   plan,
@@ -33,6 +34,7 @@ export function PlanBuilderClient({
   const [patientLimit, setPatientLimit] = useState(plan?.patientLimit ?? "")
   const [doctorLimit, setDoctorLimit] = useState(plan?.doctorLimit ?? "")
   const [storageLimitGb, setStorageLimitGb] = useState(plan?.storageLimitGb ?? "")
+  const [bookingPageLimit, setBookingPageLimit] = useState(plan?.bookingPageLimit ?? "")
   const [isFeatured, setIsFeatured] = useState(plan?.isFeatured ?? false)
   const [isActive, setIsActive] = useState(plan?.isActive ?? true)
   const [isDefaultFree, setIsDefaultFree] = useState(plan?.isDefaultFree ?? false)
@@ -73,6 +75,7 @@ export function PlanBuilderClient({
       patientLimit: patientLimit !== "" ? Number(patientLimit) : null,
       doctorLimit: doctorLimit !== "" ? Number(doctorLimit) : null,
       storageLimitGb: storageLimitGb !== "" ? Number(storageLimitGb) : null,
+      bookingPageLimit: bookingPageLimit !== "" ? Number(bookingPageLimit) : null,
       features: JSON.stringify(bullets.filter(b => b.trim())),
       isFeatured, isActive, isDefaultFree,
       sortOrder: Number(sortOrder),
@@ -239,9 +242,31 @@ export function PlanBuilderClient({
                           onChange={() => toggleFeature(f.id)}
                           style={{ accentColor: "var(--adm-accent)", width: 16, height: 16, marginTop: 1, flexShrink: 0 }}
                         />
-                        <div>
-                          <div style={{ fontSize: 13.5, fontWeight: includedIds.has(f.id) ? 600 : 400, color: "var(--adm-text)" }}>
-                            {f.name}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                            <div style={{ fontSize: 13.5, fontWeight: includedIds.has(f.id) ? 600 : 400, color: "var(--adm-text)" }}>
+                              {f.name}
+                            </div>
+                            {/* Inline booking limit input — only show for Online Booking feature when checked */}
+                            {f.key === BOOKING_FEATURE_KEY && includedIds.has(f.id) && (
+                              <div
+                                style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}
+                                onClick={e => e.preventDefault()}
+                              >
+                                <span style={{ fontSize: 11.5, color: "var(--adm-muted)", whiteSpace: "nowrap" }}>Monthly limit:</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  className="adm-input adm-mono"
+                                  value={bookingPageLimit}
+                                  onChange={e => setBookingPageLimit(e.target.value)}
+                                  placeholder="∞"
+                                  style={{ width: 80, padding: "3px 8px", fontSize: 12 }}
+                                  onClick={e => e.preventDefault()}
+                                  onKeyDown={e => e.stopPropagation()}
+                                />
+                              </div>
+                            )}
                           </div>
                           {f.description && (
                             <div style={{ fontSize: 12, color: "var(--adm-muted)", marginTop: 2 }}>{f.description}</div>

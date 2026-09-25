@@ -1,0 +1,521 @@
+/*
+ * legal.css
+ * Scoped styles for /legal/* pages.
+ * Uses .legal-* class prefix exclusively — no global overrides.
+ * Uses existing CSS custom properties from globals.css (:root block).
+ * Imported only by the legal [slug]/page.tsx.
+ */
+
+/* ── Three-column layout ──────────────────────────────────────────────────── */
+
+.legal-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr 200px;
+  grid-template-rows: auto;
+  gap: 0 40px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 48px 24px 80px;
+  align-items: start;
+}
+
+/* Tablet: hide TOC */
+@media (max-width: 1024px) {
+  .legal-layout {
+    grid-template-columns: 200px 1fr;
+    grid-template-areas: "sidebar main";
+  }
+  .legal-toc {
+    display: none !important;
+  }
+}
+
+/* Mobile: single column, sidebar becomes collapsible */
+@media (max-width: 768px) {
+  .legal-layout {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "mobile-sidebar"
+      "main";
+    padding: 24px 16px 60px;
+    gap: 0;
+  }
+  .legal-sidebar-desktop {
+    display: none !important;
+  }
+}
+
+/* ── Sidebar (desktop) ────────────────────────────────────────────────────── */
+
+.legal-sidebar-desktop {
+  position: sticky;
+  top: 80px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  padding-right: 8px;
+  /* scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.legal-sidebar-desktop::-webkit-scrollbar {
+  width: 4px;
+}
+.legal-sidebar-desktop::-webkit-scrollbar-track {
+  background: transparent;
+}
+.legal-sidebar-desktop::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 2px;
+}
+
+.legal-sidebar-group {
+  margin-bottom: 24px;
+}
+
+.legal-sidebar-group-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+  padding-left: 8px;
+}
+
+.legal-sidebar-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.legal-sidebar-link {
+  display: block;
+  padding: 5px 8px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-decoration: none;
+  border-radius: 5px;
+  line-height: 1.4;
+  transition: background 0.1s, color 0.1s;
+}
+
+.legal-sidebar-link:hover {
+  background: var(--paper-raised);
+  color: var(--ink);
+}
+
+.legal-sidebar-link:focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: 1px;
+}
+
+.legal-sidebar-link--active {
+  background: var(--paper-raised);
+  color: var(--forest);
+  font-weight: 600;
+  border-left: 2px solid var(--forest);
+  padding-left: 6px;
+}
+
+/* ── Sidebar (mobile collapsible) ─────────────────────────────────────────── */
+
+.legal-sidebar-mobile {
+  display: none;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 768px) {
+  .legal-sidebar-mobile {
+    display: block;
+  }
+}
+
+.legal-mobile-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.legal-mobile-toggle:focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: 2px;
+}
+
+.legal-mobile-nav {
+  margin-top: 6px;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+/* ── TOC (desktop only, sticky right column) ──────────────────────────────── */
+
+.legal-toc {
+  position: sticky;
+  top: 80px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  padding-left: 16px;
+  border-left: 1px solid var(--line);
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.legal-toc-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+  margin-bottom: 10px;
+}
+
+.legal-toc ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.legal-toc li {
+  margin-bottom: 2px;
+}
+
+.legal-toc-link {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-soft);
+  text-decoration: none;
+  padding: 3px 0;
+  line-height: 1.4;
+  transition: color 0.1s;
+}
+
+.legal-toc-link:hover {
+  color: var(--ink);
+}
+
+.legal-toc-link:focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.legal-toc-link--active {
+  color: var(--forest);
+  font-weight: 600;
+}
+
+/* ── Main content area ────────────────────────────────────────────────────── */
+
+.legal-main {
+  min-width: 0; /* prevent overflow in grid */
+  max-width: 720px;
+}
+
+/* ── Page header (title + last updated) ───────────────────────────────────── */
+
+.legal-header {
+  margin-bottom: 36px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.legal-title {
+  font-family: var(--font-serif);
+  font-size: clamp(24px, 4vw, 32px);
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.25;
+  margin: 0 0 8px;
+}
+
+.legal-last-updated {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+/* ── Prose / body content ─────────────────────────────────────────────────── */
+
+.legal-prose {
+  font-size: 14.5px;
+  line-height: 1.75;
+  color: var(--ink);
+}
+
+.legal-h2 {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 40px 0 12px;
+  padding-top: 8px;
+  line-height: 1.3;
+}
+
+.legal-h3 {
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 28px 0 8px;
+  line-height: 1.35;
+}
+
+.legal-h4 {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 20px 0 6px;
+}
+
+.legal-p {
+  margin: 0 0 14px;
+}
+
+.legal-link {
+  color: var(--forest);
+  text-decoration: underline;
+  text-decoration-color: rgba(30, 70, 56, 0.35);
+  text-underline-offset: 2px;
+  transition: color 0.1s, text-decoration-color 0.1s;
+}
+
+.legal-link:hover {
+  color: var(--forest-dark);
+  text-decoration-color: var(--forest-dark);
+}
+
+.legal-link:focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.legal-strong {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* ── Lists ────────────────────────────────────────────────────────────────── */
+
+.legal-ul,
+.legal-ol {
+  margin: 0 0 14px 0;
+  padding-left: 24px;
+}
+
+.legal-ul {
+  list-style: disc;
+}
+
+.legal-ol {
+  list-style: decimal;
+}
+
+.legal-li {
+  margin-bottom: 6px;
+}
+
+.legal-li > .legal-ul,
+.legal-li > .legal-ol {
+  margin-top: 6px;
+  margin-bottom: 0;
+}
+
+/* ── Tables ───────────────────────────────────────────────────────────────── */
+
+.legal-table-wrap {
+  overflow-x: auto;
+  margin: 0 0 20px;
+  /* prevent horizontal scroll on the page itself */
+  max-width: 100%;
+}
+
+.legal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.legal-thead {
+  background: var(--paper-raised);
+}
+
+.legal-th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+}
+
+.legal-td {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  vertical-align: top;
+  color: var(--ink);
+}
+
+.legal-tr:nth-child(even) .legal-td {
+  background: rgba(0, 0, 0, 0.015);
+}
+
+/* ── Code ─────────────────────────────────────────────────────────────────── */
+
+.legal-code-inline {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.legal-pre {
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  overflow-x: auto;
+  margin: 0 0 20px;
+}
+
+.legal-code-block {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ── HR ───────────────────────────────────────────────────────────────────── */
+
+.legal-hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 32px 0;
+}
+
+/* ── Blockquote ───────────────────────────────────────────────────────────── */
+
+.legal-blockquote {
+  border-left: 3px solid var(--line);
+  padding-left: 16px;
+  margin: 0 0 14px;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+/* ── Previous / Next navigation ──────────────────────────────────────────── */
+
+.legal-prevnext {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 56px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+
+.legal-prevnext-prev {
+  flex: 1;
+}
+
+.legal-prevnext-next {
+  flex: 1;
+  text-align: right;
+}
+
+.legal-prevnext-link {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 3px;
+  text-decoration: none;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper-raised);
+  transition: border-color 0.15s, background 0.15s;
+  max-width: 220px;
+}
+
+.legal-prevnext-link:hover {
+  border-color: var(--forest);
+  background: var(--paper);
+}
+
+.legal-prevnext-link:focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: 2px;
+}
+
+.legal-prevnext-dir {
+  font-size: 11px;
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+.legal-prevnext-title {
+  font-size: 13px;
+  color: var(--forest);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* ── Print styles ─────────────────────────────────────────────────────────── */
+
+@media print {
+  .legal-sidebar-desktop,
+  .legal-sidebar-mobile,
+  .legal-toc,
+  .legal-prevnext {
+    display: none !important;
+  }
+
+  .legal-layout {
+    display: block;
+    padding: 0;
+    max-width: 100%;
+  }
+
+  .legal-main {
+    max-width: 100%;
+  }
+
+  .legal-title {
+    font-size: 22pt;
+  }
+
+  .legal-h2 {
+    font-size: 14pt;
+    page-break-after: avoid;
+  }
+
+  .legal-prose {
+    font-size: 11pt;
+    line-height: 1.6;
+  }
+
+  .legal-table-wrap {
+    overflow-x: visible;
+  }
+
+  .legal-link {
+    color: inherit;
+    text-decoration: underline;
+  }
+}

@@ -1,45 +1,61 @@
 import { notFound } from "next/navigation"
-import { LEGAL_PAGES } from "@/lib/legal-content"
 import { Metadata } from "next"
+import {
+  ALL_SLUGS,
+  SLUG_LABELS,
+  readLegalMd,
+  extractH1,
+  extractLastUpdated,
+  extractFirstParagraph,
+  type LegalSlug,
+} from "@/lib/legal"
+import { LegalDocument } from "@/components/legal/LegalDocument"
+import "@/components/legal/legal.css"
 
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
-  const p = await params
-  const page = LEGAL_PAGES[p.slug]
-  if (!page) return {}
-  return { title: page.title }
+// ── Static generation ─────────────────────────────────────────────────────────
+
+export async function generateStaticParams() {
+  return ALL_SLUGS.map((slug) => ({ slug }))
 }
 
-export default async function LegalPage({ params }: { params: Promise<{ slug: string }> }) {
-  const p = await params
-  const page = LEGAL_PAGES[p.slug]
-  
-  if (!page) {
+// Unknown slugs (not in ALL_SLUGS) → 404
+export const dynamicParams = false
+
+// ── Metadata ──────────────────────────────────────────────────────────────────
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}): Promise<Metadata> {
+  const { slug } = await params
+  if (!ALL_SLUGS.includes(slug as LegalSlug)) return {}
+
+  const raw = readLegalMd(slug as LegalSlug)
+  if (!raw) return {}
+
+  const h1 = extractH1(raw)
+  const description = extractFirstParagraph(raw)
+
+  return {
+    title: h1,
+    description,
+  }
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+export default async function LegalPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  const { slug } = await params
+
+  // Guard: unknown slugs → 404
+  if (!ALL_SLUGS.includes(slug as LegalSlug)) {
     notFound()
   }
 
-  return (
-    <div className="py-20 px-7 max-w-[800px] mx-auto">
-      <div className="mb-10 text-center">
-        <h1 className="text-4xl font-serif font-bold text-ink mb-3">{page.title}</h1>
-        <p className="text-ink-soft">Last updated: {page.lastUpdated}</p>
-      </div>
-      
-      <div 
-        className="prose prose-forest max-w-none text-ink
-                   prose-headings:font-serif prose-headings:text-ink prose-headings:font-bold
-                   prose-a:text-forest hover:prose-a:text-forest-soft
-                   prose-p:leading-relaxed"
-        dangerouslySetInnerHTML={{ 
-          // Super simple markdown to HTML parser for basic headings and lists
-          __html: page.content
-            .replace(/^## (.*$)/gim, '<h2 class="text-2xl mt-8 mb-4">$1</h2>')
-            .replace(/^# (.*$)/gim, '<h1 class="text-3xl mt-10 mb-5">$1</h1>')
-            .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
-            .replace(/\*(.*)\*/gim, '<em>$1</em>')
-            .replace(/^- (.*$)/gim, '<li class="ml-4 list-disc mb-1">$1</li>')
-            .replace(/\n\n/g, '<br><br>')
-        }}
-      />
-    </div>
-  )
+  return <LegalDocument slug={slug as LegalSlug} />
 }

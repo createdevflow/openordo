@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { sendVerificationOtp } from "@/lib/email"
 import { signIn } from "@/lib/auth"
 import { isRedirectError } from "next/dist/client/components/redirect-error"
+import { sendClinicScopedWhatsAppMessage } from "@/lib/whatsapp-send"
 
 export async function verifyOtpAction(prevState: any, formData: FormData) {
   const email = (formData.get("email") as string)?.trim().toLowerCase()
@@ -31,7 +32,10 @@ export async function verifyOtpAction(prevState: any, formData: FormData) {
 
   await db.user.update({
     where: { id: user.id },
-    data: { status: "ACTIVE" }
+    data: { 
+      status: "ACTIVE",
+      ...(user.phone ? { phoneVerifiedAt: new Date() } : {})
+    }
   })
 
   // Delete the used token
@@ -54,6 +58,54 @@ export async function verifyOtpAction(prevState: any, formData: FormData) {
   return { success: true, email }
 }
 
+export async function deliverOtp(userId: string | null, email: string, phone: string | null, code: string): Promise<{ success: boolean; fallbackTriggered?: boolean; error?: string }> {
+  const settings = await db.platformCommunicationSettings.findFirst()
+  const channel = settings?.otpChannel || "EMAIL"
+  const bothMode = settings?.otpBothMode || "SEND_BOTH"
+
+  let whatsappSuccess = false
+  let emailSuccess = false
+  let attemptedWhatsApp = false
+  let fallbackTriggered = false
+
+  // 1. Try WhatsApp if configured
+  if (channel === "WHATSAPP" || (channel === "BOTH" && bothMode === "SEND_BOTH")) {
+    if (phone && settings?.whatsappConnected) {
+      attemptedWhatsApp = true
+      const res = await sendClinicScopedWhatsAppMessage({
+        toPhone: phone,
+        eventType: "OTP_VERIFICATION",
+        variables: { otp_code: code, expiry_minutes: "15" },
+        userId: userId ?? undefined
+      })
+      whatsappSuccess = res.sent
+    }
+  }
+
+  // 2. Fallback logic or direct Email
+  const shouldSendEmail = 
+    channel === "EMAIL" || 
+    (channel === "BOTH" && bothMode === "SEND_BOTH") ||
+    (attemptedWhatsApp && !whatsappSuccess)
+
+  if (shouldSendEmail) {
+    emailSuccess = await sendVerificationOtp(email, code)
+    if (attemptedWhatsApp && !whatsappSuccess) {
+      fallbackTriggered = true
+    }
+  }
+
+  if (channel === "WHATSAPP" && !shouldSendEmail && !whatsappSuccess) {
+     return { success: false, error: "Failed to send WhatsApp message and email fallback was not engaged." }
+  }
+  
+  if (!whatsappSuccess && !emailSuccess) {
+    return { success: false, error: "Failed to send verification code." }
+  }
+
+  return { success: true, fallbackTriggered }
+}
+
 export async function resendOtpAction(email: string) {
   if (!email) return { error: "Email is required." }
 
@@ -72,9 +124,13 @@ export async function resendOtpAction(email: string) {
     data: { email, code: otpCode, expiresAt }
   })
 
-  const sent = await sendVerificationOtp(email, otpCode)
-  if (!sent) {
-    return { error: "Failed to send verification email. Please check your SMTP settings or try again later." }
+  const result = await deliverOtp(user.id, email, user.phone, otpCode)
+  if (!result.success) {
+    return { error: result.error || "Failed to send verification code. Please check your settings or try again later." }
+  }
+
+  if (result.fallbackTriggered) {
+    return { success: true, message: "WhatsApp delivery failed, but we sent the code to your email instead." }
   }
 
   return { success: true }

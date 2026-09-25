@@ -123,3 +123,55 @@ export async function hardDeleteUser(userId: string) {
     return { ok: false, error: e.message }
   }
 }
+
+/**
+ * Admin-only: Assign or change the plan for a specific clinic.
+ * Creates the subscription if it doesn't exist, otherwise updates planId + status.
+ */
+export async function adminAssignPlan(clinicId: string, planId: string, billingCycle: "monthly" | "yearly" = "monthly") {
+  try {
+    const session = await requireSuperAdmin()
+
+    const plan = await db.plan.findUnique({ where: { id: planId } })
+    if (!plan) return { ok: false, error: "Plan not found" }
+
+    const existing = await db.subscription.findUnique({ where: { clinicId } })
+
+    if (existing) {
+      await db.subscription.update({
+        where: { clinicId },
+        data: {
+          planId,
+          billingCycle,
+          status: "ACTIVE",
+          // Clear Razorpay link so a fresh one is created if needed
+          razorpaySubscriptionId: null,
+          cancelAtPeriodEnd: false,
+          currentPeriodEnd: null,
+          trialEndsAt: null,
+        },
+      })
+    } else {
+      await db.subscription.create({
+        data: {
+          clinicId,
+          planId,
+          billingCycle,
+          status: "ACTIVE",
+        },
+      })
+    }
+
+    await logAudit(session.user.id!, "ADMIN_ASSIGN_PLAN", "Clinic", clinicId, {
+      planId,
+      planName: plan.name,
+      billingCycle,
+    })
+
+    revalidatePath(`/admin/users`)
+    revalidatePath(`/admin/clinics/${clinicId}`)
+    return { ok: true, planName: plan.name }
+  } catch (e: any) {
+    return { ok: false, error: e.message }
+  }
+}

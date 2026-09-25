@@ -13,7 +13,8 @@ export function AppointmentsClient({
   doctors, 
   hasMultiDoctor = false, 
   planName = "Starter",
-  hasVideoPlugin = false
+  hasVideoPlugin = false,
+  hasWhatsAppPlugin = false
 }: any) {
   const [mode, setMode] = useState("calendar")
   const today = new Date()
@@ -332,13 +333,14 @@ export function AppointmentsClient({
           onSave={saveAppointment}
           isPending={isPending}
           hasVideoPlugin={hasVideoPlugin}
+          hasWhatsAppPlugin={hasWhatsAppPlugin}
         />
       )}
     </div>
   )
 }
 
-function AppointmentModal({ initial, patients, doctors, defaultDate, onClose, onSave, isPending, hasVideoPlugin }: any) {
+function AppointmentModal({ initial, patients, doctors, defaultDate, onClose, onSave, isPending, hasVideoPlugin, hasWhatsAppPlugin }: any) {
   const { showAlert } = useConfirm()
   const isEditing = Boolean(initial);
   const [patientMode, setPatientMode] = useState<"existing" | "new">(() => {
@@ -371,6 +373,10 @@ function AppointmentModal({ initial, patients, doctors, defaultDate, onClose, on
     if (!isEditing && patientMode === "new") {
       if (!form.newPatient.name.trim()) {
         showAlert({ title: "Missing Info", body: "Please enter the patient's name.", tone: "neutral" });
+        return;
+      }
+      if (hasWhatsAppPlugin && !form.newPatient.phone.trim()) {
+        showAlert({ title: "Missing Info", body: "A phone number is required to send WhatsApp reminders.", tone: "neutral" });
         return;
       }
       onSave({

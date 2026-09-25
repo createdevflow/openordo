@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { canAcceptBooking } from "@/lib/features"
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,6 +14,15 @@ export async function POST(req: NextRequest) {
     const clinic = await db.clinic.findUnique({ where: { id: clinicId } })
     if (!clinic || clinic.status !== "ACTIVE") {
       return NextResponse.json({ error: "Clinic not found" }, { status: 404 })
+    }
+
+    // Enforce booking page monthly limit
+    const limitCheck = await canAcceptBooking(clinicId)
+    if (!limitCheck.allowed) {
+      return NextResponse.json(
+        { error: "This clinic is not accepting online bookings at this time. Please contact the clinic directly." },
+        { status: 429 }
+      )
     }
 
     const booking = await db.bookingRequest.create({

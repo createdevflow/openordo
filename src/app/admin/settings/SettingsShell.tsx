@@ -2,6 +2,7 @@
 
 import * as Tabs from "@radix-ui/react-tabs"
 import * as Switch from "@radix-ui/react-switch"
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
 import { useState, useTransition } from "react"
 import { toast } from "sonner"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
@@ -9,16 +10,21 @@ import { togglePlatformFlag, toggleFeatureGlobal, createFeature, deleteFeature }
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { saveGlobalSettings, uploadBrandingAsset, sendTestEmailAction, setDefaultFreePlan } from "@/server/actions/admin/global-settings"
 import { updateAdminCredentials } from "@/server/actions/admin/settings"
-import { ShieldAlert, Zap, Package, Palette, User, AlertTriangle, Plus, Trash2, Globe, Mail, KeyRound, ExternalLink, Eye, EyeOff, Megaphone } from "lucide-react"
+import { ShieldAlert, Zap, Package, Palette, User, AlertTriangle, Plus, Trash2, Globe, Mail, KeyRound, ExternalLink, Eye, EyeOff, Megaphone, MessageCircle, MoreHorizontal, Settings } from "lucide-react"
+
+import { WhatsAppSettingsTab } from "./WhatsAppSettingsTab"
 
 const FEATURE_CATEGORIES = ["Core", "Scheduling", "Billing", "Communication", "Support"]
 
-export function SettingsShell({ flags, features, plans, globalSettings, adminEmail, initialTab = "flags" }: {
+export function SettingsShell({ flags, features, plans, globalSettings, adminEmail, waSettings, waTemplates, waActivity, initialTab = "flags" }: {
   flags: any[]
   features: any[]
   plans: any[]
   globalSettings: Record<string, string>
   adminEmail: string
+  waSettings: any
+  waTemplates: any[]
+  waActivity: any
   initialTab?: string
 }) {
   const router = useRouter()
@@ -160,6 +166,8 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
     return defaultPlan?.id || ""
   })
 
+  const [demoPlanId, setDemoPlanId] = useState(globalSettings.demo_default_plan_id || "")
+
   const [savingGlobal, setSavingGlobal] = useState(false)
   const [testEmail, setTestEmail] = useState("")
   const [testingEmail, setTestingEmail] = useState(false)
@@ -236,6 +244,39 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
     }
   }
 
+  // Tab Configuration
+  const ALL_TABS = [
+    { value: "global", label: "Global", icon: <Settings size={14} /> },
+    { value: "flags", label: "Feature Flags", icon: <Zap size={14} /> },
+    { value: "catalog", label: "Feature Catalog", icon: <Package size={14} /> },
+    { value: "billing", label: "Plans & Billing", icon: <Globe size={14} /> },
+    { value: "whatsapp", label: "WhatsApp", icon: <MessageCircle size={14} /> },
+    { value: "email", label: "Email & SMTP", icon: <Mail size={14} /> },
+    { value: "branding", label: "Branding & SEO", icon: <Palette size={14} /> },
+    { value: "marketing", label: "Marketing", icon: <Megaphone size={14} /> },
+    { value: "oauth", label: "OAuth & SSO", icon: <KeyRound size={14} /> },
+    { value: "account", label: "Account", icon: <User size={14} /> },
+    { value: "danger", label: "Danger Zone", icon: <AlertTriangle size={14} /> },
+  ]
+  const VISIBLE_COUNT = 6
+  const visibleTabs = ALL_TABS.slice(0, VISIBLE_COUNT)
+  const hiddenTabs = ALL_TABS.slice(VISIBLE_COUNT)
+
+  // Ensure active tab is always visible if it happens to be in the hidden list
+  const isHiddenActive = hiddenTabs.some(t => t.value === activeTab)
+  const displayTabs = [...visibleTabs]
+  let dropdownTabs = [...hiddenTabs]
+
+  if (isHiddenActive) {
+    const activeIndex = ALL_TABS.findIndex(t => t.value === activeTab)
+    if (activeIndex >= VISIBLE_COUNT) {
+      // Swap the last visible tab with the active hidden tab
+      const temp = displayTabs[VISIBLE_COUNT - 1]
+      displayTabs[VISIBLE_COUNT - 1] = ALL_TABS[activeIndex]
+      dropdownTabs = hiddenTabs.map(t => t.value === activeTab ? temp : t)
+    }
+  }
+
   return (
     <div>
       <Tabs.Root value={activeTab} onValueChange={handleTabChange}>
@@ -247,32 +288,114 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
           margin: "-28px -28px 24px -28px",
           padding: "0 28px 0 28px",
         }}>
-          <div className="adm-tabs-list" style={{ flexWrap: "nowrap", overflowX: "auto", overflowY: "hidden", backgroundColor: "transparent", borderBottom: "1px solid var(--adm-border)" }}>
+          <div className="adm-tabs-list" style={{ overflow: "visible", display: "flex", alignItems: "center", backgroundColor: "transparent", borderBottom: "1px solid var(--adm-border)" }}>
             <Tabs.List asChild>
-              <div style={{ display: "flex", flexWrap: "nowrap", minWidth: "min-content" }}>
-                {[
-                  { value: "flags", label: "Feature Flags", icon: <Zap size={14} /> },
-                  { value: "catalog", label: "Feature Catalog", icon: <Package size={14} /> },
-                  { value: "billing", label: "Plans & Billing", icon: <Globe size={14} /> },
-                  { value: "email", label: "Email & SMTP", icon: <Mail size={14} /> },
-                  { value: "branding", label: "Branding & SEO", icon: <Palette size={14} /> },
-                  { value: "marketing", label: "Marketing", icon: <Megaphone size={14} /> },
-                  { value: "oauth", label: "OAuth & SSO", icon: <KeyRound size={14} /> },
-                  { value: "account", label: "Account", icon: <User size={14} /> },
-                  { value: "danger", label: "Danger Zone", icon: <AlertTriangle size={14} /> },
-                ].map(tab => (
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", flex: 1, rowGap: 4 }}>
+                {displayTabs.map(tab => (
                   <Tabs.Trigger key={tab.value} value={tab.value} className="adm-tab-trigger" asChild>
                     <button style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       {tab.icon} {tab.label}
                     </button>
                   </Tabs.Trigger>
                 ))}
+                
+                {dropdownTabs.length > 0 && (
+                  <DropdownMenu.Root>
+                    <DropdownMenu.Trigger asChild>
+                      <button className="adm-tab-trigger" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <MoreHorizontal size={16} /> More
+                      </button>
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Portal>
+                      <DropdownMenu.Content
+                        align="end"
+                        sideOffset={8}
+                        style={{
+                          backgroundColor: "var(--adm-card-bg)",
+                          border: "1px solid var(--adm-border)",
+                          borderRadius: 8,
+                          padding: 4,
+                          boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                          minWidth: 160,
+                          zIndex: 50
+                        }}
+                      >
+                        {dropdownTabs.map(tab => (
+                          <DropdownMenu.Item
+                            key={tab.value}
+                            onSelect={() => handleTabChange(tab.value)}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                              padding: "8px 12px",
+                              fontSize: 13,
+                              color: "var(--adm-text)",
+                              cursor: "pointer",
+                              borderRadius: 4,
+                              outline: "none",
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "var(--adm-hover)"}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                          >
+                            {tab.icon} {tab.label}
+                          </DropdownMenu.Item>
+                        ))}
+                      </DropdownMenu.Content>
+                    </DropdownMenu.Portal>
+                  </DropdownMenu.Root>
+                )}
               </div>
             </Tabs.List>
           </div>
         </div>
 
         <div className="adm-card" style={{ overflow: "visible" }}>
+
+          {/* ── Global ── */}
+          <Tabs.Content value="global" className="adm-tab-content">
+            <div style={{ marginBottom: 20 }}>
+              <div className="adm-section-label" style={{ marginBottom: 4 }}>Global Settings</div>
+              <p style={{ fontSize: 13.5, color: "var(--adm-muted)", margin: 0 }}>
+                Platform-wide defaults and global configurations.
+              </p>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 520 }}>
+              <div>
+                <label className="adm-label">Default Plan for Demo Requests</label>
+                <select 
+                  className="adm-input" 
+                  value={demoPlanId} 
+                  onChange={e => setDemoPlanId(e.target.value)}
+                >
+                  <option value="">Select a plan...</option>
+                  {plans.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.isActive ? "Active" : "Inactive"})</option>
+                  ))}
+                </select>
+                <p style={{ fontSize: 12.5, color: "var(--adm-muted)", marginTop: 6 }}>
+                  Users who request a demo will experience the features of this plan.
+                </p>
+              </div>
+
+              <button 
+                className="adm-btn adm-btn-primary" 
+                style={{ alignSelf: "flex-start" }} 
+                onClick={() => {
+                  setSavingGlobal(true)
+                  toast.promise(saveGlobalSettings({ demo_default_plan_id: demoPlanId }), {
+                    loading: "Saving...",
+                    success: () => { setSavingGlobal(false); return "Global settings saved" },
+                    error: () => { setSavingGlobal(false); return "Failed to save" }
+                  })
+                }} 
+                disabled={savingGlobal}
+              >
+                {savingGlobal ? "Saving..." : "Save Global Settings"}
+              </button>
+            </div>
+          </Tabs.Content>
 
           {/* ── Feature Flags ── */}
           <Tabs.Content value="flags" className="adm-tab-content">
@@ -411,6 +534,15 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
                 </button>
               </div>
             )}
+          </Tabs.Content>
+
+          {/* ── WhatsApp / Communications ── */}
+          <Tabs.Content value="whatsapp" className="adm-tab-content">
+            <WhatsAppSettingsTab
+              initialSettings={waSettings}
+              initialTemplates={waTemplates}
+              initialActivity={waActivity}
+            />
           </Tabs.Content>
 
           {/* ── Plans & Billing ── */}

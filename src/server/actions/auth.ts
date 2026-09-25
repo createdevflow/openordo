@@ -6,7 +6,8 @@ import { z } from "zod"
 import { db } from "@/lib/db"
 import bcrypt from "bcryptjs"
 import { cookies, headers } from "next/headers"
-import { sendVerificationOtp, sendPasswordResetEmail } from "@/lib/email"
+import { sendPasswordResetEmail } from "@/lib/email"
+import { deliverOtp } from "./otp"
 import { checkRateLimit, applyProgressiveDelay } from "@/lib/rate-limit"
 
 // ── Google OAuth sign-in ──────────────────────────────────────────────────────
@@ -179,9 +180,13 @@ export async function registerAccountAction(prevState: any, formData: FormData) 
   })
 
   // Send OTP
-  await sendVerificationOtp(email, otpCode)
+  const result = await deliverOtp(newUser.id, email, newUser.phone, otpCode)
+  if (!result.success) {
+    // We swallow the error here because the user is already created, but we could log it.
+    // They can resend the OTP from the next screen.
+  }
 
-  return { redirectToOtp: true, email }
+  return { redirectToOtp: true, email, fallbackTriggered: result.fallbackTriggered }
 }
 
 export async function forgotPasswordAction(prevState: any, formData: FormData) {
