@@ -1,3 +1,5 @@
+"use client"
+
 import React, { useState } from "react"
 import { Calendar, FileText, Pill, Receipt, FolderOpen, Video, FileDown, LogOut, Clock, Menu, X, User } from "lucide-react"
 
