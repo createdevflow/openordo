@@ -84,3 +84,84 @@ export async function verifyPatientPortalOtpAction(clinicId: string, identifier:
     return { error: e.message }
   }
 }
+
+export async function requestGlobalPatientPortalOtpAction(identifier: string) {
+  try {
+    const cleanId = identifier.trim().toLowerCase()
+    if (!cleanId) return { error: "Please enter your email or phone number." }
+
+    const patients = await db.patient.findMany({
+      where: {
+        OR: [
+          { email: cleanId },
+          { phone: { contains: cleanId.replace(/[^0-9]/g, "") } }
+        ]
+      }
+    })
+
+    if (patients.length === 0) {
+      return { error: "No patient records found with this email or phone number across our clinics." }
+    }
+
+    const code = randomInt(100000, 999999).toString()
+    
+    await db.otpToken.create({
+      data: {
+        email: cleanId,
+        code,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000)
+      }
+    })
+
+    console.log(`[GLOBAL_PATIENT_OTP] Code: ${code} for ${patients.length} clinic(s).`)
+    return { success: true, dummyCode: code }
+  } catch (e: any) {
+    return { error: e.message }
+  }
+}
+
+export async function verifyGlobalPatientPortalOtpAction(identifier: string, code: string) {
+  try {
+    const cleanId = identifier.trim().toLowerCase()
+    
+    const token = await db.otpToken.findFirst({
+      where: {
+        email: cleanId,
+        code,
+        expiresAt: { gt: new Date() }
+      }
+    })
+
+    if (!token) return { error: "Invalid or expired OTP." }
+
+    const patients = await db.patient.findMany({
+      where: {
+        OR: [
+          { email: cleanId },
+          { phone: { contains: cleanId.replace(/[^0-9]/g, "") } }
+        ]
+      },
+      include: { clinic: true }
+    })
+
+    if (patients.length === 0) return { error: "Patient records not found." }
+
+    await db.otpToken.delete({ where: { id: token.id } })
+
+    for (const p of patients) {
+      await setPatientSession(p.clinicId, p.id)
+    }
+
+    // Return the list of clinics so the client can decide where to route
+    return { 
+      success: true, 
+      clinics: patients.map(p => ({
+        id: p.clinic.id,
+        name: p.clinic.name,
+        slug: p.clinic.slug
+      }))
+    }
+  } catch (e: any) {
+    return { error: e.message }
+  }
+}

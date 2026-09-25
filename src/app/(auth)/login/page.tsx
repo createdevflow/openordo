@@ -21,7 +21,12 @@ const OAUTH_ERROR_MESSAGES: Record<string, string | null> = {
   Callback: null,            // popup closed — silent
 }
 
+import { requestGlobalPatientPortalOtpAction, verifyGlobalPatientPortalOtpAction } from "@/server/actions/patient-portal"
+
 function LoginForm() {
+  const [mode, setMode] = useState<"STAFF" | "PATIENT_REQUEST" | "PATIENT_VERIFY">("STAFF")
+  
+  // Staff login state
   const [state, formAction, pending] = useActionState(loginAction, null)
   const [showPassword, setShowPassword] = useState(false)
   const searchParams = useSearchParams()
@@ -33,11 +38,149 @@ function LoginForm() {
     ? (OAUTH_ERROR_MESSAGES[oauthErrorCode] ?? "Sign-in failed. Please try again.")
     : null
 
+  // Patient login state
+  const [patientId, setPatientId] = useState("")
+  const [patientOtp, setPatientOtp] = useState("")
+  const [patientLoading, setPatientLoading] = useState(false)
+  const [patientError, setPatientError] = useState("")
+  const [patientMessage, setPatientMessage] = useState("")
+  const [patientClinics, setPatientClinics] = useState<any[]>([])
+
   useEffect(() => {
     if (state?.redirectToOtp && state?.email) {
       router.push(`/verify-otp?email=${encodeURIComponent(state.email)}`)
     }
   }, [state, router])
+
+  async function handlePatientRequest(e: React.FormEvent) {
+    e.preventDefault()
+    setPatientLoading(true)
+    setPatientError("")
+    
+    const res = await requestGlobalPatientPortalOtpAction(patientId)
+    if (res.error) {
+      setPatientError(res.error)
+    } else {
+      setMode("PATIENT_VERIFY")
+      setPatientMessage(`For this demo, your OTP is: ${res.dummyCode}`)
+    }
+    setPatientLoading(false)
+  }
+
+  async function handlePatientVerify(e: React.FormEvent) {
+    e.preventDefault()
+    setPatientLoading(true)
+    setPatientError("")
+    
+    const res = await verifyGlobalPatientPortalOtpAction(patientId, patientOtp)
+    if (res.error) {
+      setPatientError(res.error)
+      setPatientLoading(false)
+    } else if (res.clinics) {
+      if (res.clinics.length === 1) {
+        router.push(`/portal/${res.clinics[0].slug}`)
+      } else {
+        setPatientClinics(res.clinics)
+      }
+    }
+  }
+
+  if (patientClinics.length > 0) {
+    return (
+      <div>
+        <h2 className="text-[26px] font-semibold mb-2">Select Clinic</h2>
+        <p className="text-[14.5px] text-ink-soft mb-6">You have records at multiple clinics. Which one do you want to access?</p>
+        <div className="space-y-3">
+          {patientClinics.map(c => (
+            <button
+              key={c.id}
+              onClick={() => router.push(`/portal/${c.slug}`)}
+              className="w-full text-left p-4 border border-line rounded-lg hover:border-forest transition-colors flex items-center justify-between"
+            >
+              <span className="font-semibold text-ink">{c.name}</span>
+              <span className="text-forest text-sm font-medium">Access Portal →</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (mode === "PATIENT_REQUEST" || mode === "PATIENT_VERIFY") {
+    return (
+      <div>
+        <h2 className="text-[26px] font-semibold mb-2">Patient Portal</h2>
+        <p className="text-[14.5px] text-ink-soft mb-6">Sign in to view your medical records and appointments.</p>
+        
+        {patientError && (
+          <div className="mb-4 bg-coral-soft text-coral p-3 rounded-md text-[13px] font-medium">
+            {patientError}
+          </div>
+        )}
+        {patientMessage && (
+          <div className="mb-4 bg-forest-soft text-forest p-3 rounded-md text-[13px] font-medium">
+            {patientMessage}
+          </div>
+        )}
+
+        {mode === "PATIENT_REQUEST" ? (
+          <form onSubmit={handlePatientRequest} className="space-y-4">
+            <div>
+              <label className="block text-[13px] font-semibold text-ink-soft mb-1.5">
+                Email or Phone number
+              </label>
+              <Input
+                required
+                placeholder="e.g. sarah@example.com or +1 555-0123"
+                value={patientId}
+                onChange={e => setPatientId(e.target.value)}
+                disabled={patientLoading}
+                autoFocus
+              />
+            </div>
+            <Button type="submit" disabled={patientLoading} className="w-full h-11">
+              {patientLoading ? "Sending Code..." : "Send Login Code"}
+            </Button>
+          </form>
+        ) : (
+          <form onSubmit={handlePatientVerify} className="space-y-4">
+            <div>
+              <label className="block text-[13px] font-semibold text-ink-soft mb-1.5">
+                Enter 6-digit Code
+              </label>
+              <Input
+                required
+                placeholder="000000"
+                value={patientOtp}
+                onChange={e => setPatientOtp(e.target.value)}
+                disabled={patientLoading}
+                className="text-center text-xl tracking-[0.5em] font-mono"
+                maxLength={6}
+                autoFocus
+              />
+            </div>
+            <Button type="submit" disabled={patientLoading || patientOtp.length < 6} className="w-full h-11">
+              {patientLoading ? "Verifying..." : "Sign In"}
+            </Button>
+            <div className="text-center mt-4">
+              <button 
+                type="button" 
+                onClick={() => { setMode("PATIENT_REQUEST"); setPatientOtp(""); setPatientError(""); setPatientMessage("") }}
+                className="text-sm text-ink-soft hover:text-ink hover:underline font-medium"
+              >
+                Use a different email or phone
+              </button>
+            </div>
+          </form>
+        )}
+
+        <div className="mt-8 text-center text-[13.5px] text-ink-soft">
+          Are you a clinic staff member?{" "}
+          <button onClick={() => setMode("STAFF")} className="font-semibold text-forest hover:underline">Staff Login</button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -116,10 +259,20 @@ function LoginForm() {
           </div>
         </div>
 
-        <Button type="submit" disabled={pending} className="w-full mt-4">
+        <Button type="submit" disabled={pending} className="w-full mt-4 h-11">
           {pending ? "Signing in..." : "Sign in"}
         </Button>
       </form>
+
+      <div className="mt-8 text-center text-[13.5px] text-ink-soft pb-4 border-b border-line">
+        Are you a patient?{" "}
+        <button onClick={() => setMode("PATIENT_REQUEST")} className="font-semibold text-forest hover:underline">Access Patient Portal</button>
+      </div>
+
+      <div className="mt-4 text-center text-[13.5px] text-ink-soft">
+        Don&apos;t have a clinic account?{" "}
+        <Link href="/register" className="font-semibold text-forest hover:underline">Start free</Link>
+      </div>
     </div>
   )
 }
@@ -130,10 +283,6 @@ export default function LoginPage() {
       <Suspense fallback={<div className="text-center py-4 text-ink-soft">Loading...</div>}>
         <LoginForm />
       </Suspense>
-      <div className="mt-8 text-center text-[13.5px] text-ink-soft">
-        Don&apos;t have an account?{" "}
-        <Link href="/register" className="font-semibold text-forest hover:underline">Start free</Link>
-      </div>
     </div>
   )
 }
