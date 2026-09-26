@@ -3,6 +3,8 @@
 import { db } from "@/lib/db"
 import { requireClinicId } from "@/lib/auth-utils"
 import { revalidatePath } from "next/cache"
+import { ensurePatientAccount } from "@/lib/patient-account"
+import { notifyPatient } from "@/lib/patient-notifications"
 
 export async function confirmBookingAction(id: string) {
   const clinicId = await requireClinicId()
@@ -32,6 +34,14 @@ export async function confirmBookingAction(id: string) {
     })
   }
 
+  // Patient portal: create/link PatientAccount (fire-and-forget)
+  ensurePatientAccount(clinicId, {
+    id: patient.id,
+    name: patient.name,
+    email: patient.email,
+    phone: patient.phone
+  }).catch(console.error)
+
   // Find first available doctor if none specified
   let doctorId = req.doctorId
   if (!doctorId) {
@@ -39,8 +49,9 @@ export async function confirmBookingAction(id: string) {
     if (doctor) doctorId = doctor.id
   }
 
+  let appointment = null
   if (doctorId) {
-    await db.appointment.create({
+    appointment = await db.appointment.create({
       data: {
         clinicId,
         patientId: patient.id,
@@ -50,7 +61,8 @@ export async function confirmBookingAction(id: string) {
         duration: 30,
         reason: req.reason,
         status: "SCHEDULED"
-      }
+      },
+      include: { doctor: true }
     })
   }
 
@@ -58,6 +70,18 @@ export async function confirmBookingAction(id: string) {
     where: { id },
     data: { status: "CONFIRMED" }
   })
+
+  // Patient portal: notify patient appointment is confirmed
+  if (appointment) {
+    notifyPatient({
+      clinicId,
+      patientId: patient.id,
+      type: "APPOINTMENT_CONFIRMED",
+      title: "Appointment confirmed",
+      body: `Your appointment request for ${req.date} at ${req.time} has been confirmed.`,
+      relatedId: appointment.id
+    }).catch(console.error)
+  }
 
   revalidatePath("/dashboard", "layout")
 }

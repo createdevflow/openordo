@@ -3,6 +3,7 @@
 import { db } from "@/lib/db"
 import { requireClinicId } from "@/lib/auth-utils"
 import { revalidatePath } from "next/cache"
+import { notifyPatient } from "@/lib/patient-notifications"
 
 export async function createInvoiceAction(data: {
   patientId: string
@@ -41,6 +42,16 @@ export async function createInvoiceAction(data: {
     })
   }
 
+  // Patient portal: notify patient of new invoice
+  notifyPatient({
+    clinicId,
+    patientId: data.patientId,
+    type: "INVOICE_CREATED",
+    title: "New invoice created",
+    body: `Invoice ${displayId} has been created for your account.`,
+    relatedId: invoice.id
+  }).catch(console.error)
+
   revalidatePath("/dashboard/billing")
   revalidatePath("/dashboard/patients")
   revalidatePath("/dashboard")
@@ -54,6 +65,16 @@ export async function markInvoicePaidAction(id: string) {
     where: { id, clinicId },
     data: { status: "paid" }
   })
+
+  // Patient portal: notify patient invoice is paid
+  notifyPatient({
+    clinicId,
+    patientId: invoice.patientId,
+    type: "INVOICE_PAID",
+    title: "Invoice marked as paid",
+    body: `Invoice ${invoice.displayId} has been marked as paid. Thank you!`,
+    relatedId: invoice.id
+  }).catch(console.error)
 
   revalidatePath("/dashboard/billing")
   revalidatePath("/dashboard/patients")

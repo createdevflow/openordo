@@ -60,6 +60,10 @@ model Clinic {
   storageUsages     StorageUsage[]
   bookingPageConfig BookingPageConfig?
   PatientDocument   PatientDocument[]
+  patientAccountLinks PatientAccountLink[]
+  patientNotifications PatientNotification[]
+
+  shareRecordsWithPatients Boolean @default(false)
 }
 
 model Membership {
@@ -146,6 +150,7 @@ model Patient {
   records         MedicalRecord[]
   prescriptions   Prescription[]
   PatientDocument PatientDocument[]
+  patientAccountLink PatientAccountLink?
 
   @@unique([clinicId, displayId])
 }
@@ -625,4 +630,73 @@ model WhatsAppConversationContext {
 
   @@unique([phone, clinicId])
   @@index([phone])
+}
+
+// ─── Patient Portal Account System ────────────────────────────────────────────
+
+/// One per real person — keyed by email, optionally phone.
+/// passwordHash is null until first-time password setup is completed.
+model PatientAccount {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  phone           String?
+  passwordHash    String?
+  name            String
+  emailVerifiedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  links         PatientAccountLink[]
+  notifications PatientNotification[]
+  loginCodes    PatientLoginCode[]
+}
+
+/// Join table linking a PatientAccount to a specific clinic's Patient record.
+/// Mirrors the Membership pattern for staff.
+model PatientAccountLink {
+  id               String   @id @default(cuid())
+  patientAccountId String
+  clinicId         String
+  patientId        String   @unique // FK to clinic-scoped Patient — unique ensures 1:1 per clinic
+  linkedAt         DateTime @default(now())
+
+  patientAccount PatientAccount @relation(fields: [patientAccountId], references: [id], onDelete: Cascade)
+  clinic         Clinic         @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  patient        Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([patientAccountId, clinicId])
+}
+
+/// Stores hashed login codes for passwordless/forgot-password flow.
+/// Never store raw codes.
+model PatientLoginCode {
+  id               String    @id @default(cuid())
+  patientAccountId String
+  codeHash         String
+  expiresAt        DateTime
+  consumedAt       DateTime?
+  createdAt        DateTime  @default(now())
+
+  patientAccount PatientAccount @relation(fields: [patientAccountId], references: [id], onDelete: Cascade)
+
+  @@index([patientAccountId])
+}
+
+/// In-app notification feed for patients — written on every trigger event.
+model PatientNotification {
+  id               String    @id @default(cuid())
+  patientAccountId String
+  clinicId         String
+  type             String    // "APPOINTMENT_CONFIRMED" | "APPOINTMENT_UPDATED" | "INVOICE_CREATED" | "INVOICE_PAID" | "PRESCRIPTION_ISSUED" | "RECORD_SHARED"
+  title            String
+  body             String
+  relatedId        String?
+  readAt           DateTime?
+  createdAt        DateTime  @default(now())
+
+  patientAccount PatientAccount @relation(fields: [patientAccountId], references: [id], onDelete: Cascade)
+  clinic         Clinic         @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([patientAccountId, clinicId])
+  @@index([createdAt])
 }

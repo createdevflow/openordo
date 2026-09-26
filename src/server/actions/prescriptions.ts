@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { requireClinicId } from "@/lib/auth-utils"
 import { hasActivePlugin } from "@/lib/plugins"
 import { revalidatePath } from "next/cache"
+import { notifyPatient } from "@/lib/patient-notifications"
 
 export async function createPrescriptionAction(data: {
   patientId: string
@@ -43,13 +44,24 @@ export async function createPrescriptionAction(data: {
       data: {
         clinicId,
         patientId: data.patientId,
-        name: data.documentName || `Prescription ${prescription.id.substring(0,6)}`,
+        name: data.documentName || `Prescription ${prescription.id.substring(0, 6)}`,
         type: "PRESCRIPTION",
         sizeBytes: data.documentSize,
         url: data.documentUrl
       }
     })
   }
+
+  // Patient portal: notify patient of new prescription
+  const drugNames = data.items.slice(0, 3).map(i => i.drug).join(", ")
+  notifyPatient({
+    clinicId,
+    patientId: data.patientId,
+    type: "PRESCRIPTION_ISSUED",
+    title: "New prescription issued",
+    body: `A prescription has been issued for: ${drugNames}${data.items.length > 3 ? ` and ${data.items.length - 3} more` : ""}.`,
+    relatedId: prescription.id
+  }).catch(console.error)
 
   revalidatePath("/dashboard/prescriptions")
   revalidatePath("/dashboard/records")

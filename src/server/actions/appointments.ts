@@ -7,6 +7,7 @@ import { canAddPatient } from "@/lib/features"
 import { hasActivePlugin } from "@/lib/plugins"
 import { sendClinicScopedWhatsAppMessage } from "@/lib/whatsapp-send"
 import { fmtDateShort, fmtTime12 } from "@/components/DashboardHelpers"
+import { notifyPatient } from "@/lib/patient-notifications"
 
 export async function createAppointmentAction(data: {
   patientId?: string
@@ -114,6 +115,16 @@ export async function createAppointmentAction(data: {
     }).catch(console.error)
   }
 
+  // Patient portal: notify patient of new appointment
+  notifyPatient({
+    clinicId,
+    patientId: appointment.patient.id,
+    type: "APPOINTMENT_CONFIRMED",
+    title: "Appointment confirmed",
+    body: `Your appointment with Dr. ${appointment.doctor.name} on ${fmtDateShort(appointment.date.toISOString().split("T")[0])} at ${fmtTime12(appointment.time)} has been scheduled.`,
+    relatedId: appointment.id
+  }).catch(console.error)
+
   revalidatePath("/dashboard", "layout")
   return appointment
 }
@@ -163,6 +174,18 @@ export async function updateAppointmentAction(id: string, data: {
         patientId: p.id,
         appointmentId: appointment.id
       })
+    }).catch(console.error)
+  }
+
+  // Patient portal: notify patient of appointment update
+  if (data.date || data.time) {
+    notifyPatient({
+      clinicId,
+      patientId: appointment.patient.id,
+      type: "APPOINTMENT_UPDATED",
+      title: "Appointment rescheduled",
+      body: `Your appointment with Dr. ${appointment.doctor.name} has been rescheduled to ${fmtDateShort(appointment.date.toISOString().split("T")[0])} at ${fmtTime12(appointment.time)}.`,
+      relatedId: appointment.id
     }).catch(console.error)
   }
 

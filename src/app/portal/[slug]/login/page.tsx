@@ -1,7 +1,7 @@
 import { db } from "@/lib/db"
 import { notFound, redirect } from "next/navigation"
 import { PatientLoginClient } from "./PatientLoginClient"
-import { getPatientSession } from "@/lib/patient-auth"
+import { getPatientAccountSession } from "@/lib/patient-auth"
 
 export default async function PatientPortalLoginPage({ params }: { params: Promise<{ slug: string }> }) {
   const resolvedParams = await params
@@ -14,9 +14,18 @@ export default async function PatientPortalLoginPage({ params }: { params: Promi
     notFound()
   }
 
-  const session = await getPatientSession(clinic.id)
+  const session = await getPatientAccountSession()
   if (session) {
-    redirect(`/portal/${resolvedParams.slug}`)
+    // Check if account is linked to this clinic
+    const link = await db.patientAccountLink.findUnique({
+      where: {
+        patientAccountId_clinicId: {
+          patientAccountId: session.patientAccountId,
+          clinicId: clinic.id
+        }
+      }
+    })
+    if (link) redirect(`/portal/${resolvedParams.slug}`)
   }
 
   const config = clinic.bookingPageConfig
@@ -28,7 +37,7 @@ export default async function PatientPortalLoginPage({ params }: { params: Promi
           {config?.logoUrl ? (
             <img src={config.logoUrl} alt={clinic.name} className="h-12 mx-auto mb-4" />
           ) : (
-            <div className="w-12 h-12 bg-forest text-white rounded-lg flex items-center justify-center mx-auto mb-4 text-xl font-bold">
+            <div className="w-12 h-12 text-white rounded-lg flex items-center justify-center mx-auto mb-4 text-xl font-bold" style={{ backgroundColor: config?.accentColor || "#1E4638" }}>
               {clinic.name.charAt(0)}
             </div>
           )}
@@ -36,7 +45,11 @@ export default async function PatientPortalLoginPage({ params }: { params: Promi
           <p className="text-ink-soft">Access your medical records and appointments at {clinic.name}.</p>
         </div>
 
-        <PatientLoginClient clinicId={clinic.id} slug={resolvedParams.slug} accentColor={config?.accentColor || "#1E4638"} />
+        <PatientLoginClient
+          clinicId={clinic.id}
+          slug={resolvedParams.slug}
+          accentColor={config?.accentColor || "#1E4638"}
+        />
       </div>
     </div>
   )
