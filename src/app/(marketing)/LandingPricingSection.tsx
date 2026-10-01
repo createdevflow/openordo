@@ -1,8 +1,10 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React from "react"
 import Link from "next/link"
-import { Check, Sparkles, ArrowRight } from "lucide-react"
+import { Check, Sparkles, ArrowRight, Globe } from "lucide-react"
+import { PriceWithTax } from "@/components/ui/PriceWithTax"
+import { getAllActiveTaxCountryConfigs } from "@/server/actions/tax"
 
 export type PlanItem = {
   id: string
@@ -21,26 +23,18 @@ export type PlanItem = {
 export function LandingPricingSection({
   plans,
   promo,
-  initialCurrency = "USD",
+  currency,
+  countryCode,
+  taxConfig,
   defaultTrialDays = 14
 }: {
   plans: PlanItem[]
   promo?: any | null
-  initialCurrency?: "USD" | "INR"
+  currency: "USD" | "INR"
+  countryCode: string
+  taxConfig: any
   defaultTrialDays?: number
 }) {
-  const [currency, setCurrency] = useState<"USD" | "INR">(initialCurrency)
-
-  // Auto-detect India timezone on client if not already detected from headers
-  useEffect(() => {
-    try {
-      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""
-      const isIndia = tz.includes("Kolkata") || tz.includes("Calcutta") || navigator.language === "en-IN"
-      if (isIndia && currency !== "INR") {
-        setCurrency("INR")
-      }
-    } catch (e) {}
-  }, [])
 
   return (
     <section id="pricing" className="mx-auto max-w-[1180px] px-7 pb-[84px]">
@@ -55,32 +49,6 @@ export function LandingPricingSection({
           <p className="text-[16px] leading-[1.55] text-ink-soft m-0">
             Every plan includes patient records, calendar scheduling, billing, and clinical charts. Upgrade as your team grows.
           </p>
-        </div>
-
-        {/* Currency Switcher */}
-        <div className="inline-flex items-center rounded-full p-1 bg-paper border border-line shrink-0">
-          <button
-            type="button"
-            onClick={() => setCurrency("INR")}
-            className={`px-4 py-1.5 text-[12.5px] font-semibold rounded-full transition-all flex items-center gap-1.5 cursor-pointer ${
-              currency === "INR"
-                ? "bg-forest text-white shadow-xs"
-                : "text-ink-soft hover:text-ink"
-            }`}
-          >
-            <span>🇮🇳</span> INR (₹)
-          </button>
-          <button
-            type="button"
-            onClick={() => setCurrency("USD")}
-            className={`px-4 py-1.5 text-[12.5px] font-semibold rounded-full transition-all flex items-center gap-1.5 cursor-pointer ${
-              currency === "USD"
-                ? "bg-forest text-white shadow-xs"
-                : "text-ink-soft hover:text-ink"
-            }`}
-          >
-            <span>🌐</span> USD ($)
-          </button>
         </div>
       </div>
 
@@ -144,8 +112,9 @@ export function LandingPricingSection({
 
               <div className="mb-1 flex items-baseline gap-1">
                 <span className="font-serif text-[38px] font-semibold text-ink">
-                  {isFree ? "Free" : `${symbol}${price.toLocaleString()}`}
+                  <PriceWithTax amount={price} currency={currency} countryCode={countryCode} />
                 </span>
+
                 {!isFree && (
                   <span className="text-[13.5px] text-ink-soft">/ month</span>
                 )}

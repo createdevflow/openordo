@@ -230,6 +230,44 @@ async function main() {
   }
 
 
+  console.log("Seeding TaxCountryConfig...")
+  const taxConfigs = [
+    {
+      countryCode: "IN",
+      countryName: "India",
+      currencyBucket: "INR",
+      taxLabel: "GST",
+      taxIdLabel: "GSTIN",
+      calculationMode: "SPLIT_BY_SUPPLY_REGION",
+      flatRate: 18,
+      ourRegisteredRegion: "Chandigarh",
+      invoiceNumberPrefix: "OO-IN",
+      isActive: true,
+      sortOrder: 1
+    },
+    {
+      countryCode: "US",
+      countryName: "United States",
+      currencyBucket: "USD",
+      taxLabel: "No Tax",
+      taxIdLabel: null,
+      calculationMode: "NONE",
+      flatRate: null,
+      ourRegisteredRegion: null,
+      invoiceNumberPrefix: "OO-US",
+      isActive: true,
+      sortOrder: 2
+    }
+  ]
+
+  for (const config of taxConfigs) {
+    await db.taxCountryConfig.upsert({
+      where: { countryCode: config.countryCode },
+      update: config as any,
+      create: config as any,
+    })
+  }
+
   console.log("✅ Seed complete")
 }
 

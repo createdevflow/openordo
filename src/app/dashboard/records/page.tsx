@@ -4,6 +4,12 @@ import { hasFeature } from "@/lib/features"
 import { FeatureGate } from "@/components/ui/FeatureGate"
 import { RecordsClient } from "./RecordsClient"
 
+import { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: "Records",
+}
+
 export default async function RecordsPage() {
   const clinicId = await requireClinicId()
 

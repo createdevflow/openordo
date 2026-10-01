@@ -84,6 +84,7 @@ function RegisterForm() {
   const [countryCode, setCountryCode] = useState("+91")
   const [showCountryDrop, setShowCountryDrop] = useState(false)
   const [countrySearch, setCountrySearch] = useState("")
+  const [consentAccepted, setConsentAccepted] = useState(false)
 
   const strength = getPasswordStrength(password)
   const selectedCountry = COUNTRY_CODES.find(c => c.code === countryCode) || COUNTRY_CODES[0]
@@ -310,9 +311,57 @@ function RegisterForm() {
           )}
         </div>
 
+        <div style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 10,
+          padding: "12px 14px",
+          borderRadius: 8,
+          background: "var(--color-paper)",
+          border: `1px solid ${consentAccepted ? "var(--color-forest)" : "var(--color-line)"}`,
+          transition: "border-color 0.15s ease",
+          cursor: "pointer",
+        }}
+          onClick={() => setConsentAccepted(v => !v)}
+        >
+          {/* Custom checkbox */}
+          <div style={{
+            width: 18, height: 18, flexShrink: 0, borderRadius: 4, marginTop: 1,
+            border: `2px solid ${consentAccepted ? "var(--color-forest)" : "var(--color-line)"}`,
+            background: consentAccepted ? "var(--color-forest)" : "transparent",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            transition: "all 0.15s ease",
+          }}>
+            {consentAccepted && <Check size={11} color="white" strokeWidth={3} />}
+          </div>
+          <span style={{ fontSize: 13, color: "var(--color-ink)", lineHeight: 1.5 }}>
+            I agree to the{" "}
+            <Link
+              href="/legal/terms"
+              target="_blank"
+              onClick={e => e.stopPropagation()}
+              style={{ color: "var(--color-forest)", fontWeight: 600, textDecoration: "underline" }}
+            >
+              Terms of Service
+            </Link>{" "}
+            and{" "}
+            <Link
+              href="/legal/privacy"
+              target="_blank"
+              onClick={e => e.stopPropagation()}
+              style={{ color: "var(--color-forest)", fontWeight: 600, textDecoration: "underline" }}
+            >
+              Privacy Policy
+            </Link>
+          </span>
+          {/* Hidden fields for server-side enforcement */}
+          <input type="hidden" name="consentAccepted" value={consentAccepted ? "true" : "false"} />
+          <input type="hidden" name="consentVersionLabel" value={new Date().toISOString().slice(0, 10)} />
+        </div>
+
         <Button
           type="submit"
-          disabled={pending}
+          disabled={pending || !consentAccepted}
           className="w-full mt-2"
         >
           {pending ? "Creating account…" : "Create account"}
@@ -326,6 +375,7 @@ function RegisterForm() {
     </div>
   )
 }
+
 
 export default function RegisterPage() {
   return (

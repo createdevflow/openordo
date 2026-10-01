@@ -7,6 +7,7 @@ import { purchasePluginAction, togglePluginEnabled, uninstallPluginAction } from
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
+import { PriceWithTax } from "@/components/ui/PriceWithTax"
 
 const ICON_MAP: Record<string, React.ElementType> = { Video, Package, FileSignature, Puzzle }
 
@@ -25,9 +26,11 @@ interface PurchaseModalProps {
   currency: "INR" | "USD"
   onClose: () => void
   onSuccess: () => void
+  platformFeePercentage: number
+  countryCode?: string | null
 }
 
-function PurchaseModal({ plugin, currency, onClose, onSuccess }: PurchaseModalProps) {
+function PurchaseModal({ plugin, currency, onClose, onSuccess, platformFeePercentage, countryCode }: PurchaseModalProps) {
   const models: { value: "ONE_TIME" | "MONTHLY" | "YEARLY"; label: string; price: string }[] = []
   if (plugin.priceOneTimeINR && plugin.priceOneTimeUSD) {
     models.push({ value: "ONE_TIME", label: "One-time", price: formatAmt(currency === "INR" ? plugin.priceOneTimeINR : plugin.priceOneTimeUSD, currency) })
@@ -44,10 +47,19 @@ function PurchaseModal({ plugin, currency, onClose, onSuccess }: PurchaseModalPr
   const [loading, setLoading] = useState(false)
 
   const isLimitModifier = (plugin as any).kind === "LIMIT_MODIFIER"
-  const basePrice = currency === "INR"
-    ? (selected === "MONTHLY" ? plugin.priceMonthlyINR : plugin.priceYearlyINR)
-    : (selected === "MONTHLY" ? plugin.priceMonthlyUSD : plugin.priceYearlyUSD)
-  const totalPrice = basePrice ? basePrice * quantity : 0
+  let basePrice = 0
+  if (currency === "INR") {
+    if (selected === "ONE_TIME") basePrice = plugin.priceOneTimeINR || 0
+    else if (selected === "MONTHLY") basePrice = plugin.priceMonthlyINR || 0
+    else if (selected === "YEARLY") basePrice = plugin.priceYearlyINR || 0
+  } else {
+    if (selected === "ONE_TIME") basePrice = plugin.priceOneTimeUSD || 0
+    else if (selected === "MONTHLY") basePrice = plugin.priceMonthlyUSD || 0
+    else if (selected === "YEARLY") basePrice = plugin.priceYearlyUSD || 0
+  }
+  const baseTotal = basePrice ? basePrice * quantity : 0
+  const platformFee = Math.round(baseTotal * (platformFeePercentage / 100))
+  const totalPrice = baseTotal + platformFee
 
   const handlePurchase = async () => {
     setLoading(true)
@@ -209,11 +221,27 @@ function PurchaseModal({ plugin, currency, onClose, onSuccess }: PurchaseModalPr
                 {plugin.slug === "document-storage" && `= +${quantity * 10} GB storage`}
               </span>
             </div>
-            {totalPrice > 0 && (
-              <div style={{ marginTop: 10, fontSize: 14, fontWeight: 700, color: "var(--forest)" }}>
-                Total: {formatAmt(totalPrice, currency)}/{selected === "MONTHLY" ? "mo" : "yr"}
+          </div>
+        )}
+
+        {totalPrice > 0 && (
+          <div style={{ marginBottom: 20, padding: 14, background: "var(--surface)", borderRadius: 8, border: "1px solid var(--line)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 13, color: "var(--ink-soft)" }}>
+              <span>Base Price:</span>
+              <span>{formatAmt(baseTotal, currency)}</span>
+            </div>
+            {platformFee > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 13, color: "var(--ink-soft)" }}>
+                <span>Platform Fee ({platformFeePercentage}%):</span>
+                <span>{formatAmt(platformFee, currency)}</span>
               </div>
             )}
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line)", fontSize: 14, fontWeight: 700, color: "var(--forest)" }}>
+              <span>Total{selected === "MONTHLY" ? " / mo" : selected === "YEARLY" ? " / yr" : ""}:</span>
+              <span>
+                <PriceWithTax amount={totalPrice / 100} currency={currency} countryCode={countryCode} />
+              </span>
+            </div>
           </div>
         )}
 
@@ -237,12 +265,14 @@ interface AddonsClientProps {
   availablePlugins: PluginCardData[]
   ownedPlugins: any[]
   currency: "INR" | "USD"
+  countryCode?: string | null
   planHasOnlineBooking?: boolean
   storageUsedGB?: number
   storageQuotaGB?: number
+  platformFeePercentage: number
 }
 
-export function AddonsClient({ availablePlugins, ownedPlugins, currency, planHasOnlineBooking = false, storageUsedGB = 0, storageQuotaGB = 5 }: AddonsClientProps) {
+export function AddonsClient({ availablePlugins, ownedPlugins, currency, countryCode, planHasOnlineBooking = false, storageUsedGB = 0, storageQuotaGB = 5, platformFeePercentage }: AddonsClientProps) {
   const router = useRouter()
   const { confirm } = useConfirm()
   const [purchasePlugin, setPurchasePlugin] = useState<PluginCardData | null>(null)
@@ -491,6 +521,7 @@ export function AddonsClient({ availablePlugins, ownedPlugins, currency, planHas
                     key={plugin.id}
                     plugin={plugin}
                     currency={currency}
+                    countryCode={countryCode}
                     variant="addons"
                     onPurchase={(p) => setPurchasePlugin(p)}
                   />
@@ -520,6 +551,8 @@ export function AddonsClient({ availablePlugins, ownedPlugins, currency, planHas
         <PurchaseModal
           plugin={purchasePlugin}
           currency={currency}
+          countryCode={countryCode}
+          platformFeePercentage={platformFeePercentage}
           onClose={() => setPurchasePlugin(null)}
           onSuccess={() => {
             setPurchasePlugin(null)

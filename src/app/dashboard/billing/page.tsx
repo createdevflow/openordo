@@ -12,9 +12,18 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
     return <FeatureGate featureName="Invoicing & Billing" />
   }
 
-  const [invoices, patients, clinic, planDetails] = await Promise.all([
-    db.invoice.findMany({ where: { clinicId } }),
+  const [invoices, patients, prescriptions, doctors, clinic, planDetails] = await Promise.all([
+    db.invoice.findMany({
+      where: { clinicId },
+      include: {
+        prescription: {
+          include: { doctor: true }
+        }
+      }
+    }),
     db.patient.findMany({ where: { clinicId }, orderBy: { name: 'asc' } }),
+    db.prescription.findMany({ where: { clinicId }, orderBy: { date: 'desc' }, include: { doctor: true } }),
+    db.doctor.findMany({ where: { clinicId } }),
     db.clinic.findUnique({ where: { id: clinicId } }),
     getClinicSubscriptionDetails(clinicId)
   ])
@@ -23,6 +32,8 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
     <BillingClient 
       invoices={invoices}
       patients={patients}
+      prescriptions={prescriptions}
+      doctors={doctors}
       clinic={clinic}
       hasRevenueReports={planDetails.activeFeatures.includes("billing.revenue_reports")}
       hasInsurance={planDetails.activeFeatures.includes("billing.insurance")}

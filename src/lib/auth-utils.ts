@@ -2,6 +2,15 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { redirect } from "next/navigation"
 
+export async function enforceStaffConsent(userId: string) {
+  const hasConsented = await db.consentRecord.findFirst({
+    where: { ownerType: "USER", ownerId: userId, documentType: "TERMS" }
+  })
+  if (!hasConsented) {
+    redirect("/onboarding/consent")
+  }
+}
+
 export async function requireClinicId() {
   const session = await auth()
   
@@ -14,6 +23,8 @@ export async function requireClinicId() {
   if (!user) {
     return redirect("/login")
   }
+
+  await enforceStaffConsent(user.id)
 
   // Strictly restrict dashboard access to fully onboarded users
   if (user.onboardingStep !== "COMPLETED" && user.platformRole !== "SUPER_ADMIN") {
@@ -44,6 +55,8 @@ export async function requireUser() {
   if (!user) {
     return redirect("/login")
   }
+
+  await enforceStaffConsent(user.id)
 
   return user
 }

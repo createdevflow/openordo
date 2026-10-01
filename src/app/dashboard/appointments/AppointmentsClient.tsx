@@ -188,7 +188,7 @@ export function AppointmentsClient({
                       {a.visitType === "VIDEO" && a.status?.toLowerCase() === "scheduled" && (
                         <div style={{ display: "flex", gap: 4 }}>
                           <Link
-                            href={"/consultation/" + (a.roomId || a.id)}
+                            href={"/consultation/join/" + (a.roomId || a.id)}
                             target="_blank"
                             className="cw-btn cw-btn-primary cw-btn-sm"
                             style={{ padding: "3px 9px", fontSize: 11.5, background: "#7C3AED", borderColor: "#7C3AED", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}
@@ -199,7 +199,7 @@ export function AppointmentsClient({
                             className="cw-btn cw-btn-ghost cw-btn-sm"
                             style={{ padding: "3px 6px", fontSize: 11.5 }}
                             onClick={() => {
-                              const url = `${window.location.origin}/consultation/${a.roomId || a.id}`;
+                              const url = `${window.location.origin}/consultation/join/${a.roomId || a.id}`;
                               navigator.clipboard.writeText(url);
                               showAlert({ title: "Copied", body: "Video link copied to clipboard!", tone: "primary" });
                             }}
@@ -274,7 +274,7 @@ export function AppointmentsClient({
                         {a.visitType === "VIDEO" && a.status?.toLowerCase() === "scheduled" && (
                           <>
                             <Link
-                              href={"/consultation/" + (a.roomId || a.id)}
+                              href={"/consultation/join/" + (a.roomId || a.id)}
                               target="_blank"
                               className="cw-btn cw-btn-primary cw-btn-sm"
                               style={{ padding: "3px 8px", fontSize: 11, background: "#7C3AED", borderColor: "#7C3AED", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 3 }}
@@ -285,7 +285,7 @@ export function AppointmentsClient({
                               className="cw-btn cw-btn-ghost cw-btn-icon"
                               style={{ padding: "3px 6px", fontSize: 11 }}
                               onClick={() => {
-                                const url = `${window.location.origin}/consultation/${a.roomId || a.id}`;
+                                const url = `${window.location.origin}/consultation/join/${a.roomId || a.id}`;
                                 navigator.clipboard.writeText(url);
                                 showAlert({ title: "Copied", body: "Video link copied to clipboard!", tone: "primary" });
                               }}

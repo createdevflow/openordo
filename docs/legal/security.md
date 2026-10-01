@@ -16,7 +16,7 @@ Clinics trust OpenORDO with some of the most sensitive information there is. Thi
 
 ## 2. Architecture overview
 
-OpenORDO is a web application built on Next.js and TypeScript, deployed on managed cloud hosting. Data is stored in a managed PostgreSQL database. Payments run on Stripe. Email is sent through a transactional email provider. Video consultations run on a hosted video provider. 
+OpenORDO is a web application built on Next.js and TypeScript, deployed on managed cloud hosting. Data is stored in a managed PostgreSQL database. Payments run on Razorpay. Email is sent through a transactional email provider. Video consultations run on a hosted video provider. 
 
 ## 3. Tenant isolation
 
@@ -46,14 +46,14 @@ A small number of authorised staff have platform administrator ("Super Admin") a
 
 - **In transit:** all connections to OpenORDO use HTTPS/TLS.
 - **At rest:** our database and storage providers encrypt data at rest.
-- **Secrets:** API keys and credentials are held in environment configuration on the hosting platform, not in the source code.
+- **Secrets:** Credentials and secrets are held securely on the hosting platform, not in the source code.
 - **Backups:** the managed database is backed up automatically. Backup windows are described in [Data Retention](/legal/retention).
 - **Data minimisation:** we collect only what is needed to provide the service. Card details never touch our servers.
 - **Exports:** clinics can export their own data (patients, appointments, billing) so nothing is locked in.
 
 ## 6. Payments security
 
-Payments are handled by Stripe, a payment provider that is certified to the PCI-DSS Level 1 standard. OpenORDO never receives or stores full card numbers. Stripe events that update subscriptions (for example payment success, failure or cancellation) are received through signed webhooks that we verify before acting.
+Payments are handled by Razorpay, a payment provider that is certified to the PCI-DSS Level 1 standard. OpenORDO never receives or stores full card numbers. Razorpay events that update subscriptions (for example payment success, failure or cancellation) are received securely and verified before acting.
 
 ## 7. Video consultation security (add-on)
 

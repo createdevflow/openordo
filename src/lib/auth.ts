@@ -4,6 +4,7 @@ import Google from "next-auth/providers/google"
 import { db } from "@/lib/db"
 import bcrypt from "bcryptjs"
 import { authConfig } from "./auth.config"
+import { decrypt } from "@/lib/crypto"
 
 // ── Username generator (mirrors registerAccountAction logic) ─────────────────
 async function generateUsername(name: string): Promise<string> {
@@ -38,7 +39,7 @@ async function getOauthSettings() {
     
     cachedOauthSettings = {
       AUTH_GOOGLE_ID: map.AUTH_GOOGLE_ID || process.env.AUTH_GOOGLE_ID,
-      AUTH_GOOGLE_SECRET: map.AUTH_GOOGLE_SECRET || process.env.AUTH_GOOGLE_SECRET,
+      AUTH_GOOGLE_SECRET: map.AUTH_GOOGLE_SECRET ? decrypt(map.AUTH_GOOGLE_SECRET) : process.env.AUTH_GOOGLE_SECRET,
       lastFetched: now,
     }
   } catch (e) {

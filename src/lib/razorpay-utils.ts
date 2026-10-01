@@ -1,4 +1,5 @@
 import { db } from "@/lib/db"
+import { decrypt } from "@/lib/crypto"
 
 /**
  * Gets the effective Razorpay Key ID.
@@ -21,7 +22,7 @@ export async function getRazorpayKeyId(): Promise<string> {
 export async function getRazorpayKeySecret(): Promise<string> {
   try {
     const setting = await db.globalSetting.findUnique({ where: { key: "RAZORPAY_KEY_SECRET" } })
-    if (setting?.value) return setting.value
+    if (setting?.value) return decrypt(setting.value)
   } catch (e) {
     // Ignore db error, fallback to env
   }
@@ -35,7 +36,7 @@ export async function getRazorpayKeySecret(): Promise<string> {
 export async function getRazorpayWebhookSecret(): Promise<string> {
   try {
     const setting = await db.globalSetting.findUnique({ where: { key: "RAZORPAY_WEBHOOK_SECRET" } })
-    if (setting?.value) return setting.value
+    if (setting?.value) return decrypt(setting.value)
   } catch (e) {
     // Ignore db error, fallback to env
   }

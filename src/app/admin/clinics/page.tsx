@@ -1,7 +1,15 @@
 import { db } from "@/lib/db"
 import { ClinicsClient } from "./ClinicsClient"
 
-export default async function AdminClinicsPage() {
+import { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: "Clinics",
+}
+
+export default async function AdminClinicsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+  const resolvedParams = await searchParams
+  const initialFilter = resolvedParams?.status === "SUSPENDED" ? "SUSPENDED" : "ALL"
   const clinics = await db.clinic.findMany({
     orderBy: { createdAt: "desc" },
     include: {
@@ -21,5 +29,5 @@ export default async function AdminClinicsPage() {
     where: { isActive: true }
   })
 
-  return <ClinicsClient clinics={clinics} activePromos={activePromos} />
+  return <ClinicsClient clinics={clinics} activePromos={activePromos} initialFilter={initialFilter} />
 }

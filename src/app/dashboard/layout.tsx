@@ -7,6 +7,14 @@ import { redirect } from "next/navigation"
 import { cookies } from "next/headers"
 import { ViewTitle } from "@/components/ViewTitle"
 import "../dashboard.css"
+import { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: {
+    template: "%s | OpenORDO Clinic",
+    default: "OpenORDO Clinic",
+  }
+}
 
 export default async function DashboardLayout({
   children,
@@ -15,6 +23,10 @@ export default async function DashboardLayout({
 }) {
   const session = await auth()
   const clinicId = await requireClinicId()
+
+  if (session?.user?.id) {
+    // Consent is now enforced globally in requireClinicId
+  }
 
   const clinic = await db.clinic.findUnique({
     where: { id: clinicId }
@@ -34,6 +46,17 @@ export default async function DashboardLayout({
     take: 4
   })
 
+  const pendingDataRequests = await db.dataExportRequest.count({
+    where: { clinicId, status: "PENDING" }
+  })
+
+  const recentDataRequests = await db.dataExportRequest.findMany({
+    where: { clinicId, status: "PENDING" },
+    orderBy: { createdAt: "desc" },
+    include: { patientAccount: { select: { name: true } } },
+    take: 4
+  })
+
   // Fetch active plugin slugs for nav gating
   const activePluginRows = await db.clinicPlugin.findMany({
     where: { clinicId, status: "ACTIVE", isEnabled: true },
@@ -48,6 +71,10 @@ export default async function DashboardLayout({
   const cookieStore = await cookies()
   const isCollapsed = cookieStore.get("cw_sidebar_collapsed")?.value === "true"
 
+  const feedbackFlag = await db.platformFlag.findUnique({
+    where: { key: "BETA_FEEDBACK_WIDGET" }
+  })
+
   return (
     <DashboardShell 
       clinicName={clinic.name} 
@@ -57,11 +84,15 @@ export default async function DashboardLayout({
       planName={`${planDetails.planName} plan`}
       pendingBookings={pendingBookings}
       recentBookings={recentBookings}
+      pendingDataRequests={pendingDataRequests}
+      recentDataRequests={recentDataRequests}
       activeFeatures={planDetails.activeFeatures}
       activePlugins={activePlugins}
       defaultCollapsed={isCollapsed}
       promoExpiresAt={planDetails.promoExpiresAt ? planDetails.promoExpiresAt.toISOString() : null}
       clinicStatus={clinic.status}
+      clinicId={clinicId}
+      showFeedbackWidget={feedbackFlag?.enabled ?? false}
     >
       {children}
     </DashboardShell>

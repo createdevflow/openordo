@@ -2,6 +2,12 @@ import { db } from "@/lib/db"
 import { UsersClient } from "./UsersClient"
 import { cleanupExpiredDemosAction } from "@/server/actions/demo"
 
+import { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: "Users",
+}
+
 export default async function AdminUsersPage() {
   await cleanupExpiredDemosAction()
 

@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { requireClinicId } from "@/lib/auth-utils"
 import { revalidatePath } from "next/cache"
 import { canAddPatient } from "@/lib/features"
+import { ensurePatientAccount } from "@/lib/patient-account"
 
 export async function createPatientAction(data: {
   name: string
@@ -36,6 +37,14 @@ export async function createPatientAction(data: {
       colorTag
     }
   })
+
+  // Patient portal: create/link PatientAccount if clinic has the feature active
+  ensurePatientAccount(clinicId, {
+    id: patient.id,
+    name: patient.name,
+    email: patient.email,
+    phone: patient.phone
+  }).catch(console.error)
 
   revalidatePath("/dashboard", "layout")
   return patient

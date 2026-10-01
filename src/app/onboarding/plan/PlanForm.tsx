@@ -5,17 +5,20 @@ import { selectPlanAction } from "@/server/actions/onboarding"
 import { Button } from "@/components/ui/Button"
 import { OnboardingPromoCard } from "./OnboardingPromoCard"
 import { Check, Sparkles } from "lucide-react"
+import { PriceWithTax } from "@/components/ui/PriceWithTax"
 
 export function PlanForm({
   plans,
   promo,
   currency = "USD",
-  initialPlan
+  initialPlan,
+  countryCode
 }: {
   plans: any[]
   promo?: any | null
   currency?: "USD" | "INR"
   initialPlan?: string
+  countryCode?: string | null
 }) {
   const [state, formAction, pending] = useActionState(selectPlanAction, null)
   const [showAll, setShowAll] = useState(!promo)
@@ -175,7 +178,7 @@ export function PlanForm({
                     <div className="my-5 pb-5 border-b border-line">
                       <div className="flex items-baseline gap-1">
                         <span className="text-[36px] font-serif font-bold text-ink leading-none">
-                          {priceMonthly === 0 ? "Free" : `${currencySymbol}${priceMonthly.toLocaleString()}`}
+                          <PriceWithTax amount={priceMonthly} currency={selectedCurrency} countryCode={countryCode} />
                         </span>
                         {priceMonthly > 0 ? (
                           <span className="text-[14px] font-medium text-ink-soft">/month</span>
@@ -250,7 +253,7 @@ export function PlanForm({
               <div className="text-[13px] text-ink-soft mt-0.5">
                 {selectedPrice === 0
                   ? "Free forever · No credit card required"
-                  : `${selectedSymbol}${selectedPrice?.toLocaleString()}/month · You can change or cancel anytime`}
+                  : <><PriceWithTax amount={selectedPrice!} currency={selectedCurrency} countryCode={countryCode} />/month · You can change or cancel anytime</>}
               </div>
             </div>
 

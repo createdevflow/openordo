@@ -17,16 +17,18 @@ export default async function OnboardingPlanPage() {
         activeClinicId: true,
         phone: true,
         memberships: {
-          include: { clinic: { select: { country: true } } },
+          include: { clinic: { select: { countryCode: true } } },
           take: 1
         }
       }
     })
     
     // If clinic's country was selected as India during step 1 or user registered with Indian phone (+91)
-    const clinicCountry = user?.memberships[0]?.clinic?.country
+    const clinicCountry = user?.memberships[0]?.clinic?.countryCode
     if (clinicCountry === 'IN' || user?.phone?.startsWith('+91')) {
       country = 'IN'
+    } else if (clinicCountry) {
+      country = clinicCountry
     }
   }
 
@@ -114,7 +116,7 @@ export default async function OnboardingPlanPage() {
       </div>
 
       <div className="p-6 md:p-8">
-        <PlanForm plans={plans} promo={promo} currency={currency} initialPlan={initialPlan} />
+        <PlanForm plans={plans} promo={promo} currency={currency} initialPlan={initialPlan} countryCode={country} />
       </div>
     </div>
   )

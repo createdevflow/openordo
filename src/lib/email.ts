@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer"
 import { db } from "./db"
+import { decrypt } from "./crypto"
 
 // Fetch SMTP credentials from the GlobalSetting table
 async function getSmtpConfig() {
@@ -16,7 +17,7 @@ async function getSmtpConfig() {
     host: (config.SMTP_HOST || process.env.SMTP_HOST || "").trim(),
     port: parseInt((config.SMTP_PORT || process.env.SMTP_PORT || "587").trim(), 10),
     user: (config.SMTP_USER || process.env.SMTP_USER || "").trim(),
-    pass: (config.SMTP_PASS || process.env.SMTP_PASS || "").trim(),
+    pass: (config.SMTP_PASS ? decrypt(config.SMTP_PASS) : (process.env.SMTP_PASS || "")).trim(),
     from: (config.SMTP_FROM && config.SMTP_FROM.includes("@")) 
       ? config.SMTP_FROM.trim()
       : (config.SMTP_FROM ? `${config.SMTP_FROM.trim()} <noreply@openordo.com>` : process.env.SMTP_FROM || "OpenORDO <noreply@openordo.com>"),
@@ -278,4 +279,170 @@ export async function sendDemoCredentialsEmail(email: string, name: string, link
     console.error("Failed to send demo credentials email:", error)
     return false
   }
+}
+
+export async function sendPatientWelcomeEmail({
+  to,
+  patientName,
+  clinicName,
+  loginUrl,
+}: {
+  to: string
+  patientName: string
+  clinicName: string
+  loginUrl: string
+}) {
+  const transporter = await getTransporter()
+  const config = await getSmtpConfig()
+
+  if (process.env.NODE_ENV !== "production" || !transporter) {
+    console.log("=========================================" )
+    console.log(`[PATIENT WELCOME] To: ${to} | Clinic: ${clinicName}`)
+    console.log(`Login: ${loginUrl}`)
+    console.log("=========================================")
+    return
+  }
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+      <h2 style="color: #1a382c;">Your patient record at ${clinicName}</h2>
+      <p>Hi ${patientName},</p>
+      <p>A patient record has been created for you at <strong>${clinicName}</strong>.</p>
+      <p>Sign in to the patient portal to view your upcoming appointments, prescriptions, and invoices.</p>
+      <div style="margin: 30px 0;">
+        <a href="${loginUrl}" style="display: inline-block; background-color: #1a382c; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Access Patient Portal</a>
+      </div>
+      <p style="font-size: 13px; color: #666;">Use your email or phone number to log in — no password required for first access.</p>
+    </div>
+  `
+
+  await transporter.sendMail({
+    from: getFromAddress("general", config),
+    to,
+    subject: `Your patient record at ${clinicName} — access the patient portal`,
+    html,
+  }).catch(console.error)
+}
+
+export async function sendPatientLoginCodeEmail({
+  to,
+  patientName,
+  code,
+  clinicName,
+}: {
+  to: string
+  patientName: string
+  code: string
+  clinicName?: string
+}) {
+  const transporter = await getTransporter()
+  const config = await getSmtpConfig()
+
+  if (process.env.NODE_ENV !== "production" || !transporter) {
+    console.log("=========================================")
+    console.log(`[PATIENT OTP] To: ${to} | Code: ${code}`)
+    console.log("=========================================")
+    return
+  }
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+      <h2 style="color: #1a382c;">Your login code${clinicName ? ` for ${clinicName}` : ""}</h2>
+      <p>Hi ${patientName},</p>
+      <p>Use the code below to sign in to your patient portal. It expires in 10 minutes.</p>
+      <div style="margin: 30px 0; text-align: center;">
+        <div style="font-size: 40px; font-weight: bold; letter-spacing: 12px; color: #1a382c; font-family: monospace;">${code}</div>
+      </div>
+      <p style="font-size: 13px; color: #666;">If you did not request this code, you can safely ignore this email.</p>
+    </div>
+  `
+
+  await transporter.sendMail({
+    from: getFromAddress("auth", config),
+    to,
+    subject: `${code} — your patient portal login code`,
+    html,
+  }).catch(console.error)
+}
+
+export async function sendPatientNotificationEmail({
+  to,
+  patientName,
+  title,
+  body,
+  clinicName,
+  ctaUrl,
+}: {
+  to: string
+  patientName: string
+  title: string
+  body: string
+  clinicName: string
+  ctaUrl?: string
+}) {
+  const transporter = await getTransporter()
+  const config = await getSmtpConfig()
+
+  if (process.env.NODE_ENV !== "production" || !transporter) {
+    console.log(`[PATIENT NOTIF] To: ${to} | ${title}`)
+    return
+  }
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+      <h2 style="color: #1a382c;">${title}</h2>
+      <p>Hi ${patientName},</p>
+      <p>${body}</p>
+      ${ctaUrl ? `<div style="margin: 24px 0;"><a href="${ctaUrl}" style="background:#1a382c;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold;">View in Patient Portal</a></div>` : ""}
+      <p style="font-size:12px;color:#999;">This is an automated message from ${clinicName} via OpenORDO.</p>
+    </div>
+  `
+
+  await transporter.sendMail({
+    from: getFromAddress("general", config),
+    to,
+    subject: `${title} — ${clinicName}`,
+    html,
+  }).catch(console.error)
+}
+
+export async function sendClinicNotificationEmail({
+  to,
+  clinicName,
+  title,
+  body,
+  ctaUrl,
+  ctaText = "View Dashboard"
+}: {
+  to: string
+  clinicName: string
+  title: string
+  body: string
+  ctaUrl?: string
+  ctaText?: string
+}) {
+  const transporter = await getTransporter()
+  const config = await getSmtpConfig()
+
+  if (process.env.NODE_ENV !== "production" || !transporter) {
+    console.log(`[CLINIC NOTIF] To: ${to} | ${title}`)
+    return
+  }
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+      <h2 style="color: #1a382c;">${title}</h2>
+      <p>Hi ${clinicName} Admin,</p>
+      <p>${body}</p>
+      ${ctaUrl ? `<div style="margin: 24px 0;"><a href="${ctaUrl}" style="background:#1a382c;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold;">${ctaText}</a></div>` : ""}
+      <p style="font-size:12px;color:#999;">OpenORDO</p>
+    </div>
+  `
+
+  await transporter.sendMail({
+    from: getFromAddress("general", config),
+    to,
+    subject: `${title}`,
+    html,
+  }).catch(console.error)
 }

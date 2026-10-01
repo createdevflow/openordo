@@ -1,8 +1,10 @@
-﻿import { db } from "@/lib/db"
+import { db } from "@/lib/db"
 import { NextResponse } from "next/server"
-import { sendTrialEndingEmail } from "@/lib/email"
+import { sendNotificationEmail } from "@/lib/notifications/send"
+import { renderTrialEndingSoon } from "@/lib/notifications/templates"
 
-// Run daily. Finds trials ending in 2-4 days and sends reminder email.
+// Run daily. Finds trials ending in 1 or 3 days and sends reminder emails.
+// Per spec §2.3: send at 3 days AND 1 day before conversion.
 export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get("authorization")
@@ -11,47 +13,66 @@ export async function GET(request: Request) {
     }
 
     const now = new Date()
-    const windowStart = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000)  // 2 days from now
-    const windowEnd   = new Date(now.getTime() + 4 * 24 * 60 * 60 * 1000)  // 4 days from now
+    const APP = process.env.NEXT_PUBLIC_APP_URL || "https://openordo.com"
 
-    const subs = await db.subscription.findMany({
-      where: {
-        status: "TRIALING",
-        trialEndsAt: { gte: windowStart, lte: windowEnd },
-      },
-      include: {
-        plan: true,
-        clinic: {
-          include: {
-            memberships: {
-              where: { role: "OWNER" },
-              include: { user: { select: { email: true, name: true } } },
-              take: 1
-            }
-          }
-        }
-      }
-    })
+    // Run for both 3-day and 1-day windows
+    const windows = [
+      { daysLeft: 3, start: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000 - 30 * 60 * 1000), end: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000 + 30 * 60 * 1000) },
+      { daysLeft: 1, start: new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000 - 30 * 60 * 1000), end: new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000 + 30 * 60 * 1000) },
+    ]
 
-    console.log(`[trial-reminder] Found ${subs.length} trials ending in 2-4 days`)
+    let totalSent = 0
 
-    let sent = 0
-    for (const sub of subs) {
-      const owner = sub.clinic.memberships[0]?.user
-      if (!owner?.email) continue
-
-      const chargeDate = sub.trialEndsAt!.toLocaleDateString("en-US", {
-        month: "long", day: "numeric", year: "numeric"
+    for (const window of windows) {
+      const subs = await db.subscription.findMany({
+        where: {
+          status: "TRIALING",
+          trialEndsAt: { gte: window.start, lte: window.end },
+        },
+        include: {
+          plan: true,
+          clinic: {
+            include: {
+              memberships: {
+                where: { role: "OWNER" },
+                include: { user: { select: { id: true, email: true, name: true } } },
+                take: 1,
+              },
+            },
+          },
+        },
       })
 
-      const isIndia = sub.clinic.memberships[0]?.user !== undefined
-      const price = sub.plan.priceMonthlyUsd > 0 ? `$${sub.plan.priceMonthlyUsd}` : `Rs.${sub.plan.priceMonthlyInr}`
+      console.log(`[trial-reminder] ${window.daysLeft}d window: ${subs.length} trials found`)
 
-      const ok = await sendTrialEndingEmail(owner.email, sub.plan.name, price, chargeDate)
-      if (ok) sent++
+      for (const sub of subs) {
+        const owner = sub.clinic.memberships[0]?.user
+        if (!owner?.email) continue
+
+        const chargeDate = sub.trialEndsAt!.toLocaleDateString("en-US", {
+          month: "long", day: "numeric", year: "numeric",
+        })
+        const price = sub.plan.priceMonthlyUsd > 0
+          ? `$${sub.plan.priceMonthlyUsd}/mo`
+          : `₹${sub.plan.priceMonthlyInr}/mo`
+
+        const result = await sendNotificationEmail(
+          "TRIAL_ENDING_SOON",
+          { toEmail: owner.email, ownerType: "USER", ownerId: owner.id, clinicId: sub.clinicId },
+          renderTrialEndingSoon({
+            name:       owner.name,
+            planName:   sub.plan.name,
+            daysLeft:   window.daysLeft,
+            chargeDate,
+            price,
+            settingsUrl: `${APP}/dashboard/settings?tab=subscription`,
+          })
+        )
+        if (result.sent) totalSent++
+      }
     }
 
-    return NextResponse.json({ ok: true, sent })
+    return NextResponse.json({ ok: true, sent: totalSent })
   } catch (error: any) {
     console.error("trial-reminder cron failed:", error)
     return NextResponse.json({ error: error.message }, { status: 500 })

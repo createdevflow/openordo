@@ -1,12 +1,13 @@
 "use server"
 
-import { db } from "@/lib/db"
+import { db, getClinicScopedDb } from "@/lib/db"
 import { requireClinicId } from "@/lib/auth-utils"
 
 export async function getStorageStats() {
   let clinicId;
   try { clinicId = await requireClinicId(); } catch { return { ok: false, error: "Unauthorized" } }
 
+  const scopedDb = getClinicScopedDb(clinicId)
   const [clinic, aggregation, breakdownRows] = await Promise.all([
     db.clinic.findUnique({
       where: { id: clinicId },
@@ -17,14 +18,12 @@ export async function getStorageStats() {
         }
       }
     }),
-    db.patientDocument.aggregate({
+    scopedDb.patientDocument.aggregate({
       _sum: { sizeBytes: true },
-      where: { clinicId },
     }),
-    db.patientDocument.groupBy({
+    scopedDb.patientDocument.groupBy({
       by: ['type'],
       _sum: { sizeBytes: true },
-      where: { clinicId }
     })
   ])
 
@@ -67,12 +66,14 @@ export async function getVaultDocuments(type?: string) {
   let clinicId;
   try { clinicId = await requireClinicId(); } catch { return { ok: false, error: "Unauthorized" } }
 
-  const where: any = { clinicId }
+  const scopedDb = getClinicScopedDb(clinicId)
+  
+  const where: any = {}
   if (type) {
     where.type = type
   }
 
-  const documents = await db.patientDocument.findMany({
+  const documents = await scopedDb.patientDocument.findMany({
     where,
     orderBy: { createdAt: "desc" },
     include: {
@@ -94,9 +95,10 @@ export async function createPatientDocumentAction(data: {
 }) {
   const clinicId = await requireClinicId()
   
-  const doc = await db.patientDocument.create({
+  const scopedDb = getClinicScopedDb(clinicId)
+  const doc = await scopedDb.patientDocument.create({
     data: {
-      clinicId,
+      clinicId: clinicId,
       patientId: data.patientId,
       name: data.name,
       type: data.type,

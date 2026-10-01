@@ -29,8 +29,9 @@ export default async function AddonsPage() {
   })
 
   // Detect currency from clinic country
-  const clinic = await db.clinic.findUnique({ where: { id: clinicId }, select: { country: true } })
-  const currency = clinic?.country === "IN" ? "INR" : "USD"
+  const clinic = await db.clinic.findUnique({ where: { id: clinicId }, select: { countryCode: true } })
+  const currency = clinic?.countryCode === "IN" ? "INR" : "USD"
+  const countryCode = clinic?.countryCode || null
 
   // Check if plan includes online booking (required for Branded Booking Page)
   const planHasOnlineBooking = await hasFeature(clinicId, "scheduling.online_booking")
@@ -38,14 +39,19 @@ export default async function AddonsPage() {
   // Storage usage for document-storage add-on
   const storageInfo = await getEffectiveStorageQuota(clinicId)
 
+  const feeSetting = await db.globalSetting.findUnique({ where: { key: "PLATFORM_FEE_PERCENTAGE" } })
+  const platformFeePercentage = parseFloat(feeSetting?.value || "10")
+
   return (
     <AddonsClient
       availablePlugins={availablePlugins}
       ownedPlugins={ownedPlugins}
       currency={currency as "INR" | "USD"}
+      countryCode={countryCode}
       planHasOnlineBooking={planHasOnlineBooking}
       storageUsedGB={storageInfo.usedGB}
       storageQuotaGB={storageInfo.quotaGB}
+      platformFeePercentage={platformFeePercentage}
     />
   )
 }

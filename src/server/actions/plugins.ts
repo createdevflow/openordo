@@ -3,6 +3,9 @@
 import { db } from "@/lib/db"
 import { requireClinicId } from "@/lib/auth-utils"
 import { revalidatePath } from "next/cache"
+import { sendNotificationEmail } from "@/lib/notifications/send"
+import { renderAddonActivated, renderAddonCanceledOrExpired } from "@/lib/notifications/templates"
+import { requireUser } from "@/lib/auth-utils"
 
 async function getClinicId() {
   return requireClinicId()
@@ -103,6 +106,22 @@ export async function purchasePluginAction(
     },
   })
 
+  // ADDON_ACTIVATED — toggleable notification to clinic owner
+  const user = await requireUser()
+  if (user.email) {
+    const APP = process.env.NEXT_PUBLIC_APP_URL || "https://openordo.com"
+    sendNotificationEmail(
+      "ADDON_ACTIVATED",
+      { toEmail: user.email, ownerType: "USER", ownerId: user.id, clinicId },
+      renderAddonActivated({
+        name: user.name || "there",
+        addonName: plugin.name,
+        activatedAt: new Date().toLocaleDateString(),
+        dashboardUrl: `${APP}/dashboard/addons`,
+      })
+    ).catch(console.error)
+  }
+
   revalidatePath("/dashboard/addons")
   revalidatePath("/dashboard")
   return { ok: true }
@@ -122,6 +141,24 @@ export async function uninstallPluginAction(clinicPluginId: string) {
   await db.clinicPlugin.delete({
     where: { id: clinicPluginId },
   })
+
+  // ADDON_CANCELED_OR_EXPIRED — confirmation to clinic owner
+  const user = await requireUser()
+  const plugin = await db.plugin.findUnique({ where: { id: cp.pluginId } })
+  if (user.email && plugin) {
+    const APP = process.env.NEXT_PUBLIC_APP_URL || "https://openordo.com"
+    sendNotificationEmail(
+      "ADDON_CANCELED_OR_EXPIRED",
+      { toEmail: user.email, ownerType: "USER", ownerId: user.id, clinicId },
+      renderAddonCanceledOrExpired({
+        name: user.name || "there",
+        addonName: plugin.name,
+        reason: "canceled",
+        date: new Date().toLocaleDateString(),
+        marketplaceUrl: `${APP}/dashboard/addons`,
+      })
+    ).catch(console.error)
+  }
 
   revalidatePath("/dashboard/addons")
   revalidatePath("/dashboard")

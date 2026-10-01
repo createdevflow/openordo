@@ -4,6 +4,12 @@ import { getClinicSubscriptionDetails } from "@/lib/features"
 import { hasActivePlugin } from "@/lib/plugins"
 import { SettingsClient } from "./SettingsClient"
 
+import { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: "Settings",
+}
+
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const user = await requireUser()
   const clinicId = await requireClinicId()
@@ -17,7 +23,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     } catch { return null }
   }
 
-  const [clinic, planDetails, allPlans, hasBrandedBooking, bookingPageConfig, doctors] = await Promise.all([
+  const [clinic, planDetails, allPlans, hasBrandedBooking, bookingPageConfig, doctors, baaRequest] = await Promise.all([
     db.clinic.findUnique({ where: { id: clinicId } }),
     getClinicSubscriptionDetails(clinicId),
     db.plan.findMany({
@@ -33,6 +39,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     hasActivePlugin(clinicId, "branded-booking-page").catch(() => false),
     safeBookingConfig(),
     db.doctor.findMany({ where: { clinicId }, orderBy: { name: "asc" }, select: { id: true, name: true, specialty: true } }),
+    db.baaRequest.findFirst({ where: { clinicId } }),
   ])
 
 
@@ -46,6 +53,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       hasBrandedBooking={hasBrandedBooking}
       initialBookingConfig={bookingPageConfig}
       doctors={doctors}
+      baaRequest={baaRequest}
     />
   )
 }

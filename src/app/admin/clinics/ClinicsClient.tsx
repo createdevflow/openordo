@@ -1,16 +1,16 @@
 "use client"
 
 import { useState } from "react"
-import { Building2, Search, CheckCircle, XCircle, Trash2, Gift } from "lucide-react"
+import { Building2, Search, CheckCircle, XCircle, Trash2, Gift, FileText } from "lucide-react"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { toast } from "sonner"
 import { suspendClinic, reactivateClinic, deleteClinic, grantPromo } from "@/server/actions/admin/clinics"
 import { AdminMenu } from "@/components/ui/AdminMenu"
 import Link from "next/link"
 
-export function ClinicsClient({ clinics, activePromos = [] }: { clinics: any[], activePromos?: any[] }) {
+export function ClinicsClient({ clinics, activePromos = [], initialFilter = "ALL" }: { clinics: any[], activePromos?: any[], initialFilter?: string }) {
   const [search, setSearch] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("ALL")
+  const [statusFilter, setStatusFilter] = useState<string>(initialFilter)
   const { confirm } = useConfirm()
 
   const filtered = clinics.filter((c) => {
@@ -160,6 +160,11 @@ export function ClinicsClient({ clinics, activePromos = [] }: { clinics: any[], 
                         {
                           label: "View Details",
                           icon: <Building2 size={14} />,
+                          onSelect: () => window.location.href = `/admin/clinics/${c.id}`,
+                        },
+                        {
+                          label: "Manage BAA",
+                          icon: <FileText size={14} />,
                           onSelect: () => window.location.href = `/admin/clinics/${c.id}`,
                         },
                         ...(activePromos.length > 0 ? activePromos.map((p: any) => ({

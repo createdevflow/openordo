@@ -24,7 +24,7 @@ Medical record retention laws differ by country, state, specialty and the patien
 | **Video call presence signals** | Held in memory only while a call is open and expire seconds after a participant leaves | n/a |
 | **Video call media** | Not recorded by OpenORDO | n/a (see the video provider's policy for transient handling) |
 | **Billing, subscription and payment records** | Kept as long as your subscription exists | Kept for **8 years** after the transaction, or as tax, GST, company and accounting law requires |
-| **Stripe payment data** | Held by Stripe under its own policies | As Stripe's legal obligations require |
+| **Razorpay payment data** | Held by Razorpay under its own policies | As Razorpay's legal obligations require |
 | **Audit log of administrative actions** | Kept | Kept for **3 years** for security, accountability and dispute handling, then deleted |
 | **Security and access logs** (IP, browser, sign-in events, errors) | Kept for up to **12 months** | Deleted at the end of that period |
 | **Support emails and tickets** | Kept while relevant | Kept for up to **3 years** after the last interaction |

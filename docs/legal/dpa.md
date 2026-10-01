@@ -74,7 +74,7 @@ Taking into account the nature of processing, OpenORDO will reasonably assist th
 
 ## 10. Audits and information
 
-1. OpenORDO will provide, on written request and no more than once a year, information reasonably needed to show compliance with this DPA, such as this page, the security description at [/legal/security](/legal/security), and the results of any independent assessments available.
+1. OpenORDO will provide, on written request and no more than once a year, information reasonably needed to show compliance with this DPA, such as this page, the security description at [Security & Trust](/legal/security), and the results of any independent assessments available.
 2. If the information is not enough, or a regulator requires it, the Customer may carry out an audit with at least 30 days' written notice, during business hours, subject to confidentiality and without disrupting the Services. Audits of Sub-processors are conducted through the reports and certifications those Sub-processors make available.
 3. Each party bears its own costs of an audit, unless the audit reveals a material breach by OpenORDO.
 
@@ -120,13 +120,13 @@ This DPA lasts for as long as OpenORDO processes Customer Personal Data. If ther
 
 ## Annex 2: Technical and organisational measures
 
-A fuller description is at [/legal/security](/legal/security). In summary OpenORDO maintains:
+A fuller description is at [Security & Trust](/legal/security). In summary OpenORDO maintains:
 
 1. **Access control:** role-based access (Owner, Admin, Doctor, Front Desk); authentication with hashed passwords or Google sign-in; email verification for new email accounts; session-based access with server-side checks on every action; separate platform-administrator role with server-side authorisation.
 2. **Tenant isolation:** every clinic-scoped record carries the clinic identifier, and every query is scoped to the signed-in user's clinic.
 3. **Encryption:** TLS for data in transit; encryption at rest provided by our database and infrastructure providers.
 4. **Logging and accountability:** audit log of administrative actions (suspensions, plan changes, promotions, role changes, add-on grants and deletions), with destructive actions requiring explicit confirmation.
-5. **Payment security:** card data handled only by Stripe; webhook events verified before processing.
+5. **Payment security:** card data handled only by Razorpay; payment events verified before processing.
 6. **Minimisation and segregation:** platform staff access limited to what is needed; production and development environments kept separate.
 7. **Availability and recovery:** managed database with backups, and documented restore procedures.
 8. **Vendor management:** Sub-processors assessed before engagement and bound by written terms.

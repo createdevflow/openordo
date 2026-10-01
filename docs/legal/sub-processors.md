@@ -14,25 +14,25 @@ Each sub-processor is bound by a written agreement with data protection and secu
 
 | Sub-processor | Purpose | Data involved | Location |
 |---|---|---|---|
-| **Vercel Inc.** | Application hosting, serverless execution, content delivery and scheduled jobs | All data in transit through the application; request logs | Global |
-| **Database Provider** (managed PostgreSQL) | Primary database and backups | All Customer Data at rest: accounts, clinics, patients, appointments, invoices, medical records, prescriptions, inventory, audit logs | Various |
-| **Stripe, Inc.** (and Stripe Payments India / Stripe Payments Europe as applicable) | Payment processing, subscriptions, invoices, customer portal | Clinic owner name, email, billing details, payment method (held by Stripe), transaction data. **No patient data.** | United States, and other Stripe processing locations |
-| **Email Provider** (for example Resend or Postmark) | Transactional email: verification codes, staff invites, billing and trial notices | Recipient name, email address and message content (which does not include clinical records) | Various |
+| **Hostinger** | Application hosting, serverless execution, content delivery and scheduled jobs | All data in transit through the application; request logs | Global |
+| **Hostinger Database** | Primary database and backups | All Customer Data at rest: accounts, clinics, patients, appointments, invoices, medical records, prescriptions, inventory, audit logs | Various |
+| **Razorpay** (and Razorpay Software Private Limited as applicable) | Payment processing, subscriptions, invoices, customer portal | Clinic owner name, email, billing details, payment method (held by Razorpay), transaction data. **No patient data.** | United States, and other Razorpay processing locations |
+| **Hostinger Webmail** | Transactional email: verification codes, staff invites, billing and trial notices | Recipient name, email address and message content (which does not include clinical records) | Various |
 | **Google LLC** (Google Sign-In) | Optional sign-in with Google | Name, email address, profile image (from Google to us) | United States and other Google locations |
 
 ### Add-on specific (only when the clinic uses the add-on)
 
 | Sub-processor | Add-on | Purpose | Data involved | Location |
 |---|---|---|---|---|
-| **Video Provider** (for example Daily.co, Twilio or LiveKit) | Video Consultation | Real-time video and audio, and room management | Room identifier, participant display names, audio and video streams, connection metadata. **Not recorded by OpenORDO.** | Various |
-| **Storage Provider** (for example Amazon S3 or Cloudinary) | File uploads (logos, branding, documents) where enabled | File storage | Uploaded files | Various |
+| **OpenORDO in-house video processing** | Video Consultation | Real-time video and audio, and room management | Room identifier, participant display names, audio and video streams, connection metadata. **Not recorded by OpenORDO.** | OpenORDO Infrastructure |
+| **Hostinger server infrastructure** | File uploads (logos, branding, documents) where enabled | File storage | Uploaded files | Hostinger |
 
 ## 2. What each provider does not receive
 
-- Stripe **does not** receive patient data, medical records or appointment details.
+- Razorpay **does not** receive patient data, medical records or appointment details.
 - Google Sign-In **does not** receive any data from your Clinic; it only tells us who is signing in.
-- The email provider **does not** receive medical records, diagnoses, prescription details or invoice line items. Emails are limited to account, invite and billing notices.
-- The video provider **does not** receive the patient chart or notes typed during the call; those stay in OpenORDO.
+- Hostinger Webmail **does not** receive medical records, diagnoses, prescription details or invoice line items. Emails are limited to account, invite and billing notices.
+- OpenORDO in-house video processing **does not** receive the patient chart or notes typed during the call; those stay in OpenORDO.
 
 ## 3. Affiliates and personnel
 

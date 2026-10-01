@@ -6,9 +6,11 @@ import { z } from "zod"
 import { db } from "@/lib/db"
 import bcrypt from "bcryptjs"
 import { cookies, headers } from "next/headers"
-import { sendPasswordResetEmail } from "@/lib/email"
 import { deliverOtp } from "./otp"
 import { checkRateLimit, applyProgressiveDelay } from "@/lib/rate-limit"
+import { sendNotificationEmail } from "@/lib/notifications/send"
+import { renderPasswordResetLink, renderPasswordChanged, renderWelcome, renderNewClinicSignup } from "@/lib/notifications/templates"
+import { recordStaffConsent } from "./consent"
 
 // ── Google OAuth sign-in ──────────────────────────────────────────────────────
 export async function googleSignInAction(callbackUrl?: string) {
@@ -120,6 +122,14 @@ export async function registerAccountAction(prevState: any, formData: FormData) 
   const phone = phoneRaw ? `${countryCode}${phoneRaw.replace(/^0+/, "")}` : undefined
   const selectedPlan = (formData.get("selectedPlan") as string)?.trim()
 
+  // ── Consent enforcement (CHARTWELL_PRELAUNCH_OPS_SPEC.md §2.3) ────────────
+  // The client checkbox is UX only.  Server rejects if flag is not explicitly true.
+  const consentAccepted = formData.get("consentAccepted") === "true"
+  const consentVersionLabel = (formData.get("consentVersionLabel") as string) || "unknown"
+  if (!consentAccepted) {
+    return { error: "You must accept the Terms of Service and Privacy Policy to create an account." }
+  }
+
   const headersList = await headers()
   const ip = headersList.get("x-forwarded-for") || "unknown"
   if (!checkRateLimit(`register_${ip}`, 5, 60 * 60 * 1000)) {
@@ -186,6 +196,39 @@ export async function registerAccountAction(prevState: any, formData: FormData) 
     // They can resend the OTP from the next screen.
   }
 
+  // Send WELCOME email (fire-and-forget — mandatory)
+  const APP = process.env.NEXT_PUBLIC_APP_URL || "https://openordo.com"
+  sendNotificationEmail(
+    "WELCOME",
+    { toEmail: email, ownerType: "USER", ownerId: newUser.id },
+    renderWelcome({ name, loginUrl: `${APP}/onboarding/clinic` })
+  ).catch(console.error)
+
+  // Record consent (fire-and-forget — user is already created, consent logging
+  // must not block the registration flow or prevent the OTP redirect)
+  recordStaffConsent({
+    userId: newUser.id,
+    accepted: consentAccepted,
+    documentTypes: ["TERMS", "PRIVACY"],
+    versionLabel: consentVersionLabel,
+  }).catch(console.error)
+
+  // Admin alert: NEW_CLINIC_SIGNUP
+  const adminEmail = process.env.ADMIN_ALERT_EMAIL
+  if (adminEmail) {
+    sendNotificationEmail(
+      "NEW_CLINIC_SIGNUP",
+      { toEmail: adminEmail, ownerType: "ADMIN" },
+      renderNewClinicSignup({
+        clinicName: "(pending setup)",
+        ownerName: name,
+        ownerEmail: email,
+        plan: "free trial",
+        adminUrl: `${APP}/admin/users`,
+      })
+    ).catch(console.error)
+  }
+
   return { redirectToOtp: true, email, fallbackTriggered: result.fallbackTriggered }
 }
 
@@ -228,7 +271,12 @@ export async function forgotPasswordAction(prevState: any, formData: FormData) {
       }
     })
 
-    await sendPasswordResetEmail(email, token)
+    const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://openordo.com"}/reset-password?token=${token}`
+    await sendNotificationEmail(
+      "PASSWORD_RESET_LINK",
+      { toEmail: email, ownerType: "USER", ownerId: user.id },
+      renderPasswordResetLink({ name: user.name, resetUrl })
+    )
   }
 
   // Always return success for security (prevents user enumeration)
@@ -289,6 +337,14 @@ export async function resetPasswordAction(prevState: any, formData: FormData) {
   await (db as any).passwordResetToken.delete({
     where: { id: resetRecord.id }
   })
+
+  // Notify user of password change (mandatory security email)
+  const changedAt = new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
+  void sendNotificationEmail(
+    "PASSWORD_CHANGED",
+    { toEmail: user.email, ownerType: "USER", ownerId: user.id },
+    renderPasswordChanged({ name: user.name, changedAt })
+  )
 
   return { success: true, message: "Your password has been reset successfully! You can now sign in with your new password." }
 }

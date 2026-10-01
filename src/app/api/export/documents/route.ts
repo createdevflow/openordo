@@ -3,6 +3,8 @@ import { db } from "@/lib/db"
 import { requireClinicId } from "@/lib/auth-utils"
 import { hasFeature } from "@/lib/features"
 import { ZipArchive } from "archiver"
+import * as fs from "fs/promises"
+import * as path from "path"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 300 // allow up to 5 minutes for zipping large exports on vercel
@@ -74,19 +76,24 @@ export async function GET(req: Request) {
       for (const doc of documents) {
         try {
           if (!doc.url) continue
-          
-          const baseUrl = new URL(req.url).origin
-          const fetchUrl = doc.url.startsWith("/") ? new URL(doc.url, baseUrl).toString() : doc.url
-          
-          // Fetch the physical file
-          const docRes = await fetch(fetchUrl)
-          if (!docRes.ok) {
-            console.warn(`Failed to fetch document ${doc.id} from ${fetchUrl}`)
-            continue
+          let buffer: Buffer;
+          if (doc.url.startsWith("/api/files/")) {
+            const filename = doc.url.replace("/api/files/", "")
+            const filePath = path.join(process.cwd(), "private_uploads", filename)
+            buffer = await fs.readFile(filePath)
+          } else {
+            const cdnPrefix = process.env.NEXT_PUBLIC_CDN_URL || new URL(req.url).origin
+            const fetchUrl = doc.url.startsWith("/") ? new URL(doc.url, cdnPrefix).toString() : doc.url
+            
+            const docRes = await fetch(fetchUrl)
+            if (!docRes.ok) {
+              console.warn(`Failed to fetch document ${doc.id} from ${fetchUrl}`)
+              continue
+            }
+            
+            const arrayBuffer = await docRes.arrayBuffer()
+            buffer = Buffer.from(arrayBuffer)
           }
-          
-          const arrayBuffer = await docRes.arrayBuffer()
-          const buffer = Buffer.from(arrayBuffer)
           
           const patientName = doc.patient?.name ? doc.patient.name.replace(/[^a-zA-Z0-9 -]/g, "") : "Unknown Patient"
           let safeFileName = doc.name.replace(/[^a-zA-Z0-9 ._-]/g, "_")

@@ -12,10 +12,10 @@ export function DemoRequestsClient({ initialRequests }: { initialRequests: any[]
   async function handleGenerate(id: string) {
     setLoadingId(id)
     const res = await generateDemoCredentialsAction(id)
-    if (res.success) {
-      setRequests(reqs => reqs.map(r => r.id === id ? { ...r, status: "CREDENTIALS_GENERATED", token: res.token } : r))
-    } else {
+    if ("error" in res && res.error) {
       alert(res.error)
+    } else if ("token" in res) {
+      setRequests(reqs => reqs.map(r => r.id === id ? { ...r, status: "CREDENTIALS_GENERATED", token: res.token } : r))
     }
     setLoadingId(null)
   }
@@ -23,11 +23,11 @@ export function DemoRequestsClient({ initialRequests }: { initialRequests: any[]
   async function handleSend(id: string) {
     setLoadingId(id)
     const res = await sendDemoCredentialsEmailAction(id, window.location.origin)
-    if (res.success) {
+    if ("error" in res && res.error) {
+      alert(res.error)
+    } else {
       alert("Email sent successfully!")
       setRequests(reqs => reqs.map(r => r.id === id ? { ...r, status: "SENT" } : r))
-    } else {
-      alert(res.error)
     }
     setLoadingId(null)
   }

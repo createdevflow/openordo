@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { ClipboardList, LogOut, Menu, Search, Bell, ChevronsLeft, ChevronsRight, Settings, X } from "lucide-react"
 import { DashboardNav } from "./DashboardNav"
+import { FeedbackWidget } from "./FeedbackWidget"
 import { signOut } from "next-auth/react"
 import { usePathname, useRouter } from "next/navigation"
 
@@ -20,6 +21,10 @@ export function DashboardShell({
   defaultCollapsed = false,
   promoExpiresAt = null,
   clinicStatus = "ACTIVE",
+  pendingDataRequests = 0,
+  recentDataRequests = [],
+  clinicId,
+  showFeedbackWidget = false,
 }: {
   children: React.ReactNode
   clinicName: string
@@ -34,6 +39,10 @@ export function DashboardShell({
   defaultCollapsed?: boolean
   promoExpiresAt?: string | null
   clinicStatus?: string
+  pendingDataRequests?: number
+  recentDataRequests?: any[]
+  clinicId?: string
+  showFeedbackWidget?: boolean
 }) {
   const pathname = usePathname()
   const router = useRouter()
@@ -125,7 +134,10 @@ export function DashboardShell({
           </div>
           <DashboardNav onNavClick={() => setSidebarOpen(false)} pendingBookings={pendingBookings} activeFeatures={activeFeatures} activePlugins={activePlugins} />
           
-          <div className="cw-sidebar-foot">
+          <div className="cw-sidebar-foot" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {showFeedbackWidget && (
+              <FeedbackWidget clinicId={clinicId} />
+            )}
             <button className="cw-nav-item" onClick={() => signOut({ callbackUrl: "/login" })} data-tooltip="Log out">
               <LogOut size={17} style={{ flexShrink: 0 }} />
               <span className="cw-nav-label">Log out</span>
@@ -183,31 +195,40 @@ export function DashboardShell({
                   style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center", color: "var(--ink-soft)", position: "relative" }}
                 >
                   <Bell size={18} />
-                  <span className="cw-dot-badge" style={{ right: -2, top: -2, display: pendingBookings > 0 ? "block" : "none" }} />
+                  <span className="cw-dot-badge" style={{ right: -2, top: -2, display: (pendingBookings + pendingDataRequests) > 0 ? "block" : "none" }} />
                 </button>
                 {notifOpen && (
                   <>
                     <div style={{ position: "fixed", inset: 0, zIndex: 90 }} onClick={() => setNotifOpen(false)} />
                     <div className="cw-dropdown" style={{ width: 280, right: 0, padding: 0 }}>
                       <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", fontWeight: 600, fontSize: 13.5 }}>
-                        Notifications {pendingBookings > 0 && <span style={{ color: "var(--moss)", marginLeft: 6 }}>({pendingBookings})</span>}
+                        Notifications {(pendingBookings + pendingDataRequests) > 0 && <span style={{ color: "var(--moss)", marginLeft: 6 }}>({pendingBookings + pendingDataRequests})</span>}
                       </div>
                       <div style={{ maxHeight: 300, overflowY: "auto", padding: "8px 0" }}>
-                        {(!recentBookings || recentBookings.length === 0) ? (
+                        {((!recentBookings || recentBookings.length === 0) && (!recentDataRequests || recentDataRequests.length === 0)) ? (
                           <div style={{ padding: "16px", fontSize: 13, color: "var(--ink-soft)", textAlign: "center" }}>
                             No new notifications
                           </div>
                         ) : (
-                          recentBookings.map((b: any) => (
-                            <div key={b.id} style={{ padding: "12px 16px", fontSize: 13, borderBottom: "1px solid var(--line)" }}>
-                              <div style={{ fontWeight: 600 }}>New booking request</div>
-                              <div style={{ color: "var(--ink-soft)", marginTop: 4 }}>{b.name} requested {b.date} at {b.time}</div>
-                            </div>
-                          ))
+                          <>
+                            {recentDataRequests?.map((req: any) => (
+                              <div key={req.id} style={{ padding: "12px 16px", fontSize: 13, borderBottom: "1px solid var(--line)" }}>
+                                <div style={{ fontWeight: 600 }}>Data export requested</div>
+                                <div style={{ color: "var(--ink-soft)", marginTop: 4 }}>{req.patientAccount?.name} requested their data</div>
+                                <a href="/dashboard/settings?tab=data-requests" onClick={() => setNotifOpen(false)} style={{ display: "inline-block", marginTop: 8, color: "var(--forest)", fontWeight: 500, textDecoration: "underline" }}>View Settings</a>
+                              </div>
+                            ))}
+                            {recentBookings?.map((b: any) => (
+                              <div key={b.id} style={{ padding: "12px 16px", fontSize: 13, borderBottom: "1px solid var(--line)" }}>
+                                <div style={{ fontWeight: 600 }}>New booking request</div>
+                                <div style={{ color: "var(--ink-soft)", marginTop: 4 }}>{b.name} requested {b.date} at {b.time}</div>
+                              </div>
+                            ))}
+                          </>
                         )}
-                        {recentBookings && recentBookings.length > 0 && (
+                        {((recentBookings && recentBookings.length > 0) || (recentDataRequests && recentDataRequests.length > 0)) && (
                           <a href="/dashboard/bookings" style={{ display: "block", padding: "12px 16px", fontSize: 13, textAlign: "center", color: "var(--moss)", textDecoration: "none", fontWeight: 500 }}>
-                            View all requests
+                            View all bookings
                           </a>
                         )}
                       </div>

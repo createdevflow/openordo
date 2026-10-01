@@ -57,7 +57,7 @@ Business Associate will report to Customer:
 
 Business Associate will ensure that any subcontractor that creates, receives, maintains or transmits PHI on its behalf **agrees in writing to the same restrictions and conditions** that apply to Business Associate under this BAA (45 C.F.R. §§ 164.502(e)(1)(ii) and 164.308(b)(2)). For PHI, Business Associate will use a subcontractor only if it has signed (or agrees to sign) a business associate agreement or equivalent HIPAA-compliant terms.
 
-**Payment and email services.** Customer agrees not to put PHI into fields that are sent to payment or email services (for example billing descriptions or Stripe metadata, or emails). OpenORDO's design keeps clinical data out of these services.
+**Payment and email services.** Customer agrees not to put PHI into fields that are sent to payment or email services (for example billing descriptions or Razorpay metadata, or emails). OpenORDO's design keeps clinical data out of these services.
 
 ## 6. Individual rights
 

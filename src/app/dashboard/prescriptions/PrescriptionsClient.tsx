@@ -165,18 +165,20 @@ export function PrescriptionsClient({
             
             const formData = new FormData()
             formData.append("file", file)
+            formData.append("category", "PATIENT_PRESCRIPTION")
+            formData.append("patientId", patientId)
             
             const res = await fetch("/api/upload", { method: "POST", body: formData })
             if (res.ok) {
               const json = await res.json()
-              if (json.url) {
+              if (json.id) {
                 const { createPatientDocumentAction } = await import("@/server/actions/documents")
                 await createPatientDocumentAction({
                   patientId,
                   name: `Prescription ${result.prescription.id.substring(0, 6)}`,
                   type: "PRESCRIPTION",
                   sizeBytes: json.sizeBytes || file.size,
-                  url: json.url
+                  url: json.id
                 })
               }
             }

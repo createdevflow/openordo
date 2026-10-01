@@ -10,13 +10,19 @@ import { togglePlatformFlag, toggleFeatureGlobal, createFeature, deleteFeature }
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { saveGlobalSettings, uploadBrandingAsset, sendTestEmailAction, setDefaultFreePlan } from "@/server/actions/admin/global-settings"
 import { updateAdminCredentials } from "@/server/actions/admin/settings"
-import { ShieldAlert, Zap, Package, Palette, User, AlertTriangle, Plus, Trash2, Globe, Mail, KeyRound, ExternalLink, Eye, EyeOff, Megaphone, MessageCircle, MoreHorizontal, Settings } from "lucide-react"
+import { ShieldAlert, Zap, Package, Palette, User, AlertTriangle, Plus, Trash2, Globe, Mail, KeyRound, ExternalLink, Eye, EyeOff, Megaphone, MessageCircle, MoreHorizontal, Settings, FileText, Activity } from "lucide-react"
 
 import { WhatsAppSettingsTab } from "./WhatsAppSettingsTab"
+import { SmsSettingsSection } from "./SmsSettingsSection"
+import { EncryptedField } from "./EncryptedField"
+import { BaaSettingsTab } from "./BaaSettingsTab"
+import { GstSettingsTab } from "./GstSettingsTab"
+import { DnsHealthCheck } from "./DnsHealthCheck"
+import { MarketsGeoTab } from "./MarketsGeoTab"
 
 const FEATURE_CATEGORIES = ["Core", "Scheduling", "Billing", "Communication", "Support"]
 
-export function SettingsShell({ flags, features, plans, globalSettings, adminEmail, waSettings, waTemplates, waActivity, initialTab = "flags" }: {
+export function SettingsShell({ flags, features, plans, globalSettings, adminEmail, waSettings, waTemplates, waActivity, smsSettings, initialTab = "flags", baaTemplateVersions, taxConfigs }: {
   flags: any[]
   features: any[]
   plans: any[]
@@ -25,7 +31,10 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
   waSettings: any
   waTemplates: any[]
   waActivity: any
+  smsSettings: any
   initialTab?: string
+  baaTemplateVersions: any[]
+  taxConfigs: any[]
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -246,115 +255,50 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
 
   // Tab Configuration
   const ALL_TABS = [
-    { value: "global", label: "Global", icon: <Settings size={14} /> },
-    { value: "flags", label: "Feature Flags", icon: <Zap size={14} /> },
-    { value: "catalog", label: "Feature Catalog", icon: <Package size={14} /> },
-    { value: "billing", label: "Plans & Billing", icon: <Globe size={14} /> },
-    { value: "whatsapp", label: "WhatsApp", icon: <MessageCircle size={14} /> },
-    { value: "email", label: "Email & SMTP", icon: <Mail size={14} /> },
-    { value: "branding", label: "Branding & SEO", icon: <Palette size={14} /> },
-    { value: "marketing", label: "Marketing", icon: <Megaphone size={14} /> },
-    { value: "oauth", label: "OAuth & SSO", icon: <KeyRound size={14} /> },
-    { value: "account", label: "Account", icon: <User size={14} /> },
-    { value: "danger", label: "Danger Zone", icon: <AlertTriangle size={14} /> },
+    { value: 'general', label: 'General', icon: <Settings size={14} /> },
+    { value: 'features', label: 'Features', icon: <Zap size={14} /> },
+    { value: 'billing', label: 'Billing & Tax', icon: <Globe size={14} /> },
+    { value: 'communications', label: 'Communications', icon: <MessageCircle size={14} /> },
+    { value: 'security', label: 'Security & Auth', icon: <ShieldAlert size={14} /> },
+    { value: 'danger', label: 'Danger Zone', icon: <AlertTriangle size={14} /> },
+    { value: 'markets', label: 'Markets & Geo', icon: <Globe size={14} /> },
   ]
-  const VISIBLE_COUNT = 6
-  const visibleTabs = ALL_TABS.slice(0, VISIBLE_COUNT)
-  const hiddenTabs = ALL_TABS.slice(VISIBLE_COUNT)
 
-  // Ensure active tab is always visible if it happens to be in the hidden list
-  const isHiddenActive = hiddenTabs.some(t => t.value === activeTab)
-  const displayTabs = [...visibleTabs]
-  let dropdownTabs = [...hiddenTabs]
-
-  if (isHiddenActive) {
-    const activeIndex = ALL_TABS.findIndex(t => t.value === activeTab)
-    if (activeIndex >= VISIBLE_COUNT) {
-      // Swap the last visible tab with the active hidden tab
-      const temp = displayTabs[VISIBLE_COUNT - 1]
-      displayTabs[VISIBLE_COUNT - 1] = ALL_TABS[activeIndex]
-      dropdownTabs = hiddenTabs.map(t => t.value === activeTab ? temp : t)
-    }
-  }
+  const safeActiveTab = ALL_TABS.some(t => t.value === activeTab) ? activeTab : 'general'
 
   return (
     <div>
-      <Tabs.Root value={activeTab} onValueChange={handleTabChange}>
+      <Tabs.Root value={safeActiveTab} onValueChange={handleTabChange}>
         <div style={{
-          position: "sticky",
+          position: 'sticky',
           top: -28,
           zIndex: 40,
-          backgroundColor: "var(--adm-bg)",
-          margin: "-28px -28px 24px -28px",
-          padding: "0 28px 0 28px",
+          backgroundColor: 'var(--adm-bg)',
+          margin: '-28px -28px 24px -28px',
+          padding: '0 28px 0 28px',
         }}>
-          <div className="adm-tabs-list" style={{ overflow: "visible", display: "flex", alignItems: "center", backgroundColor: "transparent", borderBottom: "1px solid var(--adm-border)" }}>
+          <div className='adm-tabs-list' style={{ overflow: 'visible', display: 'flex', alignItems: 'center', backgroundColor: 'transparent', borderBottom: '1px solid var(--adm-border)' }}>
             <Tabs.List asChild>
-              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", flex: 1, rowGap: 4 }}>
-                {displayTabs.map(tab => (
-                  <Tabs.Trigger key={tab.value} value={tab.value} className="adm-tab-trigger" asChild>
-                    <button style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', flex: 1, rowGap: 4 }}>
+                {ALL_TABS.map(tab => (
+                  <Tabs.Trigger key={tab.value} value={tab.value} className='adm-tab-trigger' asChild>
+                    <button style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       {tab.icon} {tab.label}
                     </button>
                   </Tabs.Trigger>
                 ))}
-                
-                {dropdownTabs.length > 0 && (
-                  <DropdownMenu.Root>
-                    <DropdownMenu.Trigger asChild>
-                      <button className="adm-tab-trigger" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <MoreHorizontal size={16} /> More
-                      </button>
-                    </DropdownMenu.Trigger>
-                    <DropdownMenu.Portal>
-                      <DropdownMenu.Content
-                        align="end"
-                        sideOffset={8}
-                        style={{
-                          backgroundColor: "var(--adm-card-bg)",
-                          border: "1px solid var(--adm-border)",
-                          borderRadius: 8,
-                          padding: 4,
-                          boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-                          minWidth: 160,
-                          zIndex: 50
-                        }}
-                      >
-                        {dropdownTabs.map(tab => (
-                          <DropdownMenu.Item
-                            key={tab.value}
-                            onSelect={() => handleTabChange(tab.value)}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 8,
-                              padding: "8px 12px",
-                              fontSize: 13,
-                              color: "var(--adm-text)",
-                              cursor: "pointer",
-                              borderRadius: 4,
-                              outline: "none",
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "var(--adm-hover)"}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-                          >
-                            {tab.icon} {tab.label}
-                          </DropdownMenu.Item>
-                        ))}
-                      </DropdownMenu.Content>
-                    </DropdownMenu.Portal>
-                  </DropdownMenu.Root>
-                )}
               </div>
             </Tabs.List>
           </div>
         </div>
 
-        <div className="adm-card" style={{ overflow: "visible" }}>
+        <div className='adm-card' style={{ overflow: 'visible' }}>
 
-          {/* ── Global ── */}
-          <Tabs.Content value="global" className="adm-tab-content">
-            <div style={{ marginBottom: 20 }}>
+          {/* ── GENERAL ── */}
+          <Tabs.Content value="general" className="adm-tab-content">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+              <section>
+                <div style={{ marginBottom: 20 }}>
               <div className="adm-section-label" style={{ marginBottom: 4 }}>Global Settings</div>
               <p style={{ fontSize: 13.5, color: "var(--adm-muted)", margin: 0 }}>
                 Platform-wide defaults and global configurations.
@@ -395,11 +339,87 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
                 {savingGlobal ? "Saving..." : "Save Global Settings"}
               </button>
             </div>
+              </section>
+              <hr style={{ border: 0, borderTop: '1px solid var(--adm-border)' }} />
+              <section>
+                <div className="adm-section-label" style={{ marginBottom: 16 }}>Platform Branding & SEO</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 520 }}>
+              <div>
+                <label className="adm-label">Admin Panel Display Name</label>
+                <input className="adm-input" value={seoSettings.SEO_META_TITLE} onChange={e => setSeoSettings(p => ({...p, SEO_META_TITLE: e.target.value}))} />
+                <p style={{ fontSize: 12.5, color: "var(--adm-muted)", marginTop: 6 }}>Shown in the topbar and browser title.</p>
+              </div>
+              <div>
+                <label className="adm-label">Meta Description</label>
+                <input className="adm-input" value={seoSettings.SEO_META_DESC} onChange={e => setSeoSettings(p => ({...p, SEO_META_DESC: e.target.value}))} />
+              </div>
+              <div>
+                <label className="adm-label">Favicon</label>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  {seoSettings.SEO_FAVICON_URL && (
+                    <img src={seoSettings.SEO_FAVICON_URL} alt="Favicon" style={{ width: 32, height: 32, borderRadius: 4, objectFit: "cover", background: "#fff", border: "1px solid var(--adm-border)" }} />
+                  )}
+                  <input className="adm-input" type="file" accept="image/png, image/jpeg, image/x-icon, image/svg+xml" onChange={e => handleFileUpload(e, "SEO_FAVICON_URL")} disabled={savingGlobal} />
+                </div>
+              </div>
+              <div>
+                <label className="adm-label">OpenGraph (OG) Image</label>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {seoSettings.SEO_OG_IMAGE_URL && (
+                    <img src={seoSettings.SEO_OG_IMAGE_URL} alt="OG Image" style={{ width: "100%", maxWidth: 300, borderRadius: 8, objectFit: "cover", background: "#fff", border: "1px solid var(--adm-border)" }} />
+                  )}
+                  <input className="adm-input" type="file" accept="image/png, image/jpeg, image/webp" onChange={e => handleFileUpload(e, "SEO_OG_IMAGE_URL")} disabled={savingGlobal} />
+                </div>
+                <p style={{ fontSize: 12.5, color: "var(--adm-muted)", marginTop: 6 }}>This image appears when a link to your site is shared on social media.</p>
+              </div>
+              <button className="adm-btn adm-btn-primary" style={{ alignSelf: "flex-start" }} onClick={() => handleSaveGlobal(seoSettings)} disabled={savingGlobal}>
+                {savingGlobal ? "Saving..." : "Save Branding & SEO"}
+              </button>
+            </div>
+
+            <hr style={{ border: 0, borderTop: "1px solid var(--adm-border)", margin: "32px 0", maxWidth: 520 }} />
+
+            <div style={{ maxWidth: 520 }}>
+              <DnsHealthCheck />
+            </div>
+              </section>
+              <hr style={{ border: 0, borderTop: '1px solid var(--adm-border)' }} />
+              <section>
+                <div style={{ marginBottom: 24 }}>
+              <div className="adm-section-label" style={{ marginBottom: 4 }}>Marketing & Content</div>
+              <p style={{ fontSize: 13.5, color: "var(--adm-muted)", margin: 0 }}>
+                Configure content and assets for the public marketing site.
+              </p>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 600 }}>
+              <div>
+                <label className="adm-label">Demo Video URL</label>
+                <div style={{ fontSize: 12, color: "var(--adm-muted)", marginBottom: 8 }}>
+                  YouTube Embed or direct URL shown on the Request a Demo page.
+                </div>
+                <input
+                  className="adm-input"
+                  type="text"
+                  value={seoSettings.demo_video_url || ""}
+                  onChange={e => setSeoSettings(p => ({ ...p, demo_video_url: e.target.value }))}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                />
+              </div>
+
+              <button className="adm-btn adm-btn-primary" style={{ alignSelf: "flex-start" }} onClick={() => handleSaveGlobal({ demo_video_url: seoSettings.demo_video_url })} disabled={savingGlobal}>
+                {savingGlobal ? "Saving..." : "Save Marketing Settings"}
+              </button>
+            </div>
+              </section>
+            </div>
           </Tabs.Content>
 
-          {/* ── Feature Flags ── */}
-          <Tabs.Content value="flags" className="adm-tab-content">
-            <div style={{ marginBottom: 20 }}>
+          {/* ── FEATURES ── */}
+          <Tabs.Content value="features" className="adm-tab-content">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+              <section>
+                <div style={{ marginBottom: 20 }}>
               <div className="adm-section-label" style={{ marginBottom: 4 }}>Platform Feature Flags</div>
               <p style={{ fontSize: 13.5, color: "var(--adm-muted)", margin: 0 }}>
                 Turn parts of the platform on or off without a code deploy. Every toggle writes to the Audit Log.
@@ -439,11 +459,10 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
                 </div>
               </div>
             )}
-          </Tabs.Content>
-
-          {/* ── Feature Catalog ── */}
-          <Tabs.Content value="catalog" className="adm-tab-content">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+              </section>
+              <hr style={{ border: 0, borderTop: '1px solid var(--adm-border)' }} />
+              <section>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
               <div>
                 <div className="adm-section-label" style={{ marginBottom: 4 }}>Feature Catalog</div>
                 <p style={{ fontSize: 13.5, color: "var(--adm-muted)", margin: 0 }}>
@@ -534,20 +553,15 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
                 </button>
               </div>
             )}
+              </section>
+            </div>
           </Tabs.Content>
 
-          {/* ── WhatsApp / Communications ── */}
-          <Tabs.Content value="whatsapp" className="adm-tab-content">
-            <WhatsAppSettingsTab
-              initialSettings={waSettings}
-              initialTemplates={waTemplates}
-              initialActivity={waActivity}
-            />
-          </Tabs.Content>
-
-          {/* ── Plans & Billing ── */}
+          {/* ── BILLING & TAX ── */}
           <Tabs.Content value="billing" className="adm-tab-content">
-            <div className="adm-section-label" style={{ marginBottom: 16 }}>Plans & Billing Defaults</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+              <section>
+                <div className="adm-section-label" style={{ marginBottom: 16 }}>Plans & Billing Defaults</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 520 }}>
               <div>
                 <label className="adm-label">Default Free Plan</label>
@@ -602,25 +616,51 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
                     <label className="adm-label">Razorpay Key ID</label>
                     <input className="adm-input" value={paymentSettings.RAZORPAY_KEY_ID} onChange={e => setPaymentSettings(p => ({...p, RAZORPAY_KEY_ID: e.target.value}))} placeholder="rzp_test_..." />
                   </div>
-                  <div>
-                    <label className="adm-label">Razorpay Key Secret</label>
-                    <input className="adm-input" type="password" value={paymentSettings.RAZORPAY_KEY_SECRET} onChange={e => setPaymentSettings(p => ({...p, RAZORPAY_KEY_SECRET: e.target.value}))} placeholder="..." />
-                  </div>
-                  <div>
-                    <label className="adm-label">Razorpay Webhook Secret</label>
-                    <input className="adm-input" type="password" value={paymentSettings.RAZORPAY_WEBHOOK_SECRET} onChange={e => setPaymentSettings(p => ({...p, RAZORPAY_WEBHOOK_SECRET: e.target.value}))} placeholder="..." />
-                  </div>
+                  <EncryptedField 
+                    label="Razorpay Key Secret"
+                    value={paymentSettings.RAZORPAY_KEY_SECRET}
+                    onChange={v => setPaymentSettings(p => ({...p, RAZORPAY_KEY_SECRET: v}))}
+                    placeholder="..."
+                    settingKey="RAZORPAY_KEY_SECRET"
+                  />
+                  <EncryptedField 
+                    label="Razorpay Webhook Secret"
+                    value={paymentSettings.RAZORPAY_WEBHOOK_SECRET}
+                    onChange={v => setPaymentSettings(p => ({...p, RAZORPAY_WEBHOOK_SECRET: v}))}
+                    placeholder="..."
+                    settingKey="RAZORPAY_WEBHOOK_SECRET"
+                  />
                 </div>
               </div>
               <button className="adm-btn adm-btn-primary" style={{ alignSelf: "flex-start" }} onClick={handleSaveBilling} disabled={savingGlobal}>
                 {savingGlobal ? "Saving..." : "Save Billing Settings"}
               </button>
             </div>
+              </section>
+              <hr style={{ border: 0, borderTop: '1px solid var(--adm-border)' }} />
+              <section>
+                <GstSettingsTab globalSettings={globalSettings} />
+              </section>
+            </div>
           </Tabs.Content>
 
-          {/* ── Email & SMTP ── */}
-          <Tabs.Content value="email" className="adm-tab-content">
-            <div className="adm-section-label" style={{ marginBottom: 16 }}>SMTP Email Configuration</div>
+          {/* ── COMMUNICATIONS ── */}
+          <Tabs.Content value="communications" className="adm-tab-content">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+              <section>
+                <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+              <WhatsAppSettingsTab
+                initialSettings={waSettings}
+                initialTemplates={waTemplates}
+                initialActivity={waActivity}
+              />
+              <div style={{ height: 1, background: "var(--adm-border)" }} />
+              <SmsSettingsSection initialSettings={smsSettings} />
+            </div>
+              </section>
+              <hr style={{ border: 0, borderTop: '1px solid var(--adm-border)' }} />
+              <section>
+                <div className="adm-section-label" style={{ marginBottom: 16 }}>SMTP Email Configuration</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 520 }}>
               <div>
                 <label className="adm-label">SMTP Host</label>
@@ -641,10 +681,12 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
                 <input className="adm-input" value={smtpSettings.SMTP_USER} onChange={e => setSmtpSettings(p => ({...p, SMTP_USER: e.target.value}))} />
                 <p className="text-[11px] text-ink-soft mt-1">If using aliases, this MUST be the primary mailbox address.</p>
               </div>
-              <div>
-                <label className="adm-label">SMTP Password</label>
-                <input className="adm-input" type="password" value={smtpSettings.SMTP_PASS} onChange={e => setSmtpSettings(p => ({...p, SMTP_PASS: e.target.value}))} />
-              </div>
+              <EncryptedField 
+                label="SMTP Password"
+                value={smtpSettings.SMTP_PASS}
+                onChange={v => setSmtpSettings(p => ({...p, SMTP_PASS: v}))}
+                settingKey="SMTP_PASS"
+              />
               <button className="adm-btn adm-btn-primary" style={{ alignSelf: "flex-start" }} onClick={() => handleSaveGlobal(smtpSettings)} disabled={savingGlobal}>
                 {savingGlobal ? "Saving..." : "Save SMTP Settings"}
               </button>
@@ -686,79 +728,36 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
                 </button>
               </div>
             </div>
+              </section>
+            </div>
           </Tabs.Content>
 
-          {/* ── Branding ── */}
-          <Tabs.Content value="branding" className="adm-tab-content">
-            <div className="adm-section-label" style={{ marginBottom: 16 }}>Platform Branding & SEO</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 520 }}>
+          {/* ── SECURITY & AUTH ── */}
+          <Tabs.Content value="security" className="adm-tab-content">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+              <section>
+                <div className="adm-section-label" style={{ marginBottom: 16 }}>Admin Account Credentials</div>
+            <form onSubmit={handleSaveCredentials} style={{ maxWidth: 480, display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
-                <label className="adm-label">Admin Panel Display Name</label>
-                <input className="adm-input" value={seoSettings.SEO_META_TITLE} onChange={e => setSeoSettings(p => ({...p, SEO_META_TITLE: e.target.value}))} />
-                <p style={{ fontSize: 12.5, color: "var(--adm-muted)", marginTop: 6 }}>Shown in the topbar and browser title.</p>
+                <label className="adm-label">Email</label>
+                <input className="adm-input" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
               </div>
               <div>
-                <label className="adm-label">Meta Description</label>
-                <input className="adm-input" value={seoSettings.SEO_META_DESC} onChange={e => setSeoSettings(p => ({...p, SEO_META_DESC: e.target.value}))} />
+                <label className="adm-label">Current Password</label>
+                <input className="adm-input" type="password" value={currentPw} onChange={e => setCurrentPw(e.target.value)} placeholder="Required to make changes" />
               </div>
               <div>
-                <label className="adm-label">Favicon</label>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  {seoSettings.SEO_FAVICON_URL && (
-                    <img src={seoSettings.SEO_FAVICON_URL} alt="Favicon" style={{ width: 32, height: 32, borderRadius: 4, objectFit: "cover", background: "#fff", border: "1px solid var(--adm-border)" }} />
-                  )}
-                  <input className="adm-input" type="file" accept="image/png, image/jpeg, image/x-icon, image/svg+xml" onChange={e => handleFileUpload(e, "SEO_FAVICON_URL")} disabled={savingGlobal} />
-                </div>
+                <label className="adm-label">New Password (leave blank to keep current)</label>
+                <input className="adm-input" type="password" value={newPw} onChange={e => setNewPw(e.target.value)} />
               </div>
-              <div>
-                <label className="adm-label">OpenGraph (OG) Image</label>
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  {seoSettings.SEO_OG_IMAGE_URL && (
-                    <img src={seoSettings.SEO_OG_IMAGE_URL} alt="OG Image" style={{ width: "100%", maxWidth: 300, borderRadius: 8, objectFit: "cover", background: "#fff", border: "1px solid var(--adm-border)" }} />
-                  )}
-                  <input className="adm-input" type="file" accept="image/png, image/jpeg, image/webp" onChange={e => handleFileUpload(e, "SEO_OG_IMAGE_URL")} disabled={savingGlobal} />
-                </div>
-                <p style={{ fontSize: 12.5, color: "var(--adm-muted)", marginTop: 6 }}>This image appears when a link to your site is shared on social media.</p>
-              </div>
-              <button className="adm-btn adm-btn-primary" style={{ alignSelf: "flex-start" }} onClick={() => handleSaveGlobal(seoSettings)} disabled={savingGlobal}>
-                {savingGlobal ? "Saving..." : "Save Branding & SEO"}
+              <button type="submit" className="adm-btn adm-btn-primary" disabled={savingAccount} style={{ alignSelf: "flex-start" }}>
+                {savingAccount ? "Saving…" : "Update Credentials"}
               </button>
-            </div>
-          </Tabs.Content>
-
-          {/* ── Marketing ── */}
-          <Tabs.Content value="marketing" className="adm-tab-content">
-            <div style={{ marginBottom: 24 }}>
-              <div className="adm-section-label" style={{ marginBottom: 4 }}>Marketing & Content</div>
-              <p style={{ fontSize: 13.5, color: "var(--adm-muted)", margin: 0 }}>
-                Configure content and assets for the public marketing site.
-              </p>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 600 }}>
-              <div>
-                <label className="adm-label">Demo Video URL</label>
-                <div style={{ fontSize: 12, color: "var(--adm-muted)", marginBottom: 8 }}>
-                  YouTube Embed or direct URL shown on the Request a Demo page.
-                </div>
-                <input
-                  className="adm-input"
-                  type="text"
-                  value={seoSettings.demo_video_url || ""}
-                  onChange={e => setSeoSettings(p => ({ ...p, demo_video_url: e.target.value }))}
-                  placeholder="https://www.youtube.com/watch?v=..."
-                />
-              </div>
-
-              <button className="adm-btn adm-btn-primary" style={{ alignSelf: "flex-start" }} onClick={() => handleSaveGlobal({ demo_video_url: seoSettings.demo_video_url })} disabled={savingGlobal}>
-                {savingGlobal ? "Saving..." : "Save Marketing Settings"}
-              </button>
-            </div>
-          </Tabs.Content>
-
-          {/* ── OAuth & SSO ── */}
-          <Tabs.Content value="oauth" className="adm-tab-content">
-            <div style={{ marginBottom: 24 }}>
+            </form>
+              </section>
+              <hr style={{ border: 0, borderTop: '1px solid var(--adm-border)' }} />
+              <section>
+                <div style={{ marginBottom: 24 }}>
               <div className="adm-section-label" style={{ marginBottom: 4 }}>OAuth & Single Sign-On</div>
               <p style={{ fontSize: 13.5, color: "var(--adm-muted)", margin: 0 }}>
                 Configure OAuth provider credentials. Values saved here override the corresponding <code style={{ fontFamily: "monospace", background: "var(--adm-bg)", padding: "2px 5px", borderRadius: 4 }}>.env</code> variables at runtime — no redeploy needed.
@@ -850,31 +849,28 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
                 </div>
               </div>
             </div>
+              </section>
+              <hr style={{ border: 0, borderTop: '1px solid var(--adm-border)' }} />
+              <section>
+                <BaaSettingsTab globalSettings={globalSettings} baaTemplateVersions={baaTemplateVersions} />
+              </section>
+            </div>
           </Tabs.Content>
 
-          {/* ── Account ── */}
-          <Tabs.Content value="account" className="adm-tab-content">
-            <div className="adm-section-label" style={{ marginBottom: 16 }}>Admin Account Credentials</div>
-            <form onSubmit={handleSaveCredentials} style={{ maxWidth: 480, display: "flex", flexDirection: "column", gap: 16 }}>
-              <div>
-                <label className="adm-label">Email</label>
-                <input className="adm-input" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
-              </div>
-              <div>
-                <label className="adm-label">Current Password</label>
-                <input className="adm-input" type="password" value={currentPw} onChange={e => setCurrentPw(e.target.value)} placeholder="Required to make changes" />
-              </div>
-              <div>
-                <label className="adm-label">New Password (leave blank to keep current)</label>
-                <input className="adm-input" type="password" value={newPw} onChange={e => setNewPw(e.target.value)} />
-              </div>
-              <button type="submit" className="adm-btn adm-btn-primary" disabled={savingAccount} style={{ alignSelf: "flex-start" }}>
-                {savingAccount ? "Saving…" : "Update Credentials"}
-              </button>
-            </form>
+          
+          {/* ── MARKETS & GEO ── */}
+          <Tabs.Content value="markets" className="adm-tab-content">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+              <MarketsGeoTab 
+                initialConfigs={taxConfigs} 
+                globalSettings={globalSettings} 
+                handleSaveGlobal={handleSaveGlobal} 
+                savingGlobal={savingGlobal} 
+              />
+            </div>
           </Tabs.Content>
 
-          {/* ── Danger Zone ── */}
+          {/* ── DANGER ZONE ── */}
           <Tabs.Content value="danger" className="adm-tab-content">
             <div className="adm-danger-zone">
               <div className="adm-danger-zone-title">

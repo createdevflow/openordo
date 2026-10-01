@@ -24,7 +24,7 @@ This Privacy Policy explains how **OpenORDO** ("**OpenORDO**", "**we**", "**us**
 Clinic name, type/specialty, phone, address, working hours, region, and public booking page settings (logo, cover image, tagline, about text, social links, bookable doctors, appointment types).
 
 ### 1.3 Billing data
-Plan, add-ons, billing cycle, subscription status, invoice and payment history (amount, currency, status, dates, Stripe references). **Card details are entered on Stripe's hosted pages; we do not receive or store your full card number.** We may see the card brand, last four digits and expiry shown by Stripe.
+Plan, add-ons, billing cycle, subscription status, invoice and payment history (amount, currency, status, dates, Razorpay references). **Card details are entered on Razorpay's hosted pages; we do not receive or store your full card number.** We may see the card brand, last four digits and expiry shown by Razorpay.
 
 ### 1.4 Usage, device and security data
 Log data such as IP address, browser and device type, pages requested, timestamps, error reports and authentication events. Administrative actions on the platform are recorded in an audit log. We use this to keep the service secure, prevent abuse and fix bugs.
@@ -71,7 +71,7 @@ We do **not** sell personal data, and we do **not** use patient data for adverti
 
 - **Sub-processors** that help us run the Service (hosting, database, payments, email, video, sign-in, storage).  They are bound by written data protection terms.
 - **Within a Clinic**: your Clinic's Owner and Admins can see the accounts and activity of users in that Clinic.
-- **Payments**: Stripe acts as an independent controller for certain payment, fraud and compliance data.
+- **Payments**: Razorpay acts as an independent controller for certain payment, fraud and compliance data.
 - **Legal and safety**: where required by law, court order or to protect rights, safety and security. We will notify the affected clinic where permitted.
 - **Business transfers**: in a merger, acquisition or sale of assets, subject to equivalent privacy commitments.
 - **With your direction**: for example when you publish a public booking page, the information you choose to show is public.
@@ -96,7 +96,7 @@ Detailed timelines are in [Data Retention](/legal/retention).
 
 ## 8. Security
 
-We use safeguards including encrypted connections (TLS), hashed passwords, per-clinic data isolation, role-based access control, server-side authorisation checks, verified payment webhooks, audit logging and access restrictions on infrastructure. No system is perfectly secure, and you should also protect your own credentials and devices. See [Security & Trust](/legal/security). We will notify affected clinics and, where required, regulators, of personal data breaches in line with the [DPA](/legal/dpa).
+We use safeguards including encrypted connections (TLS), hashed passwords, per-clinic data isolation, role-based access control, server-side authorisation checks, verified payment events, audit logging and access restrictions on infrastructure. No system is perfectly secure, and you should also protect your own credentials and devices. See [Security & Trust](/legal/security). We will notify affected clinics and, where required, regulators, of personal data breaches in line with the [DPA](/legal/dpa).
 
 ## 9. Your rights
 

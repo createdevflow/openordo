@@ -53,11 +53,11 @@ Each add-on may be offered as a **one-time** purchase, a **monthly** subscriptio
 
 ## 4. Payments
 
-1. **Payment processor.** Payments for plans and add-ons are processed by **Stripe**. You pay on Stripe's secure hosted checkout, and manage cards, invoices and cancellations in the Stripe customer portal linked from Settings. OpenORDO does not see or store your full card number.
+1. **Payment processor.** Payments for plans and add-ons are processed by **Razorpay**. You pay on Razorpay's secure hosted checkout, and manage cards, invoices and cancellations in the Razorpay customer portal linked from Settings. OpenORDO does not see or store your full card number.
 2. **Billing owner.** The Clinic Owner is the billing owner and is responsible for payment.
 3. **Authorisation.** By subscribing you authorise recurring charges to your chosen payment method for the plan or add-on price plus applicable taxes, until you cancel.
-4. **Payment methods.** Methods available depend on your country and Stripe (for example cards). We may add or remove methods.
-5. **Invoices.** You receive a receipt or invoice from Stripe for every successful payment. Invoice details (legal name, address, tax number) are taken from your billing profile; keep it accurate. OpenORDO also keeps a payment log for reconciliation.
+4. **Payment methods.** Methods available depend on your country and Razorpay (for example cards). We may add or remove methods.
+5. **Invoices.** You receive a receipt or invoice from Razorpay for every successful payment. Invoice details (legal name, address, tax number) are taken from your billing profile; keep it accurate. OpenORDO also keeps a payment log for reconciliation.
 6. **Card and bank fees.** You are responsible for any fees charged by your bank or card issuer, including foreign currency fees.
 
 ## 5. Taxes
@@ -68,13 +68,13 @@ Each add-on may be offered as a **one-time** purchase, a **monthly** subscriptio
 
 - Plans and recurring add-ons bill **in advance** at the start of each monthly or yearly period, starting on the day you subscribe.
 - Subscriptions **renew automatically** for another period at the then-current rate unless cancelled before the renewal date.
-- **Upgrading** takes effect immediately. Any price difference for the remainder of the current period is calculated by Stripe and charged or credited as shown before you confirm.
+- **Upgrading** takes effect immediately. Any price difference for the remainder of the current period is calculated by Razorpay and charged or credited as shown before you confirm.
 - **Downgrading or switching cycle** takes effect as shown in the billing portal, usually at the end of the current period. See Section 8 for what happens to limits.
 - We send a renewal reminder before a recurring add-on's period ends, and may send reminders for plans.
 
 ## 7. Failed payments
 
-If a payment fails, we or Stripe will retry it and email you.
+If a payment fails, we or Razorpay will retry it and email you.
 
 1. Your subscription is marked **past due**. You can fix this by updating your payment method in the billing portal.
 2. We may limit access to paid features after a reasonable grace period if the payment remains unpaid.

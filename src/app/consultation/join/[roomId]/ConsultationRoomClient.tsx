@@ -1,15 +1,20 @@
-﻿"use client"
+"use client"
 
 /**
  * ConsultationRoomClient — Video consultation room
- * 
- * BUG 2 FIX (Privacy): Camera toggle uses track.stop() + fresh getUserMedia() re-acquire,
- * NOT track.enabled = false, so the OS hardware indicator actually clears.
- * 
- * BUG 1 FIX (Real signaling): Presence driven by polling /api/room/[roomId] every 3s.
- * Both doctor and patient post heartbeats; each side reads real peer state — no fake
- * setTimeout("joined") logic. remoteJoined / remoteCameraOn / remoteMicOn all come
- * from the server-side presence store, not local assumptions.
+ *
+ * Hardened per CHARTWELL_SECURITY_COMPLIANCE_SPEC.md §2, §5, CHARTWELL_VIDEO_CALL_UI_SPEC.md
+ *
+ * Key behaviours:
+ *  - Camera toggle: track.stop() + fresh getUserMedia() re-acquire (not track.enabled=false)
+ *    so the OS hardware indicator actually clears. (BUILD_LOG: Bug 2 Fix)
+ *  - Real signaling: presence driven by polling /api/room/[roomId] every 2–4 s.
+ *    remoteJoined / remoteCameraOn / remoteMicOn all come from server-side presence store.
+ *  - Share Patient Link: calls generatePatientLinkToken server action, copies token URL to clipboard.
+ *    Never generates a URL client-side.
+ *  - Notes autosave: debounced 3 s → autosaveConsultationNotes server action.
+ *  - End Call: calls logCallEnded server action before navigating away (doctor only).
+ *  - ROOM_FULL: if the presence API returns 403 ROOM_FULL the UI shows a "Room is full" banner.
  */
 
 import React, { useCallback, useEffect, useId, useRef, useState } from "react"
@@ -17,8 +22,13 @@ import Link from "next/link"
 import {
   Mic, MicOff, Video, VideoOff, PhoneOff, Share2,
   Copy, Check, Clock, Stethoscope, FileText,
-  ChevronDown, ChevronUp, Lock, Zap, User
+  ChevronDown, ChevronUp, Lock, Zap, User, AlertTriangle, Eye, Download,
 } from "lucide-react"
+import {
+  generatePatientLinkToken,
+  autosaveConsultationNotes,
+  logCallEnded,
+} from "@/server/actions/video-consultation"
 
 // ── Brand tokens (dark surface) ───────────────────────────────────────────────
 const T = {
@@ -75,10 +85,10 @@ interface PresenceParticipant {
 }
 type RoomPresence = Record<string, PresenceParticipant>
 
-// ── Side Panel — defined as a TOP-LEVEL component (NOT nested) ───────────────
-// Critical: if defined as a function inside ConsultationRoomClient, React treats
-// it as a new component type on every render → unmounts + remounts on every
-// keystroke → input loses focus after one character. Top-level = stable identity.
+// ── Side Panel — TOP-LEVEL component (stable identity across re-renders) ──────
+// Critical: if defined inside ConsultationRoomClient, React treats it as a new
+// component type on every render → unmounts + remounts → input loses focus after
+// one keystroke. Top-level = stable reference.
 interface SidePanelProps {
   isHost: boolean
   hasEprescriptions: boolean
@@ -94,7 +104,7 @@ interface SidePanelProps {
   newMessage: string
   setNewMessage: (v: string) => void
   sendChat: (e: React.FormEvent) => void
-  sharedFiles: { name: string; size: string; sender: string }[]
+  sharedFiles: { name: string; size: string; sender: string; url?: string }[]
   uploadFile: (e: React.ChangeEvent<HTMLInputElement>) => void
 }
 
@@ -223,17 +233,17 @@ function ConsultationSidePanel({
             <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, paddingBottom: 12 }}>
               {chatMessages.map((msg, idx) => (
                 <div key={idx} style={{
-                  alignSelf: msg.sender === "You" ? "flex-end" : "flex-start",
-                  background: msg.sender === "System" ? "transparent" : msg.sender === "You" ? "rgba(30,70,56,0.7)" : "rgba(255,255,255,0.07)",
+                  alignSelf: (msg.sender === "Doctor" && isHost) || (msg.sender === "Patient" && !isHost) ? "flex-end" : "flex-start",
+                  background: msg.sender === "System" ? "transparent" : ((msg.sender === "Doctor" && isHost) || (msg.sender === "Patient" && !isHost)) ? "rgba(30,70,56,0.7)" : "rgba(255,255,255,0.07)",
                   padding: msg.sender === "System" ? "2px 0" : "8px 12px",
                   borderRadius: 12, maxWidth: "88%",
-                  borderBottomRightRadius: msg.sender === "You" ? 3 : 12,
-                  borderBottomLeftRadius:  (msg.sender === "You" || msg.sender === "System") ? 12 : 3,
+                  borderBottomRightRadius: ((msg.sender === "Doctor" && isHost) || (msg.sender === "Patient" && !isHost)) ? 3 : 12,
+                  borderBottomLeftRadius:  (((msg.sender === "Doctor" && isHost) || (msg.sender === "Patient" && !isHost)) || msg.sender === "System") ? 12 : 3,
                   textAlign: msg.sender === "System" ? "center" : "left",
                   color: msg.sender === "System" ? T.textSecondary : T.textPrimary,
                   fontSize: msg.sender === "System" ? 11 : 13,
                 }}>
-                  {msg.sender !== "You" && msg.sender !== "System" && (
+                  {msg.sender !== "System" && !((msg.sender === "Doctor" && isHost) || (msg.sender === "Patient" && !isHost)) && (
                     <div style={{ fontSize: 10, color: T.textSecondary, marginBottom: 2 }}>{msg.sender}</div>
                   )}
                   <div>{msg.text}</div>
@@ -289,6 +299,41 @@ function ConsultationSidePanel({
                     <div style={{ fontSize: 13, fontWeight: 600, color: T.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{f.name}</div>
                     <div style={{ fontSize: 11, color: T.textSecondary }}>{f.size} · Shared by {f.sender}</div>
                   </div>
+                  {f.url && (
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={() => {
+                        if (!f.url) return
+                        const w = window.open("", "_blank")
+                        if (!w) return
+                        if (f.url.startsWith("data:text/html")) {
+                          w.document.title = f.name
+                          const b64 = f.url.split(",")[1]
+                          const html = decodeURIComponent(escape(atob(b64)))
+                          const escapedHtml = html.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+                          w.document.write(`<html><body style="margin:0;"><iframe srcdoc="${escapedHtml}" sandbox="allow-scripts allow-same-origin" style="width:100vw;height:100vh;border:none;"></iframe></body></html>`)
+                        } else {
+                          try {
+                            const [header, b64] = f.url.split(",")
+                            const mime = header.match(/:(.*?);/)?.[1] || ""
+                            const byteStr = atob(b64)
+                            const u8 = new Uint8Array(byteStr.length)
+                            for (let i = 0; i < byteStr.length; i++) u8[i] = byteStr.charCodeAt(i)
+                            const blob = new Blob([u8], { type: mime })
+                            const blobUrl = URL.createObjectURL(blob)
+                            w.location.href = blobUrl
+                            setTimeout(() => URL.revokeObjectURL(blobUrl), 10000)
+                          } catch (e) {
+                            w.document.write(`<html><body><h2>Error opening file</h2></body></html>`)
+                          }
+                        }
+                      }} title="View" style={{ padding: 6, background: "rgba(255,255,255,0.1)", borderRadius: 6, color: T.textPrimary, display: "flex", alignItems: "center", justifyContent: "center", border: "none", cursor: "pointer" }}>
+                        <Eye size={14} />
+                      </button>
+                      <a href={f.url} download={f.name} title="Download" style={{ padding: 6, background: "rgba(255,255,255,0.1)", borderRadius: 6, color: T.textPrimary, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Download size={14} />
+                      </a>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -321,59 +366,63 @@ export default function ConsultationRoomClient({
   isHost?: boolean
   hasEprescriptions?: boolean
 }) {
-  // ── Stable participant ID (persists across re-renders in this session) ────────
-  // useId gives a stable string per component instance; we prefix to make it readable
+  // ── Stable participant ID ─────────────────────────────────────────────────
   const componentId = useId()
   const myParticipantId = useRef(`${isHost ? "host" : "guest"}-${componentId.replace(/:/g, "")}`)
 
-  // ── Local media state ─────────────────────────────────────────────────────────
-  const [micOn,       setMicOn]       = useState(true)
-  const [cameraOn,    setCameraOn]    = useState(true)
-  const [cameraError, setCameraError] = useState(false)
+  // ── Local media state ─────────────────────────────────────────────────────
+  const [micOn,           setMicOn]           = useState(true)
+  const [cameraOn,        setCameraOn]        = useState(true)
+  const [cameraError,     setCameraError]     = useState(false)
   const [cameraAcquiring, setCameraAcquiring] = useState(false)
-  const videoRef  = useRef<HTMLVideoElement | null>(null)
-  const streamRef = useRef<MediaStream | null>(null)   // full stream for mic track
-  const videoTrackRef = useRef<MediaStreamTrack | null>(null) // current video track only
+  const [micAcquiring, setMicAcquiring] = useState(false)
+  const videoRef      = useRef<HTMLVideoElement | null>(null)
+  const streamRef     = useRef<MediaStream | null>(null)
+  const videoTrackRef = useRef<MediaStreamTrack | null>(null)
 
-  // ── Room presence (real signaling) ────────────────────────────────────────────
-  const [presence,       setPresence]       = useState<RoomPresence>({})
-  const [presenceError,  setPresenceError]  = useState(false)
+  // ── Room presence ─────────────────────────────────────────────────────────
+  const [presence,      setPresence]      = useState<RoomPresence>({})
+  const [presenceError, setPresenceError] = useState(false)
+  const [roomFull,      setRoomFull]      = useState(false)
 
-  // ── Derived remote peer state from presence (the real fix for Bug 1) ─────────
+  // ── Derived remote peer state ─────────────────────────────────────────────
   const remoteParticipants = Object.entries(presence).filter(
     ([id]) => id !== myParticipantId.current
   )
   const remotePeer = remoteParticipants[0]?.[1] ?? null
-  const remoteJoined    = remotePeer !== null
-  const remoteCameraOn  = remotePeer?.cameraOn ?? false
-  const remoteMicOn     = remotePeer?.micOn    ?? false
+  const remoteJoined   = remotePeer !== null
+  const remoteCameraOn = remotePeer?.cameraOn ?? false
+  const remoteMicOn    = remotePeer?.micOn    ?? false
 
-  // Remote display name
+  // Names
   const patientName  = appointment?.patient?.name  ?? null
   const patientColor = appointment?.patient?.colorTag ?? "#5C7A67"
   const doctorName   = appointment?.doctor?.name
     ? `Dr. ${appointment.doctor.name}` : "Doctor"
   const doctorColor  = appointment?.doctor?.colorTag ?? T.amber
-  const clinicName   = appointment?.clinic?.name ?? "OpenORDO Telehealth"
+  const clinicName   = appointment?.clinic?.name ?? "OpenORDO"
 
   const remoteName  = isHost ? patientName  : doctorName
   const remoteColor = isHost ? patientColor : doctorColor
 
-  // Three distinct status states per spec
   const remoteStatusText = !remoteJoined
     ? `Waiting for ${isHost ? (patientName || "patient") : doctorName} to join…`
     : !remoteCameraOn
     ? "Camera off"
     : "Live feed active"
 
-  // ── Call state ────────────────────────────────────────────────────────────────
-  const [copied,       setCopied]       = useState(false)
-  const [callDuration, setCallDuration] = useState(0)
-  const [notes,        setNotes]        = useState("")
-  const [showJoinToast, setShowJoinToast] = useState(false)
+  // ── Link generation state (doctor-only) ───────────────────────────────────
+  const [linkCopied,      setLinkCopied]      = useState(false)
+  const [linkGenerating,  setLinkGenerating]  = useState(false)
+  const [linkError,       setLinkError]       = useState<string | null>(null)
+
+  // ── Call state ────────────────────────────────────────────────────────────
+  const [callDuration,     setCallDuration]     = useState(0)
+  const [notes,            setNotes]            = useState("")
+  const [showJoinToast,    setShowJoinToast]    = useState(false)
   const prevRemoteJoinedRef = useRef(false)
 
-  // ── Chat state ────────────────────────────────────────────────────────────────
+  // ── Chat state ────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<"patient" | "chat" | "files">(
     isHost ? "patient" : "chat"
   )
@@ -381,30 +430,46 @@ export default function ConsultationRoomClient({
     { sender: "System", text: "End-to-end encrypted session started.", time: "" }
   ])
   const [newMessage,  setNewMessage]  = useState("")
-  const [sharedFiles, setSharedFiles] = useState<{ name: string; size: string; sender: string }[]>([])
+  const [sharedFiles, setSharedFiles] = useState<{ name: string; size: string; sender: string; url?: string }[]>([])
   const chatEndRef = useRef<HTMLDivElement | null>(null)
 
-  // ── UI state ──────────────────────────────────────────────────────────────────
+  // ── UI state ──────────────────────────────────────────────────────────────
   const [sheetOpen,       setSheetOpen]       = useState(false)
   const [patientExpanded, setPatientExpanded] = useState(true)
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // BUG 2 FIX: Camera toggle uses track.stop() + fresh getUserMedia() re-acquire.
-  // track.enabled = false is NOT sufficient in all browsers to clear the OS
-  // hardware indicator (confirmed failing on the reporter's desktop browser).
-  // This approach fully releases the hardware on off, and re-acquires on on.
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ── Notes autosave (debounced 3 s, host only) ─────────────────────────────
+  const notesAutosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [notesStatus, setNotesStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
 
-  /** Stop the current video track and clear the PIP preview */
+  useEffect(() => {
+    if (!isHost || !notes || !appointment?.id) return
+    if (notesAutosaveTimer.current) clearTimeout(notesAutosaveTimer.current)
+    notesAutosaveTimer.current = setTimeout(async () => {
+      setNotesStatus("saving")
+      const result = await autosaveConsultationNotes(appointment.id, notes)
+      setNotesStatus(result.ok ? "saved" : "error")
+      // Reset to idle after 2 s
+      setTimeout(() => setNotesStatus("idle"), 2000)
+    }, 3000)
+    return () => {
+      if (notesAutosaveTimer.current) clearTimeout(notesAutosaveTimer.current)
+    }
+  }, [notes, isHost, appointment?.id])
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Camera toggle: track.stop() + fresh getUserMedia() (not track.enabled=false)
+  // BUILD_LOG Bug 2 Fix: track.enabled=false does NOT clear the OS hardware
+  // indicator in Chrome on desktop (confirmed). track.stop() does.
+  // ─────────────────────────────────────────────────────────────────────────
+
   const stopVideoTrack = useCallback(() => {
     if (videoTrackRef.current) {
-      videoTrackRef.current.stop()           // releases OS camera hardware
+      videoTrackRef.current.stop()
       videoTrackRef.current = null
     }
     if (videoRef.current) {
-      videoRef.current.srcObject = null       // clear the video element
+      videoRef.current.srcObject = null
     }
-    // Remove video track from the stream object so audio continues
     if (streamRef.current) {
       streamRef.current.getVideoTracks().forEach(t => {
         t.stop()
@@ -413,7 +478,6 @@ export default function ConsultationRoomClient({
     }
   }, [])
 
-  /** Re-acquire camera and attach to preview */
   const acquireVideoTrack = useCallback(async () => {
     if (cameraAcquiring) return
     setCameraAcquiring(true)
@@ -422,21 +486,23 @@ export default function ConsultationRoomClient({
       const [track] = newStream.getVideoTracks()
       if (!track) throw new Error("No video track returned")
       videoTrackRef.current = track
-
-      // Attach to the preview element
       if (videoRef.current) {
-        // Build a display stream: existing audio + new video
         const displayStream = new MediaStream()
         streamRef.current?.getAudioTracks().forEach(t => displayStream.addTrack(t))
         displayStream.addTrack(track)
         videoRef.current.srcObject = displayStream
       }
-
       setCameraError(false)
-      console.log("[Camera] Re-acquired video track:", track.label, "readyState:", track.readyState)
-    } catch (err) {
+    } catch (err: any) {
       console.warn("[Camera] Failed to re-acquire video:", err)
       setCameraError(true)
+      if (err.name === 'NotAllowedError') {
+        alert("Camera access was denied. Please check your browser/OS permissions.")
+      } else if (err.name === 'NotFoundError') {
+        alert("No camera found on this device.")
+      } else {
+        alert("Could not access camera: " + err.message)
+      }
     } finally {
       setCameraAcquiring(false)
     }
@@ -444,47 +510,93 @@ export default function ConsultationRoomClient({
 
   const toggleCamera = useCallback(async () => {
     if (cameraOn) {
-      // Turn OFF: stop the track — OS indicator will clear
       stopVideoTrack()
       setCameraOn(false)
-      console.log("[Camera] Stopped — hardware indicator should clear now")
     } else {
-      // Turn ON: re-acquire fresh stream
       setCameraOn(true)
       await acquireVideoTrack()
-      console.log("[Camera] Re-acquired")
     }
   }, [cameraOn, stopVideoTrack, acquireVideoTrack])
 
-  /** Mic toggle: track.enabled is sufficient for audio (no hardware indicator issue) */
-  const toggleMic = useCallback(() => {
-    const nextOn = !micOn
-    streamRef.current?.getAudioTracks().forEach(t => {
-      t.enabled = nextOn
-    })
-    setMicOn(nextOn)
-    console.log("[Mic] enabled =", nextOn)
-  }, [micOn])
+  const stopAudioTrack = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getAudioTracks().forEach(t => {
+        t.stop()
+        streamRef.current?.removeTrack(t)
+      })
+    }
+  }, [])
 
-  // ── Initial media acquisition — works on mobile Safari/Chrome ───────────────
-  // Mobile Safari requires getUserMedia to be called after a user gesture on
-  // first visit. If it fails (permissions denied or no camera), show a retry UI.
+  const acquireAudioTrack = useCallback(async () => {
+    if (micAcquiring) return
+    setMicAcquiring(true)
+    try {
+      const newStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const [track] = newStream.getAudioTracks()
+      if (!track) throw new Error("No audio track returned")
+      if (streamRef.current) {
+        streamRef.current.addTrack(track)
+      } else {
+        streamRef.current = newStream
+      }
+    } catch (err: any) {
+      console.warn("[Mic] Failed to re-acquire audio:", err)
+      if (err.name === 'NotAllowedError') {
+        alert("Microphone access was denied. Please check your browser/OS permissions.")
+      } else if (err.name === 'NotFoundError') {
+        alert("No microphone found on this device.")
+      } else {
+        alert("Could not access microphone: " + err.message)
+      }
+      setMicOn(false) // revert if failed
+    } finally {
+      setMicAcquiring(false)
+    }
+  }, [micAcquiring])
+
+  const toggleMic = useCallback(async () => {
+    if (micOn) {
+      stopAudioTrack()
+      setMicOn(false)
+    } else {
+      setMicOn(true)
+      await acquireAudioTrack()
+    }
+  }, [micOn, stopAudioTrack, acquireAudioTrack])
+
   const retryMedia = useCallback(async () => {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      alert("Your browser blocks camera access here. Please use a secure connection (HTTPS or localhost).")
+      return
+    }
     setCameraError(false)
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      let stream: MediaStream
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      } catch (e) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        } catch (e2) {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true })
+        }
+      }
       streamRef.current = stream
       const [vidTrack] = stream.getVideoTracks()
       videoTrackRef.current = vidTrack ?? null
-      if (videoRef.current) videoRef.current.srcObject = stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        videoRef.current.play().catch(() => {})
+      }
       setCameraOn(true)
-      console.log("[Media] Retry succeeded")
-    } catch (err) {
+    } catch (err: any) {
       console.warn("[Media] Retry failed:", err)
+      alert("Could not access camera/microphone: " + (err.message || "Please check permissions or if another app is using them."))
       setCameraError(true)
     }
   }, [])
 
+  // Initial media acquisition
   useEffect(() => {
     let active = true
     async function initMedia() {
@@ -493,18 +605,47 @@ export default function ConsultationRoomClient({
           if (active) setCameraError(true)
           return
         }
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        if (!active) { stream.getTracks().forEach(t => t.stop()); return }
+        
+        let stream: MediaStream | null = null
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        } catch (e: any) {
+          console.warn("[Media] Both failed, trying audio-only", e)
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+          } catch (e2: any) {
+            console.warn("[Media] Audio-only failed, trying video-only", e2)
+            stream = await navigator.mediaDevices.getUserMedia({ video: true })
+          }
+        }
 
+        if (!stream) throw new Error("No stream acquired")
+        if (!active) { stream.getTracks().forEach(t => t.stop()); return }
         streamRef.current = stream
         const [vidTrack] = stream.getVideoTracks()
         videoTrackRef.current = vidTrack ?? null
-
-        if (videoRef.current) videoRef.current.srcObject = stream
-        console.log("[Media] Stream acquired. Tracks:", stream.getTracks().map(t => `${t.kind}:${t.label}`))
-      } catch (err) {
-        console.warn("[Media] getUserMedia failed:", err)
-        if (active) setCameraError(true)
+        
+        if (!vidTrack) {
+          // If we successfully got audio but no video track, we should show the avatar placeholder
+          setCameraError(true)
+        }
+        
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          videoRef.current.play().catch(() => {})
+        }
+      } catch (err: any) {
+        console.warn("[Media] getUserMedia totally failed:", err)
+        if (active) {
+          setCameraError(true)
+          if (err.name === 'NotAllowedError') {
+            alert("Camera/Microphone access was denied. Please check your browser permissions (the lock icon in the URL bar) and your Windows/macOS Privacy settings.")
+          } else if (err.name === 'NotFoundError') {
+            alert("No camera or microphone found on this device.")
+          } else {
+            alert("Could not access camera/microphone: " + err.message)
+          }
+        }
       }
     }
     initMedia()
@@ -515,14 +656,8 @@ export default function ConsultationRoomClient({
     }
   }, [])
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // BUG 1 FIX: Real presence polling via /api/room/[roomId]
-  // Both participants post heartbeats every 4s. Each reads real peer state.
-  // No setTimeout("joined") — the UI only updates when the server confirms the
-  // other participant's heartbeat has been received.
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  const postHeartbeat = useCallback(async () => {
+  // ── Presence heartbeat ────────────────────────────────────────────────────
+  const postHeartbeat = useCallback(async (extra: any = {}) => {
     try {
       const res = await fetch(`/api/room/${roomId}`, {
         method: "POST",
@@ -532,41 +667,46 @@ export default function ConsultationRoomClient({
           role: isHost ? "host" : "guest",
           cameraOn,
           micOn,
+          ...extra,
         }),
       })
+      if (res.status === 403) {
+        const data = await res.json().catch(() => ({}))
+        if (data?.code === "ROOM_FULL") {
+          setRoomFull(true)
+          return
+        }
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setPresence(data.participants ?? {})
+      if (data.messages && data.messages.length > 0) setChatMessages(data.messages)
+      if (data.files && data.files.length > 0) setSharedFiles(data.files)
       setPresenceError(false)
+      setRoomFull(false)
     } catch (err) {
       console.warn("[Presence] Heartbeat failed:", err)
       setPresenceError(true)
     }
   }, [roomId, isHost, cameraOn, micOn])
 
-  // Post heartbeat every 4s; also fetch-only every 2s for responsive remote updates
   useEffect(() => {
-    // Immediate first heartbeat on mount
     postHeartbeat()
     const heartbeatInterval = setInterval(postHeartbeat, 4000)
-
-    // Fast poll for remote presence updates (GET only, no body)
     const pollInterval = setInterval(async () => {
       try {
         const res = await fetch(`/api/room/${roomId}`)
         if (res.ok) {
           const data = await res.json()
           setPresence(data.participants ?? {})
+          if (data.messages && data.messages.length > 0) setChatMessages(data.messages)
+          if (data.files && data.files.length > 0) setSharedFiles(data.files)
         }
-      } catch {
-        // silent — heartbeat error state handled separately
-      }
+      } catch { /* silent */ }
     }, 2000)
-
     return () => {
       clearInterval(heartbeatInterval)
       clearInterval(pollInterval)
-      // DELETE our presence on leave
       fetch(`/api/room/${roomId}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
@@ -575,38 +715,64 @@ export default function ConsultationRoomClient({
     }
   }, [postHeartbeat, roomId])
 
-  // Show toast when remote peer joins (host only) — driven by real presence, not timer
+  // Join toast (host only)
   useEffect(() => {
     if (isHost && remoteJoined && !prevRemoteJoinedRef.current) {
       setShowJoinToast(true)
       setTimeout(() => setShowJoinToast(false), 6000)
-      console.log("[Signaling] Remote peer joined. Presence:", presence)
     }
     prevRemoteJoinedRef.current = remoteJoined
-  }, [isHost, remoteJoined, presence])
+  }, [isHost, remoteJoined])
 
-  // ── Call timer ────────────────────────────────────────────────────────────────
+  // Call timer (persisted across refresh via sessionStorage)
   useEffect(() => {
-    const t = setInterval(() => setCallDuration(d => d + 1), 1000)
-    return () => clearInterval(t)
-  }, [])
+    const storageKey = `call_start_${roomId}`
+    let startStr = sessionStorage.getItem(storageKey)
+    if (!startStr) {
+      startStr = Date.now().toString()
+      sessionStorage.setItem(storageKey, startStr)
+    }
+    const startTime = parseInt(startStr, 10)
 
-  // ── Chat scroll ───────────────────────────────────────────────────────────────
+    const t = setInterval(() => {
+      setCallDuration(Math.floor((Date.now() - startTime) / 1000))
+    }, 1000)
+    return () => clearInterval(t)
+  }, [roomId])
+
+  // Chat scroll
   useEffect(() => {
     if (activeTab === "chat") chatEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [chatMessages, activeTab])
 
-  // ── Helpers ───────────────────────────────────────────────────────────────────
+  // ── Helpers ───────────────────────────────────────────────────────────────
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60), s = sec % 60
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
   }
 
-  const copyLink = () => {
-    if (typeof window !== "undefined") {
-      navigator.clipboard.writeText(window.location.href)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+  /**
+   * Share Patient Link — generates a token server-side, then copies the URL.
+   * NEVER constructs a URL on the client.
+   */
+  const sharePatientLink = async () => {
+    if (!appointment?.id || linkGenerating) return
+    setLinkGenerating(true)
+    setLinkError(null)
+    try {
+      const result = await generatePatientLinkToken(appointment.id)
+      if ("error" in result) {
+        setLinkError(result.error)
+        return
+      }
+      await navigator.clipboard.writeText(result.url)
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 3000)
+    } catch (err) {
+      console.warn("[ShareLink] Failed:", err)
+      setLinkError("Could not copy link — please try again.")
+    } finally {
+      setLinkGenerating(false)
     }
   }
 
@@ -614,73 +780,73 @@ export default function ConsultationRoomClient({
     e.preventDefault()
     if (!newMessage.trim()) return
     const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    setChatMessages(prev => [...prev, { sender: "You", text: newMessage, time: now }])
+    const msg = { sender: isHost ? "Doctor" : "Patient", text: newMessage, time: now }
+    
+    // immediate optimistic update
+    setChatMessages(prev => [...prev, msg])
     setNewMessage("")
+    
+    // push to server
+    postHeartbeat({ newMessage: msg })
   }
 
   const uploadFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const size = (file.size / 1024 / 1024).toFixed(2) + " MB"
-    setSharedFiles(prev => [...prev, { name: file.name, size, sender: "You" }])
-    const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    setChatMessages(prev => [...prev, { sender: "You", text: `📎 Shared: ${file.name}`, time: now }])
+    if (file.size > 2 * 1024 * 1024) {
+      alert("For this demo, files must be under 2MB.")
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      const size = (file.size / 1024 / 1024).toFixed(2) + " MB"
+      const newFile = { name: file.name, size, sender: isHost ? "Doctor" : "Patient", url: dataUrl }
+      const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      const msg = { sender: "System", text: `📎 Shared: ${file.name}`, time: now }
+
+      setSharedFiles(prev => [...prev, newFile])
+      setChatMessages(prev => [...prev, msg])
+      postHeartbeat({ newFile, newMessage: msg })
+    }
+    reader.readAsDataURL(file)
   }
 
-  // ── Style helpers ─────────────────────────────────────────────────────────────
-  const ctrlBtn = (active: boolean): React.CSSProperties => ({
-    width: 48, height: 48, borderRadius: "50%",
-    background: active ? "rgba(255,255,255,0.1)" : T.coralSoft,
-    border: `1px solid ${active ? T.panelBorder : "rgba(181,67,47,0.4)"}`,
-    color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
-    cursor: "pointer", transition: "background 0.15s, border-color 0.15s",
-    flexShrink: 0,
-  })
-
-  const tabStyle = (tab: string): React.CSSProperties => ({
-    background: "transparent", border: "none", padding: "10px 14px",
-    fontSize: 13, fontWeight: 600, cursor: "pointer",
-    color: activeTab === tab ? T.textPrimary : T.textSecondary,
-    borderBottom: activeTab === tab ? `2px solid ${T.amber}` : "2px solid transparent",
-    transition: "color 0.15s, border-color 0.15s", whiteSpace: "nowrap",
-  })
-
-  // SidePanel is now a top-level component (ConsultationSidePanel) — see above.
-  // This avoids the remount-on-every-render bug that caused one-char input loss.
   const sidePanelProps: SidePanelProps = {
-    isHost,
-    hasEprescriptions,
-    appointment,
-    activeTab,
-    setActiveTab,
-    patientExpanded,
-    setPatientExpanded,
-    notes,
-    setNotes,
-    chatMessages,
-    chatEndRef,
-    newMessage,
-    setNewMessage,
-    sendChat,
-    sharedFiles,
-    uploadFile,
+    isHost, hasEprescriptions, appointment,
+    activeTab, setActiveTab,
+    patientExpanded, setPatientExpanded,
+    notes, setNotes,
+    chatMessages, chatEndRef,
+    newMessage, setNewMessage, sendChat,
+    sharedFiles, uploadFile,
   }
 
-  // ── Control bar (CSS-class driven for mobile override) ───────────────────────
+  // ── Control Bar ───────────────────────────────────────────────────────────
   function ControlBar() {
-    // Patients (guests) should not be redirected to /dashboard — it requires login.
-    // We navigate them back to a safe "left" screen instead.
     const exitHref = isHost ? "/dashboard/appointments" : `/consultation/ended?room=${roomId}`
+
+    const handleEndCall = async () => {
+      if (isHost && appointment?.id) {
+        await logCallEnded(appointment.id).catch(() => {})
+      }
+      window.location.href = exitHref
+    }
 
     return (
       <div className="cw-control-bar">
         <button
           onClick={toggleMic}
+          disabled={micAcquiring}
           className={`cw-ctrl-btn${micOn ? "" : " cw-ctrl-btn--off"}`}
+          style={{ opacity: micAcquiring ? 0.6 : 1 }}
           title={micOn ? "Mute" : "Unmute"}
           aria-label="Toggle microphone"
         >
-          {micOn ? <Mic size={20} /> : <MicOff size={20} />}
+          {micAcquiring ? (
+            <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", animation: "spin 0.8s linear infinite" }} />
+          ) : micOn ? <Mic size={20} /> : <MicOff size={20} />}
         </button>
 
         <button
@@ -696,31 +862,47 @@ export default function ConsultationRoomClient({
           ) : cameraOn ? <Video size={20} /> : <VideoOff size={20} />}
         </button>
 
-        {/* Share — only show to host or on desktop; patient mobile has no room to share */}
         <button
-          onClick={copyLink}
+          onClick={sharePatientLink}
+          disabled={linkGenerating || !isHost}
           className="cw-ctrl-btn hide-on-mobile"
-          title="Share link"
-          aria-label="Share link"
+          title="Share patient link"
+          aria-label="Share patient link"
+          style={{ opacity: (!isHost || linkGenerating) ? 0.4 : 1, cursor: !isHost ? "not-allowed" : "pointer" }}
         >
-          {copied ? <Check size={20} color={T.successGreen} /> : <Share2 size={20} />}
+          {linkCopied ? <Check size={20} color={T.successGreen} /> : <Share2 size={20} />}
         </button>
 
-        <Link href={exitHref} className="cw-ctrl-btn--end">
+        <button
+          onClick={handleEndCall}
+          className="cw-ctrl-btn--end"
+          aria-label={isHost ? "End Call" : "Leave"}
+        >
           <PhoneOff size={18} />
           <span className="hide-on-mobile">{isHost ? "End Call" : "Leave"}</span>
-        </Link>
+        </button>
       </div>
     )
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    // cw-room-root: uses CSS for 100dvh with 100vh fallback + overscroll-behavior:none
-    // This is critical for mobile Safari where 100vh != real visible height
     <div className="cw-room-root">
 
-      {/* ── Header ─────────────────────────────────────────────────────────────── */}
+      {/* ── Room full banner ────────────────────────────────────────────────── */}
+      {roomFull && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, zIndex: 200,
+          background: T.coral, color: "#fff", padding: "12px 20px",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+          fontSize: 14, fontWeight: 600,
+        }}>
+          <AlertTriangle size={16} />
+          This room already has two participants. You cannot join at this time.
+        </div>
+      )}
+
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="cw-room-header">
         {/* Left: logo + name */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -749,7 +931,6 @@ export default function ConsultationRoomClient({
               {formatTime(callDuration)}
             </span>
           </div>
-          {/* Real connection status badge */}
           <div className="hide-on-mobile" style={{
             display: "flex", alignItems: "center", gap: 5,
             padding: "4px 10px", borderRadius: 20,
@@ -769,15 +950,37 @@ export default function ConsultationRoomClient({
 
         {/* Right */}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button onClick={copyLink} style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            background: "rgba(255,255,255,0.08)", border: `1px solid ${T.panelBorder}`,
-            color: "#fff", padding: "5px 12px", borderRadius: 7,
-            fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-          }}>
-            {copied ? <Check size={13} color={T.successGreen} /> : <Copy size={13} />}
-            <span className="hide-on-mobile">{copied ? "Copied!" : "Share Patient Link"}</span>
-          </button>
+          {/* Notes autosave status indicator (host only) */}
+          {isHost && notesStatus !== "idle" && (
+            <span style={{ fontSize: 11, color: notesStatus === "saving" ? T.textSecondary : notesStatus === "saved" ? T.successGreen : T.coral }}>
+              {notesStatus === "saving" ? "Saving…" : notesStatus === "saved" ? "Notes saved" : "Save failed"}
+            </span>
+          )}
+
+          {/* Share patient link — host only */}
+          {isHost && (
+            <button
+              onClick={sharePatientLink}
+              disabled={linkGenerating}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                background: "rgba(255,255,255,0.08)", border: `1px solid ${T.panelBorder}`,
+                color: "#fff", padding: "5px 12px", borderRadius: 7,
+                fontSize: 12.5, fontWeight: 600, cursor: linkGenerating ? "not-allowed" : "pointer",
+                opacity: linkGenerating ? 0.6 : 1,
+              }}
+            >
+              {linkCopied ? <Check size={13} color={T.successGreen} /> : <Copy size={13} />}
+              <span className="hide-on-mobile">
+                {linkGenerating ? "Generating…" : linkCopied ? "Copied!" : "Share Patient Link"}
+              </span>
+            </button>
+          )}
+
+          {linkError && (
+            <span style={{ fontSize: 11, color: T.coral }}>{linkError}</span>
+          )}
+
           <Link href="/dashboard/appointments" style={{ fontSize: 12.5, color: T.textSecondary, textDecoration: "none", padding: "5px 6px" }}>
             <span className="hide-on-mobile">Exit to Dashboard</span>
             <span className="show-on-mobile-inline">Exit</span>
@@ -796,7 +999,7 @@ export default function ConsultationRoomClient({
         </div>
       </div>
 
-      {/* ── Join toast (driven by real presence, not timer) ─────────────────────── */}
+      {/* ── Join toast ────────────────────────────────────────────────────────── */}
       {showJoinToast && (
         <div style={{
           position: "fixed", top: 72, left: "50%", transform: "translateX(-50%)",
@@ -808,19 +1011,18 @@ export default function ConsultationRoomClient({
         </div>
       )}
 
-      {/* ── Main body ───────────────────────────────────────────────────────────── */}
+      {/* ── Main body ─────────────────────────────────────────────────────────── */}
       <div className="cw-consultation-layout">
 
-        {/* ── Video Stage ──────────────────────────────────────────────────────── */}
+        {/* ── Video Stage ────────────────────────────────────────────────────── */}
         <div className="cw-video-col">
           <div className="cw-stage">
             {/* Remote participant view */}
             {remoteJoined && remoteCameraOn ? (
               /**
-               * NOTE: No WebRTC SDK wired. Remote camera-on shows their avatar 
-               * (their name + colorTag). When a real provider (Daily.co/Twilio/LiveKit)
-               * is integrated, replace this block with <VideoTile participantId={...} />.
-               * The remoteCameraOn flag will be driven by the provider's track events.
+               * NOTE: No WebRTC SDK wired. Remote camera-on shows their avatar.
+               * When a real provider (Daily.co/Twilio/LiveKit) is integrated,
+               * replace this block with <VideoTile participantId={...} />.
                */
               <AvatarPlaceholder
                 name={remoteName} colorTag={remoteColor}
@@ -836,7 +1038,7 @@ export default function ConsultationRoomClient({
               />
             )}
 
-            {/* Name badge — top left */}
+            {/* Name badge */}
             <div style={{
               position: "absolute", top: 14, left: 14,
               background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)",
@@ -850,7 +1052,7 @@ export default function ConsultationRoomClient({
                 : `Room · ${roomId.slice(-6)}`}
             </div>
 
-            {/* Remote mic status indicator */}
+            {/* Remote mic status */}
             {remoteJoined && !remoteMicOn && (
               <div style={{
                 position: "absolute", top: 14, right: 14,
@@ -863,9 +1065,8 @@ export default function ConsultationRoomClient({
               </div>
             )}
 
-            {/* ── Self-view PIP ─────────────────────────────────────────────────── */}
+            {/* ── Self-view PIP ──────────────────────────────────────────────── */}
             <div className="cw-pip-video">
-              {/* <video> always mounted; srcObject is null when camera stopped */}
               <video
                 ref={videoRef}
                 autoPlay playsInline muted
@@ -885,7 +1086,6 @@ export default function ConsultationRoomClient({
                     colorTag={isHost ? doctorColor : patientColor}
                     size={30}
                   />
-                  {/* Camera permission retry — critical for mobile where autoplay blocks getUserMedia */}
                   {cameraError && (
                     <button
                       onClick={retryMedia}
@@ -913,13 +1113,13 @@ export default function ConsultationRoomClient({
           <ControlBar />
         </div>
 
-        {/* ── Side panel (desktop/tablet) ───────────────────────────────────────── */}
+        {/* ── Side panel (desktop/tablet) ─────────────────────────────────────── */}
         <div className="cw-side-panel">
           <ConsultationSidePanel {...sidePanelProps} />
         </div>
       </div>
 
-      {/* ── Mobile bottom sheet ──────────────────────────────────────────────────── */}
+      {/* ── Mobile bottom sheet ──────────────────────────────────────────────── */}
       {sheetOpen && (
         <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
           <div style={{ flex: 1, background: "rgba(0,0,0,0.5)" }} onClick={() => setSheetOpen(false)} />
