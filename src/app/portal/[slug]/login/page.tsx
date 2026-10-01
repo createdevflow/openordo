@@ -1,4 +1,6 @@
 import { db } from "@/lib/db"
+
+import { getFileUrl } from "@/lib/file-utils";
 import { notFound, redirect } from "next/navigation"
 import { PatientLoginClient } from "./PatientLoginClient"
 import { getPatientAccountSession } from "@/lib/patient-auth"
@@ -35,7 +37,7 @@ export default async function PatientPortalLoginPage({ params }: { params: Promi
       <div className="max-w-md w-full bg-white rounded-xl shadow-sm border border-line p-8">
         <div className="text-center mb-8">
           {config?.logoUrl ? (
-            <img src={config.logoUrl} alt={clinic.name} className="h-12 mx-auto mb-4" />
+            <img src={getFileUrl(config.logoUrl)} alt={clinic.name} className="h-12 mx-auto mb-4" />
           ) : (
             <div className="w-12 h-12 text-white rounded-lg flex items-center justify-center mx-auto mb-4 text-xl font-bold" style={{ backgroundColor: config?.accentColor || "#1E4638" }}>
               {clinic.name.charAt(0)}

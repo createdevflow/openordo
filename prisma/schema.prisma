@@ -29,41 +29,78 @@ model User {
   memberships Membership[]
 }
 
+enum TaxCalculationMode {
+  NONE                     // no tax added, amount charged as-is
+  FLAT_PERCENTAGE          // a single flat % added on top, shown as one line (e.g. VAT)
+  SPLIT_BY_SUPPLY_REGION   // India-style: compare the clinic's region to our own registered
+                            // region to decide CGST+SGST (same-region) vs IGST (cross-region)
+}
+
+model TaxCountryConfig {
+  id                  String              @id @default(cuid())
+  countryCode         String              @unique   // ISO 3166-1 alpha-2, e.g. "IN", "US", "GB", "AE"
+  countryName         String                        // "India", "United States", ...
+  currencyBucket      String                        // "INR" | "USD" — which existing pricing bucket this country maps to
+  taxLabel            String                        // "GST" | "VAT" | "Sales Tax" | "No Tax"
+  taxIdLabel          String?                       // "GSTIN" | "VAT Number" | null if not applicable
+  calculationMode     TaxCalculationMode  @default(NONE)
+  flatRate            Float?                        // overall %, e.g. 18 for India GST, 20 for UK VAT
+  ourRegisteredRegion String?                        // OUR state/region — only used for SPLIT_BY_SUPPLY_REGION
+  invoiceNumberPrefix String?                        // e.g. "OO-IN", "OO-US"
+  isActive            Boolean             @default(true)  // offered as a choice at onboarding
+  sortOrder           Int                 @default(0)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+}
+
+
 model Clinic {
   id            String    @id @default(cuid())
   name          String
   slug          String    @unique
   type          String
   phone         String?
+  whatsappNumber String?
   address       String?
   openTime      String?   @default("09:00")
   closeTime     String?   @default("18:00")
-  status        String    @default("ACTIVE") // Enum ClinicStatus
-  country       String    @default("US")
+storageRoot              String?  @unique
+  storageUsedBytes         Int      @default(0)
+  pricingMarketLocked      Boolean  @default(false)
+  geoMismatchFlag          Boolean  @default(false)
+  detectedCountryAtSignup  String?
+    status        String    @default("ACTIVE") // Enum ClinicStatus
+  countryCode   String?   // FK-equivalent to TaxCountryConfig.countryCode, set at onboarding
+  region        String?   // state/province — required when the selected country uses SPLIT_BY_SUPPLY_REGION, optional otherwise
+  taxId         String?   // the clinic's own tax ID (their GSTIN/VAT number) if they have one — B2B invoicing
   billingConfig String? // JSON string for region-specific compliance
   createdAt     DateTime  @default(now())
   lockedAt      DateTime? // Tracks when clinic was locked (e.g. cancelled sub)
 
-  memberships       Membership[]
-  patients          Patient[]
-  doctors           Doctor[]
-  appointments      Appointment[]
-  invoices          Invoice[]
-  records           MedicalRecord[]
-  subscription      Subscription?
-  bookingRequests   BookingRequest[]
-  promoRedemptions  PromoRedemption[]
-  payments          Payment[]
-  clinicPlugins     ClinicPlugin[]
-  inventoryItems    InventoryItem[]
-  prescriptions     Prescription[]
-  storageUsages     StorageUsage[]
-  bookingPageConfig BookingPageConfig?
-  PatientDocument   PatientDocument[]
-  patientAccountLinks PatientAccountLink[]
+  memberships          Membership[]
+  patients             Patient[]
+  doctors              Doctor[]
+  appointments         Appointment[]
+  invoices             Invoice[]
+  records              MedicalRecord[]
+  subscription         Subscription?
+  bookingRequests      BookingRequest[]
+  promoRedemptions     PromoRedemption[]
+  payments             Payment[]
+  clinicPlugins        ClinicPlugin[]
+  inventoryItems       InventoryItem[]
+  prescriptions        Prescription[]
+  storageUsages        StorageUsage[]
+  bookingPageConfig    BookingPageConfig?
+  PatientDocument      PatientDocument[]
+  patientAccountLinks  PatientAccountLink[]
   patientNotifications PatientNotification[]
+  dataExportRequests   DataExportRequest[]
 
   shareRecordsWithPatients Boolean @default(false)
+
+  baaRequests BaaRequest[]
+  taxInvoices TaxInvoice[]
 }
 
 model Membership {
@@ -91,7 +128,7 @@ model Plan {
   patientLimit          Int?
   doctorLimit           Int?
   storageLimitGb        Int?
-  bookingPageLimit      Int?   // null = unlimited booking entries per month
+  bookingPageLimit      Int? // null = unlimited booking entries per month
   features              String // JSON array of extra marketing bullets (extraBullets)
   isFeatured            Boolean  @default(false)
   isActive              Boolean  @default(true)
@@ -127,6 +164,53 @@ model Subscription {
   plan   Plan   @relation(fields: [planId], references: [id])
 }
 
+enum BaaRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model BaaRequest {
+  id                String           @id @default(cuid())
+  clinicId          String
+  requestedByUserId String
+  status            BaaRequestStatus @default(PENDING)
+
+  clinicLegalName String
+  ownerFullName   String
+  ownerTitle      String @default("Clinic Owner")
+
+  bizRegCertKey      String?
+  signatoryAuthKey   String?
+  photoIdKey         String?
+  addressProofKey    String?
+  practiceLicenseKey String?
+
+  requestedAt       DateTime  @default(now())
+  reviewedByAdminId String?
+  approvedAt        DateTime?
+  rejectedReason    String?
+
+  documentReferenceNumber String? @unique
+  legalTextSnapshot       String?
+  templateVersionLabel    String?
+  pdfFileKey              String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+}
+
+model BaaTemplateVersion {
+  id                 String   @id @default(cuid())
+  bodyText           String
+  versionLabel       String   @unique
+  isCurrent          Boolean  @default(false)
+  publishedAt        DateTime @default(now())
+  publishedByAdminId String
+}
+
 model Patient {
   id         String   @id @default(cuid())
   clinicId   String
@@ -144,12 +228,12 @@ model Patient {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  clinic          Clinic            @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  appointments    Appointment[]
-  invoices        Invoice[]
-  records         MedicalRecord[]
-  prescriptions   Prescription[]
-  PatientDocument PatientDocument[]
+  clinic             Clinic              @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  appointments       Appointment[]
+  invoices           Invoice[]
+  records            MedicalRecord[]
+  prescriptions      Prescription[]
+  PatientDocument    PatientDocument[]
   patientAccountLink PatientAccountLink?
 
   @@unique([clinicId, displayId])
@@ -184,25 +268,32 @@ model Appointment {
   status    String   @default("SCHEDULED") // Enum AppointmentStatus
   visitType String   @default("IN_PERSON") // "IN_PERSON" | "VIDEO"
   roomId    String?
+  // Patient join-link token (unguessable, scoped to this appointment only)
+  patientLinkToken       String?   @unique
+  patientLinkTokenExpiry DateTime?
   createdAt DateTime @default(now())
 
   clinic  Clinic  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
   doctor  Doctor  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  videoAccessLogs VideoCallAccessLog[]
 }
 
 model Invoice {
-  id        String   @id @default(cuid())
-  clinicId  String
-  patientId String
-  displayId String
-  date      DateTime // Removed @db.Date
-  status    String   @default("UNPAID") // Enum InvoiceStatus
-  items     String // Was Json, SQLite native JSON requires modern Prisma setup, String is safer for quick mockup
-  createdAt DateTime @default(now())
+  id             String   @id @default(cuid())
+  clinicId       String
+  patientId      String
+  displayId      String
+  date           DateTime
+  status         String   @default("UNPAID")
+  items          String   // JSON string of line items
+  prescriptionId String?  // Optional: linked prescription for combined invoice+Rx print
+  createdAt      DateTime @default(now())
 
-  clinic  Clinic  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  clinic       Clinic        @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  patient      Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  prescription Prescription? @relation(fields: [prescriptionId], references: [id], onDelete: SetNull)
 
   @@unique([clinicId, displayId])
 }
@@ -469,9 +560,10 @@ model Prescription {
   items     String // JSON: [{ drug, dosage, frequency, durationDays, notes }]
   createdAt DateTime @default(now())
 
-  clinic  Clinic  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  doctor  Doctor  @relation(fields: [doctorId], references: [id])
+  clinic   Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  patient  Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor   Doctor   @relation(fields: [doctorId], references: [id])
+  invoices Invoice[]
 }
 
 // ─── Global Settings & Auth ───────────────────────────────────────────────────
@@ -499,12 +591,15 @@ model ContactLead {
   name      String
   email     String
   message   String
+  reason    String   @default("General inquiry") // e.g. "General inquiry" | "Technical support" | "Billing" | "Feature request"
+  source    String   @default("CONTACT_FORM")  // "CONTACT_FORM" | "IN_APP_FEEDBACK"
+  metadata  String?  // JSON — page URL, browser info, clinicId captured by feedback widget
   status    String   @default("NEW") // "NEW", "CONTACTED", "ARCHIVED"
   createdAt DateTime @default(now())
 }
 
 model DemoRequest {
-  id              String    @id @default(cuid())
+  id              String  @id @default(cuid())
   firstName       String
   lastName        String
   email           String
@@ -514,15 +609,15 @@ model DemoRequest {
   companyName     String?
   employees       String?
   message         String?
-  newsletterOptIn Boolean   @default(false)
+  newsletterOptIn Boolean @default(false)
 
   // Temp Credential Tracking
-  status          String    @default("PENDING") // PENDING, CREDENTIALS_GENERATED, USED, EXPIRED
-  tempUserId      String?   // ID of the temporary user generated
-  token           String?   @unique
-  expiresAt       DateTime?
-  
-  createdAt       DateTime  @default(now())
+  status     String    @default("PENDING") // PENDING, CREDENTIALS_GENERATED, USED, EXPIRED
+  tempUserId String? // ID of the temporary user generated
+  token      String?   @unique
+  expiresAt  DateTime?
+
+  createdAt DateTime @default(now())
 }
 
 // ─── Branded Booking Page Plugin ──────────────────────────────────────────────
@@ -547,7 +642,8 @@ model BookingPageConfig {
 
   // Booking behaviour (JSON arrays stored as strings)
   bookableDoctorIds String? // JSON: string[] of Doctor.id values enabled for public booking
-  appointmentTypes  String? // JSON: string[] — editable dropdown options for "Reason for visit"
+searchIndexing Boolean @default(false)
+    appointmentTypes  String? // JSON: string[] — editable dropdown options for "Reason for visit"
 
   // Footer
   showPoweredBy Boolean @default(true) // only honoured server-side when plugin IS active; forced true when not
@@ -576,17 +672,42 @@ model AccountDeletionRequest {
 model PlatformCommunicationSettings {
   id String @id @default(cuid())
 
-  whatsappNumber            String? // e.g. "+919800000000"
-  whatsappPhoneNumberId     String? // Meta Cloud API Phone Number ID
-  whatsappBusinessAccountId String? // Meta WABA ID
-  whatsappAccessToken       String? // AES-256-GCM encrypted at rest — never stored plain
+  whatsappNumber             String? // e.g. "+919800000000"
+  whatsappPhoneNumberId      String? // Meta Cloud API Phone Number ID
+  whatsappBusinessAccountId  String? // Meta WABA ID
+  whatsappAccessToken        String? // AES-256-GCM encrypted at rest — never stored plain
   whatsappWebhookVerifyToken String? // used to validate Meta webhook calls
-  whatsappConnected         Boolean  @default(false)
-  whatsappLastVerifiedAt    DateTime?
-  whatsappLastError         String? // last test-connection error message
+  whatsappConnected          Boolean   @default(false)
+  whatsappLastVerifiedAt     DateTime?
+  whatsappLastError          String? // last test-connection error message
 
-  otpChannel  String  @default("EMAIL") // "EMAIL" | "WHATSAPP" | "BOTH"
-  otpBothMode String? // "USER_CHOOSES" | "SEND_BOTH" — read only when otpChannel = "BOTH"
+  // Legacy OTP fields — kept for backward compat, superseded by otpChannels/otpMode below
+  otpChannel  String  @default("EMAIL") // "EMAIL" | "WHATSAPP" | "BOTH" — DEPRECATED, use otpChannels
+  otpBothMode String? // "USER_CHOOSES" | "SEND_BOTH" — DEPRECATED, use otpMode
+
+  // ── SMS — India (MSG91 / Kaleyra) ──────────────────────────────────────────
+  smsProviderIndia             String? // "MSG91" | "KALEYRA"
+  smsApiKeyIndia               String? // AES-256-GCM encrypted at rest — same key as whatsappAccessToken
+  smsSenderIdIndia             String? // DLT-registered sender ID (typically 6 characters)
+  smsDltTemplateIdOtp          String? // DLT-approved template ID for OTP messages — REQUIRED for India sends
+  smsDltTemplateIdConfirmation String? // DLT-approved template ID for appointment confirmations — REQUIRED for India sends
+  smsConnectedIndia            Boolean @default(false)
+
+  // ── SMS — International (Twilio) ───────────────────────────────────────────
+  smsProviderInternational   String? // "TWILIO"
+  smsAccountSidInternational String? // Twilio Account SID
+  smsAuthTokenInternational  String? // AES-256-GCM encrypted at rest — same key as whatsappAccessToken
+  smsFromNumberInternational String?
+  smsConnectedInternational  Boolean @default(false)
+
+  smsLastVerifiedAt DateTime?
+
+  // ── OTP channel multi-select (replaces otpChannel + otpBothMode) ────────────
+  otpChannels String[] @default(["EMAIL"]) // any combination of "EMAIL" | "WHATSAPP" | "SMS"
+  otpMode     String   @default("USER_CHOOSES") // "USER_CHOOSES" | "SEND_ALL" — only relevant when otpChannels.length > 1
+
+  // ── Appointment confirmation fallback ───────────────────────────────────────
+  appointmentConfirmationFallbackChannel String @default("EMAIL") // "EMAIL" | "SMS" — used ONLY when clinic does NOT have WhatsApp Reminders add-on
 
   updatedAt DateTime @updatedAt
 }
@@ -632,6 +753,27 @@ model WhatsAppConversationContext {
   @@index([phone])
 }
 
+/// Audit trail for every SMS sent — OTP_VERIFICATION and APPOINTMENT_CONFIRMATION only.
+/// Per CHARTWELL_SMS_INTEGRATION_SPEC.md Section 6: SMS is structurally restricted to these two event types.
+model SmsMessageLog {
+  id                String   @id @default(cuid())
+  clinicId          String? // null for OTP sends not tied to a clinic
+  patientId         String?
+  appointmentId     String?
+  userId            String? // set for OTP sends tied to a registering User
+  toPhone           String
+  eventType         String // "OTP_VERIFICATION" | "APPOINTMENT_CONFIRMATION" — nothing else is valid
+  provider          String // "MSG91" | "KALEYRA" | "TWILIO"
+  status            String // "SENT" | "DELIVERED" | "FAILED"
+  providerMessageId String?
+  errorMessage      String?
+  sentAt            DateTime @default(now())
+
+  @@index([clinicId])
+  @@index([sentAt])
+  @@index([eventType])
+}
+
 // ─── Patient Portal Account System ────────────────────────────────────────────
 
 /// One per real person — keyed by email, optionally phone.
@@ -646,9 +788,10 @@ model PatientAccount {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  links         PatientAccountLink[]
-  notifications PatientNotification[]
-  loginCodes    PatientLoginCode[]
+  links              PatientAccountLink[]
+  notifications      PatientNotification[]
+  loginCodes         PatientLoginCode[]
+  dataExportRequests DataExportRequest[]
 }
 
 /// Join table linking a PatientAccount to a specific clinic's Patient record.
@@ -687,7 +830,7 @@ model PatientNotification {
   id               String    @id @default(cuid())
   patientAccountId String
   clinicId         String
-  type             String    // "APPOINTMENT_CONFIRMED" | "APPOINTMENT_UPDATED" | "INVOICE_CREATED" | "INVOICE_PAID" | "PRESCRIPTION_ISSUED" | "RECORD_SHARED"
+  type             String // "APPOINTMENT_CONFIRMED" | "APPOINTMENT_UPDATED" | "INVOICE_CREATED" | "INVOICE_PAID" | "PRESCRIPTION_ISSUED" | "RECORD_SHARED"
   title            String
   body             String
   relatedId        String?
@@ -699,4 +842,211 @@ model PatientNotification {
 
   @@index([patientAccountId, clinicId])
   @@index([createdAt])
+}
+
+/// Request by a patient to export all their data from a clinic
+model DataExportRequest {
+  id               String    @id @default(cuid())
+  patientAccountId String
+  clinicId         String
+  status           String    @default("PENDING") // PENDING, PROCESSING, COMPLETED, REJECTED
+  downloadUrl      String?
+  createdAt        DateTime  @default(now())
+  completedAt      DateTime?
+
+  patientAccount PatientAccount @relation(fields: [patientAccountId], references: [id], onDelete: Cascade)
+  clinic         Clinic         @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId])
+  @@index([patientAccountId])
+}
+
+/// Access-only audit log for video consultations.
+/// Stores only WHO joined/left WHEN — no recordings, chat, or call content.
+model VideoCallAccessLog {
+  id            String   @id @default(cuid())
+  clinicId      String
+  appointmentId String
+  roomId        String
+  role          String   // "doctor" | "patient"
+  identifier    String   // doctorId or patientId (name/id)
+  event         String   // "JOINED" | "ADMITTED" | "LEFT" | "LINK_REVOKED" | "ENDED" | "DENIED"
+  createdAt     DateTime @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId])
+  @@index([appointmentId])
+}
+
+// ─── Email Notification System ────────────────────────────────────────────────
+
+/// Audit trail for every email sent (or skipped) through sendNotificationEmail().
+/// recipientType: "STAFF" | "PATIENT" | "ADMIN" | "LEAD"
+/// status:        "SENT" | "FAILED" | "BOUNCED" | "SKIPPED"
+model EmailLog {
+  id                String   @id @default(cuid())
+  recipientType     String             // "STAFF" | "PATIENT" | "ADMIN" | "LEAD"
+  recipientId       String?            // userId / patientAccountId / null for pre-account leads
+  clinicId          String?            // null for platform-level emails not tied to a clinic
+  eventType         String             // a key from EMAIL_EVENTS catalog
+  toEmail           String
+  subject           String
+  status            String             // "SENT" | "FAILED" | "BOUNCED" | "SKIPPED"
+  providerMessageId String?
+  errorMessage      String?
+  sentAt            DateTime @default(now())
+
+  @@index([recipientId])
+  @@index([clinicId])
+  @@index([eventType])
+  @@index([sentAt])
+}
+
+/// Per-user or per-patient toggle for TOGGLEABLE notification events.
+/// Mandatory events (per catalog) never appear here — they send unconditionally.
+/// ownerType: "USER" | "PATIENT_ACCOUNT"
+model NotificationPreference {
+  id        String  @id @default(cuid())
+  ownerType String            // "USER" | "PATIENT_ACCOUNT"
+  ownerId   String
+  eventType String            // must be a TOGGLEABLE event per catalog — never a mandatory one
+  enabled   Boolean @default(true)
+
+  @@unique([ownerType, ownerId, eventType])
+  @@index([ownerId])
+}
+
+// ─── Legal Consent Records ─────────────────────────────────────────────────────
+// CHARTWELL_PRELAUNCH_OPS_SPEC.md §2
+//
+// Records that a specific user or patient explicitly accepted a legal document.
+// ownerType: "USER" | "PATIENT_ACCOUNT"
+// documentType: "TERMS" | "PRIVACY"
+// versionLabel: the "Last updated" date from the legal page at time of acceptance
+// (e.g. "2026-09-30") — proves *what version* they accepted.
+
+model ConsentRecord {
+  id            String   @id @default(cuid())
+  ownerType     String             // "USER" | "PATIENT_ACCOUNT"
+  ownerId       String
+  documentType  String             // "TERMS" | "PRIVACY"
+  versionLabel  String             // legal page's "Last updated" date at time of acceptance
+  acceptedAt    DateTime @default(now())
+  ipAddress     String?
+
+  @@index([ownerType, ownerId])
+  @@index([documentType])
+}
+
+// ─── GST Tax Invoices ─────────────────────────────────────────────────────────
+// CHARTWELL_PRELAUNCH_OPS_SPEC.md §3
+//
+// OpenORDO's own invoices to clinics for Plan subscriptions and Plugin purchases.
+// INR invoices carry CGST+SGST (intra-state) or IGST (inter-state).
+// USD invoices are plain receipts — Indian GST does not apply.
+//
+// invoiceNumber: sequential, financial-year-scoped (e.g. OO/2026-27/000123)
+// billingType:   "PLAN_SUBSCRIPTION" | "PLUGIN_PURCHASE"
+// currency:      "INR" | "USD"
+// placeOfSupply: clinic's registered state — INR invoices only
+// All amounts in smallest currency unit (paise for INR, cents for USD).
+
+model TaxInvoice {
+  id            String   @id @default(cuid())
+  invoiceNumber String   @unique          // sequential, financial-year-scoped
+  clinicId      String
+  billingType   String                    // "PLAN_SUBSCRIPTION" | "PLUGIN_PURCHASE"
+  relatedId     String                    // the Subscription id or ClinicPlugin id
+  currency      String                    // "INR" | "USD"
+  issueDate     DateTime @default(now())
+  
+  countryCode   String            // which TaxCountryConfig applied at issue time
+  taxLabel      String            // copied at issue time for immutability — "GST"/"VAT"/etc.
+  taxAmount     Int      @default(0)
+
+  taxableValue    Int                       // smallest currency unit
+  platformFee     Int?                      // platform fee amount in smallest currency unit
+  platformFeeRate String?                   // the percentage rate applied (e.g. "10")
+  cgst            Int?                      // set only for intra-state INR invoices
+  sgst          Int?                      // set only for intra-state INR invoices
+  igst          Int?                      // set only for inter-state INR invoices
+  totalValue    Int
+  pdfFileKey    String?                   // private storage key — signed-URL delivery
+
+  // Void tracking — numbers are never deleted, only voided
+  isVoided      Boolean  @default(false)
+  voidedAt      DateTime?
+  voidReason    String?
+
+  createdAt     DateTime @default(now())
+
+  clinic Clinic @relation(fields: [clinicId], references: [id])
+
+  @@index([clinicId])
+  @@index([issueDate])
+  @@index([currency])
+}
+
+// ─── Invoice Sequence Counter ─────────────────────────────────────────────────
+// Atomic counter for GST invoice numbering — one row per financial year.
+// financialYear: e.g. "2026-27"
+// sequence:      current highest number in that year (incremented atomically)
+
+model InvoiceSequence {
+  id            String @id @default(cuid())
+  financialYear String @unique  // e.g. "2026-27"
+  sequence      Int    @default(0)
+}
+
+// ─── Internal Observability & Error Monitoring ────────────────────────────────
+
+/// Internal logs for system errors, replacing Sentry.
+/// NO PHI should ever be written to this table.
+model SystemErrorLog {
+  id           String   @id @default(cuid())
+  level        String   @default("ERROR") // "ERROR", "WARN", "INFO"
+  source       String   // "CLIENT", "SERVER", "EDGE"
+  message      String
+  stack        String?  // Stack trace, no PHI
+  url          String?  // Request URL
+  userId       String?  // UUID only, no names/emails
+  clinicId     String?  // UUID only
+  metadata     String?  // JSON string (Safe, sanitized data only)
+  createdAt    DateTime @default(now())
+}
+
+
+model StoredFile {
+  id            String    @id @default(cuid())
+  scope         String
+  clinicId      String?
+  patientId     String?
+  appointmentId String?
+  category      String
+  storageKey    String    @unique
+  originalName  String
+  mimeType      String
+  sizeBytes     Int
+  sha256        String
+  width         Int?
+  height        Int?
+  variants      String?
+  isPublicAsset Boolean   @default(false)
+  uploadedById  String?
+  uploadedByType String?
+  createdAt     DateTime  @default(now())
+  deletedAt     DateTime?
+
+  @@index([clinicId, patientId, category])
+  @@index([clinicId, category, createdAt])
+}
+
+model SeoSitemapEntry {
+  id         String   @id @default(cuid())
+  path       String   @unique
+  priority   Float    @default(0.5)
+  changefreq String   @default("weekly")
+  mode       String   @default("INCLUDE")
+  updatedAt  DateTime @updatedAt
 }

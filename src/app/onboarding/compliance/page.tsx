@@ -27,7 +27,7 @@ export default async function OnboardingCompliancePage() {
       </div>
 
       <div className="p-8">
-        <ComplianceForm country={clinic.country} />
+        <ComplianceForm countryCode={clinic.countryCode || "US"} />
       </div>
     </div>
   )

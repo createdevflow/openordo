@@ -1,5 +1,7 @@
 import { cookies } from "next/headers"
 import { SignJWT, jwtVerify } from "jose"
+import { db } from "@/lib/db"
+import { redirect } from "next/navigation"
 
 const SECRET = new TextEncoder().encode(process.env.AUTH_SECRET || "fallback_secret_for_dev")
 const COOKIE_NAME = "patient_account_session"
@@ -44,6 +46,15 @@ export async function getPatientAccountSession(): Promise<PatientAccountSession 
 export async function clearPatientAccountSession() {
   const cookieStore = await cookies()
   cookieStore.delete(COOKIE_NAME)
+}
+
+export async function requirePatientConsent(patientAccountId: string, clinicSlug: string) {
+  const consentRecord = await db.consentRecord.findFirst({
+    where: { ownerType: "PATIENT_ACCOUNT", ownerId: patientAccountId, documentType: "PRIVACY" }
+  })
+  if (!consentRecord) {
+    redirect(`/portal/${clinicSlug}/consent`)
+  }
 }
 
 // ─── Legacy compat shim — old per-clinic cookie (kept to avoid 404s on old sessions) ──

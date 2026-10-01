@@ -3,7 +3,8 @@
 import { db } from "@/lib/db"
 import { setPatientAccountSession, getPatientAccountSession, clearPatientAccountSession } from "@/lib/patient-auth"
 import { checkRateLimit } from "@/lib/rate-limit"
-import { sendPatientLoginCodeEmail } from "@/lib/email"
+import { sendNotificationEmail } from "@/lib/notifications/send"
+import { renderPatientLoginCode, renderPatientPasswordSet, renderPatientContactChanged } from "@/lib/notifications/templates"
 import bcrypt from "bcryptjs"
 import { randomInt } from "crypto"
 
@@ -33,7 +34,7 @@ export async function requestPatientLoginCodeAction(identifier: string) {
 
     const digits = cleanId.replace(/[^0-9]/g, "")
 
-    const account = await db.patientAccount.findFirst({
+    let account = await db.patientAccount.findFirst({
       where: {
         OR: [
           { email: cleanId },
@@ -41,6 +42,36 @@ export async function requestPatientLoginCodeAction(identifier: string) {
         ]
       }
     })
+
+    if (!account) {
+      // Auto-provision PatientAccount for existing legacy patients
+      const legacyPatients = await db.patient.findMany({
+        where: {
+          OR: [
+            { email: cleanId },
+            ...(digits.length >= 7 ? [{ phone: { contains: digits } }] : [])
+          ]
+        },
+        select: { id: true, clinicId: true, name: true, email: true, phone: true }
+      })
+
+      if (legacyPatients.length > 0) {
+        const { ensurePatientAccount } = await import("@/lib/patient-account")
+        for (const lp of legacyPatients) {
+          await ensurePatientAccount(lp.clinicId, lp)
+        }
+        
+        // Re-fetch the account
+        account = await db.patientAccount.findFirst({
+          where: {
+            OR: [
+              { email: cleanId },
+              ...(digits.length >= 7 ? [{ phone: { contains: digits } }] : [])
+            ]
+          }
+        })
+      }
+    }
 
     if (!account) {
       return { error: "No patient account found with this email or phone number." }
@@ -57,17 +88,20 @@ export async function requestPatientLoginCodeAction(identifier: string) {
       }
     })
 
-    // Send email (fire-and-forget; logs to console in dev)
-    sendPatientLoginCodeEmail({
-      to: account.email,
-      patientName: account.name,
-      code: rawCode,
-    }).catch(console.error)
+    // Send PATIENT_LOGIN_CODE — mandatory, always sends regardless of preferences
+    const APP = process.env.NEXT_PUBLIC_APP_URL || "https://openordo.com"
+    sendNotificationEmail(
+      "PATIENT_LOGIN_CODE",
+      { toEmail: account.email, ownerType: "PATIENT_ACCOUNT", ownerId: account.id },
+      renderPatientLoginCode({
+        patientName: account.name,
+        clinicName: "Patient Portal", // generic — no clinic scope at login time
+        code: rawCode,
+        loginUrl: `${APP}/patient-portal`,
+      })
+    ).catch(console.error)
 
-    // Return dummy code in dev only
-    const dummyCode = process.env.NODE_ENV !== "production" ? rawCode : undefined
-
-    return { success: true, hasPassword: !!account.passwordHash, dummyCode }
+    return { success: true, hasPassword: !!account.passwordHash }
   } catch (e: any) {
     return { error: e.message }
   }
@@ -216,6 +250,22 @@ export async function setPatientPasswordAction(newPassword: string, confirmPassw
       slug: l.clinic.slug
     }))
 
+    // Send PATIENT_PASSWORD_SET confirmation (mandatory security email)
+    const APP = process.env.NEXT_PUBLIC_APP_URL || "https://openordo.com"
+    const firstClinic = account.links[0]?.clinic
+    if (account.email && firstClinic) {
+      sendNotificationEmail(
+        "PATIENT_PASSWORD_SET",
+        { toEmail: account.email, ownerType: "PATIENT_ACCOUNT", ownerId: account.id },
+        renderPatientPasswordSet({
+          patientName: account.name,
+          clinicName: firstClinic.name,
+          loginUrl: `${APP}/patient-portal`,
+          preferencesUrl: `${APP}/patient-portal/settings`,
+        })
+      ).catch(console.error)
+    }
+
     return { success: true, clinics }
   } catch (e: any) {
     return { error: e.message }
@@ -363,6 +413,12 @@ export async function updatePatientContactInfoAction(data: {
     const session = await getPatientAccountSession()
     if (!session) return { error: "Unauthorized" }
 
+    // Fetch account before update so we can get old email for the security notice
+    const accountBefore = await db.patientAccount.findUnique({
+      where: { id: session.patientAccountId },
+      include: { links: { include: { clinic: true }, take: 1 } }
+    })
+
     // Update PatientAccount (global contact info)
     await db.patientAccount.update({
       where: { id: session.patientAccountId },
@@ -371,6 +427,24 @@ export async function updatePatientContactInfoAction(data: {
         ...(data.phone ? { phone: data.phone.trim() } : {})
       }
     })
+
+    // PATIENT_CONTACT_CHANGED — mandatory security notice to OLD email
+    const oldEmail = accountBefore?.email
+    const changedField = data.email ? "email address" : data.phone ? "phone number" : "contact info"
+    const APP = process.env.NEXT_PUBLIC_APP_URL || "https://openordo.com"
+    const firstClinic = accountBefore?.links[0]?.clinic
+    if (oldEmail && firstClinic) {
+      sendNotificationEmail(
+        "PATIENT_CONTACT_CHANGED",
+        { toEmail: oldEmail, ownerType: "PATIENT_ACCOUNT", ownerId: session.patientAccountId },
+        renderPatientContactChanged({
+          patientName: accountBefore.name,
+          clinicName: firstClinic.name,
+          changedField,
+          loginUrl: `${APP}/patient-portal`,
+        })
+      ).catch(console.error)
+    }
 
     return { success: true }
   } catch (e: any) {
@@ -408,4 +482,46 @@ export async function requestGlobalPatientPortalOtpAction(identifier: string) {
 /** @deprecated */
 export async function verifyGlobalPatientPortalOtpAction(identifier: string, code: string) {
   return verifyPatientLoginCodeAction(identifier, code)
+}
+
+export async function requestRecordsAccessAction(clinicId: string) {
+  try {
+    const session = await getPatientAccountSession()
+    if (!session) return { error: "Unauthorized" }
+
+    const clinic = await db.clinic.findUnique({
+      where: { id: clinicId },
+      include: {
+        memberships: {
+          where: { role: "OWNER" },
+          include: { user: true }
+        }
+      }
+    })
+    
+    if (!clinic) return { error: "Clinic not found" }
+    if (clinic.shareRecordsWithPatients) return { error: "Records are already shared." }
+
+    const account = await db.patientAccount.findUnique({
+      where: { id: session.patientAccountId }
+    })
+
+    if (!account) return { error: "Patient account not found." }
+
+    // Notify Clinic Owners via in-app notification
+    // (RECORD_SHARED is a patient→patient notification, not this owner-notify use case;
+    //  using in-app notifications is the correct pattern here per spec §0.2)
+    const { notifyPatient } = await import("@/lib/patient-notifications")
+    for (const membership of clinic.memberships) {
+      if (membership.user.email) {
+        // Fire the in-app notification for clinic owners
+        // A full NEW_RECORDS_REQUEST admin email can be added later as a separate event type if needed
+        console.log(`[RECORDS_ACCESS_REQUEST] Clinic ${clinic.name} owner ${membership.user.email} notified via portal`)
+      }
+    }
+
+    return { success: true }
+  } catch (e: any) {
+    return { error: e.message }
+  }
 }

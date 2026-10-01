@@ -1,13 +1,18 @@
-"use client"
+import { auth } from "@/lib/auth"
+import { db } from "@/lib/db"
+import { redirect } from "next/navigation"
+import { ClinicForm } from "./ClinicForm"
 
-import { useActionState } from "react"
-import { createClinicAction } from "@/server/actions/onboarding"
-import { Button } from "@/components/ui/Button"
-import { Input } from "@/components/ui/Input"
-import { Select } from "@/components/ui/Select"
+export default async function OnboardingClinicPage() {
+  const session = await auth()
+  if (!session?.user) {
+    redirect("/login")
+  }
 
-export default function OnboardingClinicPage() {
-  const [state, formAction, pending] = useActionState(createClinicAction, null)
+  const activeCountries = await db.taxCountryConfig.findMany({
+    where: { isActive: true },
+    orderBy: { sortOrder: "asc" }
+  })
 
   return (
     <div>
@@ -19,50 +24,9 @@ export default function OnboardingClinicPage() {
       </div>
 
       <div className="p-8">
-        <form action={formAction} className="space-y-6">
-          {state?.error && (
-            <div className="bg-coral-soft text-coral p-3 rounded-md text-[13px] font-medium">
-              {state.error}
-            </div>
-          )}
-          
-          <div>
-            <label className="block text-[13px] font-semibold text-ink-soft mb-1.5">Clinic Name</label>
-            <Input name="name" type="text" placeholder="e.g. Riverside Family Practice" required />
-          </div>
-          
-          <div>
-            <label className="block text-[13px] font-semibold text-ink-soft mb-1.5">Specialty / Type</label>
-            <Select name="type" required>
-              <option value="General Practice">General Practice</option>
-              <option value="Dental">Dental</option>
-              <option value="Pediatrics">Pediatrics</option>
-              <option value="Dermatology">Dermatology</option>
-              <option value="Other">Other Specialty</option>
-            </Select>
-          </div>
-
-          <div>
-            <label className="block text-[13px] font-semibold text-ink-soft mb-1.5">Country</label>
-            <Select name="country" required defaultValue="US">
-              <option value="US">🇺🇸 United States</option>
-              <option value="CA">🇨🇦 Canada</option>
-              <option value="AE">🇦🇪 United Arab Emirates</option>
-              <option value="IN">🇮🇳 India</option>
-              <option value="ZA">🇿🇦 South Africa</option>
-              <option value="NG">🇳🇬 Nigeria</option>
-              <option value="KE">🇰🇪 Kenya</option>
-              <option value="Other">🌍 Other / International</option>
-            </Select>
-          </div>
-
-          <div className="pt-4 flex justify-end">
-            <Button type="submit" disabled={pending}>
-              {pending ? "Saving..." : "Continue"}
-            </Button>
-          </div>
-        </form>
+        <ClinicForm activeCountries={activeCountries} />
       </div>
     </div>
   )
 }
+

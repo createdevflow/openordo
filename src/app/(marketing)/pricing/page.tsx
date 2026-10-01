@@ -1,11 +1,10 @@
 import { db } from "@/lib/db"
 import { headers } from "next/headers"
+import { resolvePricingContext } from "@/lib/pricing"
 import { LandingPricingSection, PlanItem } from "../LandingPricingSection"
 
 export default async function PricingPage() {
-  const headersList = await headers()
-  const country = headersList.get("x-user-country") || "US"
-  const initialCurrency = country === "IN" ? "INR" : "USD"
+  const pricingContext = await resolvePricingContext()
 
   let dbPlans: any[] = []
   let defaultTrialDays = 14
@@ -120,7 +119,7 @@ export default async function PricingPage() {
       <LandingPricingSection 
         plans={plans} 
         promo={promo} 
-        initialCurrency={initialCurrency as "USD" | "INR"} 
+        currency={pricingContext.currency} countryCode={pricingContext.countryCode} taxConfig={pricingContext.taxConfig} 
         defaultTrialDays={defaultTrialDays}
       />
     </div>

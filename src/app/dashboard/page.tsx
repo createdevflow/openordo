@@ -4,6 +4,12 @@ import { getClinicSubscriptionDetails } from "@/lib/features"
 import { getStorageStats } from "@/server/actions/documents"
 import { OverviewClient } from "./OverviewClient"
 
+import { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: "Dashboard",
+}
+
 export default async function DashboardOverviewPage() {
   const clinicId = await requireClinicId()
 

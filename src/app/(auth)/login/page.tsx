@@ -62,7 +62,7 @@ function LoginForm() {
       setPatientError(res.error)
     } else {
       setMode("PATIENT_VERIFY")
-      setPatientMessage(`For this demo, your OTP is: ${res.dummyCode}`)
+      setPatientMessage(`A 6-digit code has been sent to your registered email.`)
     }
     setPatientLoading(false)
   }

@@ -6,6 +6,7 @@ import { currency, fmtDateShort, StatusBadge, toISO } from "@/components/Dashboa
 import { createInvoiceAction, markInvoicePaidAction } from "@/server/actions/billing"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import Link from "next/link"
+import { PrescriptionPrintTemplate } from "../records/RecordsClient"
 
 export function BillingClient({ 
   invoices, 
@@ -15,7 +16,9 @@ export function BillingClient({
   hasInsurance = false, 
   planName = "Practice",
   initialAction,
-  initialPatientId
+  initialPatientId,
+  prescriptions,
+  doctors
 }: any) {
   const [printingInvoice, setPrintingInvoice] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState("all")
@@ -88,47 +91,7 @@ export function BillingClient({
   function createInvoice(data: any) {
     startTransition(async () => {
       try {
-        // 1. Create the invoice first so it gets a displayId
-        const newInvoice = await createInvoiceAction(data)
-        
-        // 2. Secretly render the invoice template to generate PDF
-        try {
-          const html2pdf = (await import("html2pdf.js")).default
-          const ReactDOMServer = (await import("react-dom/server")).default
-          
-          const patient = patients.find((p: any) => p.id === data.patientId)
-          const htmlString = ReactDOMServer.renderToString(
-            <InvoicePrintTemplate invoice={newInvoice} clinic={clinic} patient={patient} />
-          )
-          
-          const container = document.createElement("div")
-          container.innerHTML = htmlString
-          
-          // Use html2pdf to generate blob
-          const pdfBlob = await html2pdf().from(container).outputPdf("blob")
-          const file = new File([pdfBlob], `${newInvoice.displayId}.pdf`, { type: "application/pdf" })
-          
-          const formData = new FormData()
-          formData.append("file", file)
-          
-          const res = await fetch("/api/upload", { method: "POST", body: formData })
-          if (res.ok) {
-            const json = await res.json()
-            if (json.url) {
-              const { createPatientDocumentAction } = await import("@/server/actions/documents")
-              await createPatientDocumentAction({
-                patientId: data.patientId,
-                name: `Invoice ${newInvoice.displayId}`,
-                type: "INVOICE",
-                sizeBytes: json.sizeBytes || file.size,
-                url: json.url
-              })
-            }
-          }
-        } catch (pdfErr) {
-          console.error("Failed to generate/upload invoice PDF:", pdfErr)
-        }
-
+        await createInvoiceAction(data)
         setModalOpen(false)
       } catch (err) {
         console.error(err)
@@ -206,8 +169,21 @@ export function BillingClient({
                           <button className="cw-btn cw-btn-ghost cw-btn-sm" onClick={() => markPaid(inv.id)} disabled={isPending}>Mark paid</button>
                         )}
                         <button className="cw-btn cw-btn-ghost cw-btn-icon" onClick={() => {
-                          setPrintingInvoice(inv);
-                          setTimeout(() => window.print(), 100);
+                          startTransition(async () => {
+                            try {
+                              const { getInvoicePdfUrlAction } = await import("@/server/actions/billing")
+                              const url = await getInvoicePdfUrlAction(inv.displayId, inv.patientId)
+                              if (url) {
+                                window.open(url, '_blank')
+                              } else {
+                                setPrintingInvoice(inv)
+                                setTimeout(() => window.print(), 100)
+                              }
+                            } catch(e) {
+                              setPrintingInvoice(inv)
+                              setTimeout(() => window.print(), 100)
+                            }
+                          })
                         }} title="Download / Print Invoice"><Download size={14} /></button>
                       </div>
                     </td>
@@ -228,13 +204,25 @@ export function BillingClient({
         </div>
       </div>
 
-      {modalOpen && <InvoiceModal patients={patients} initialPatientId={initialPatientId} onClose={() => setModalOpen(false)} onSave={createInvoice} isPending={isPending} />}
+      {modalOpen && <InvoiceModal patients={patients} prescriptions={prescriptions} initialPatientId={initialPatientId} onClose={() => setModalOpen(false)} onSave={createInvoice} isPending={isPending} />}
       {printingInvoice && (
-        <InvoicePrintTemplate 
-          invoice={printingInvoice} 
-          patient={patients.find((p: any) => p.id === printingInvoice.patientId)}
-          clinic={clinic} 
-        />
+        <div id="print-root">
+          <InvoicePrintTemplate 
+            invoice={printingInvoice} 
+            patient={patients.find((p: any) => p.id === printingInvoice.patientId)}
+            clinic={clinic} 
+          />
+          {printingInvoice.prescription && (
+            <div style={{ pageBreakBefore: "always" }}>
+              <PrescriptionPrintTemplate
+                record={printingInvoice.prescription}
+                patient={patients.find((p: any) => p.id === printingInvoice.patientId)}
+                doctor={printingInvoice.prescription.doctor}
+                clinic={clinic}
+              />
+            </div>
+          )}
+        </div>
       )}
     </div>
   )
@@ -249,7 +237,7 @@ function InvoicePrintTemplate({ invoice, clinic, patient }: any) {
   const total = invoice.items.reduce((s: number, it: any) => s + Number(it.amount), 0);
 
   return (
-    <div id="print-root" style={{ padding: "40px", maxWidth: "800px", margin: "0 auto", color: "#000", fontFamily: "sans-serif" }}>
+    <div style={{ padding: "40px", maxWidth: "800px", margin: "0 auto", color: "#000", fontFamily: "sans-serif", background: "white" }}>
       <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "2px solid #eee", paddingBottom: "20px", marginBottom: "30px" }}>
         <div>
           {config.invoiceLogo ? (
@@ -316,11 +304,15 @@ function InvoicePrintTemplate({ invoice, clinic, patient }: any) {
   )
 }
 
-function InvoiceModal({ patients, onClose, onSave, isPending, initialPatientId }: any) {
+function InvoiceModal({ patients, prescriptions, onClose, onSave, isPending, initialPatientId }: any) {
   const [patientId, setPatientId] = useState(initialPatientId || patients[0]?.id || "");
   const today = new Date();
   const [date, setDate] = useState(toISO(today.getFullYear(), today.getMonth(), today.getDate()));
   const [items, setItems] = useState([{ desc: "", amount: "" }]);
+  const [includePrescription, setIncludePrescription] = useState(false);
+
+  const patientPrescriptions = prescriptions?.filter((p: any) => p.patientId === patientId) || [];
+  const latestPrescription = patientPrescriptions[0];
 
   function updateItem(i: number, key: string, val: string) {
     const next = [...items]; 
@@ -338,7 +330,12 @@ function InvoiceModal({ patients, onClose, onSave, isPending, initialPatientId }
         </div>
         <form onSubmit={e => {
           e.preventDefault();
-          onSave({ patientId, date, items: items.filter(it => it.desc && it.amount).map(it => ({ desc: it.desc, amount: Number(it.amount) })) });
+          onSave({ 
+            patientId, 
+            date, 
+            items: items.filter(it => it.desc && it.amount).map(it => ({ desc: it.desc, amount: Number(it.amount) })),
+            includePrescriptionId: includePrescription && latestPrescription ? latestPrescription.id : null
+          });
         }}>
           <div className="cw-modal-body">
             <div className="cw-row2">
@@ -360,6 +357,19 @@ function InvoiceModal({ patients, onClose, onSave, isPending, initialPatientId }
             <button type="button" className="cw-btn cw-btn-ghost cw-btn-sm" onClick={() => setItems([...items, { desc: "", amount: "" }])} disabled={isPending}><Plus size={13} />Add line item</button>
             <div style={{ marginTop: 18, paddingTop: 14, borderTop: "1px solid var(--line)", display: "flex", justifyContent: "space-between", fontWeight: 700 }}>
               <span>Total</span><span className="mono">{currency(total)}</span>
+            </div>
+            
+            <div style={{ marginTop: 20, padding: 12, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 6 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: latestPrescription ? "pointer" : "not-allowed", margin: 0, color: latestPrescription ? "var(--ink)" : "var(--ink-soft)" }}>
+                <input 
+                  type="checkbox" 
+                  checked={includePrescription && !!latestPrescription} 
+                  onChange={e => setIncludePrescription(e.target.checked)} 
+                  disabled={isPending || !latestPrescription} 
+                />
+                Include latest e-prescription in PDF 
+                {latestPrescription ? ` (${fmtDateShort(latestPrescription.date)})` : " (No prescription found)"}
+              </label>
             </div>
           </div>
           <div className="cw-modal-foot">

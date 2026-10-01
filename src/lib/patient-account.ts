@@ -9,7 +9,7 @@
  */
 
 import { db } from "@/lib/db"
-import { hasActivePlugin } from "@/lib/plugins"
+import { hasFeature } from "@/lib/features"
 import { sendPatientWelcomeEmail } from "@/lib/email"
 
 /**
@@ -28,9 +28,10 @@ export async function ensurePatientAccount(
     phone?: string | null
   }
 ): Promise<void> {
-  // Gate: only for clinics with patient-portal plugin active
-  const hasPortal = await hasActivePlugin(clinicId, "patient-portal")
+  // Gate: only for clinics with patient-portal feature active
+  const hasPortal = await hasFeature(clinicId, "communication.patient_portal")
   if (!hasPortal) return
+
 
   const email = patient.email?.trim().toLowerCase() || null
   const phone = patient.phone?.trim().replace(/[^0-9+]/g, "") || null

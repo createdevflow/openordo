@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { headers } from "next/headers"
+import { resolvePricingContext } from "@/lib/pricing"
 import { db } from "@/lib/db"
 import { Button } from "@/components/ui/Button"
 import { PluginCard } from "@/components/ui/PluginCard"
@@ -8,11 +9,14 @@ import {
   Building2, CalendarDays, ArrowRight, ChevronDown, Quote, Download, BellRing, Puzzle
 } from "lucide-react"
 import { LandingPricingSection, PlanItem } from "./LandingPricingSection"
+import { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: "Home",
+}
 
 export default async function MarketingPage() {
-  const headersList = await headers()
-  const country = headersList.get("x-user-country") || "US"
-  const initialCurrency = country === "IN" ? "INR" : "USD"
+  const pricingContext = await resolvePricingContext()
 
   // Fetch real plans from DB
   let dbPlans: any[] = []
@@ -331,7 +335,7 @@ export default async function MarketingPage() {
       <LandingPricingSection 
         plans={plans} 
         promo={promo} 
-        initialCurrency={initialCurrency as "USD" | "INR"} 
+        currency={pricingContext.currency} countryCode={pricingContext.countryCode} taxConfig={pricingContext.taxConfig} 
         defaultTrialDays={defaultTrialDays}
       />
 
@@ -351,7 +355,7 @@ export default async function MarketingPage() {
               <PluginCard
                 key={plugin.id}
                 plugin={plugin}
-                currency={initialCurrency as "INR" | "USD"}
+                currency={pricingContext.currency as "INR" | "USD"}
                 variant="landing"
                 isLoggedIn={false}
               />

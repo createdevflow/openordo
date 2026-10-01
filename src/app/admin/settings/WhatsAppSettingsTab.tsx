@@ -9,7 +9,6 @@ import {
   saveWhatsAppAccessToken,
   revealWhatsAppAccessToken,
   testWhatsAppConnectionAction,
-  saveOtpChannelSettings,
   saveWhatsAppTemplateMapping,
 } from "@/server/actions/admin/whatsapp-settings"
 import {
@@ -39,8 +38,6 @@ interface WaSettings {
   whatsappConnected: boolean
   whatsappLastVerifiedAt: string | null
   whatsappLastError: string | null
-  otpChannel: string
-  otpBothMode: string
 }
 
 interface TemplateMapping {
@@ -116,11 +113,6 @@ export function WhatsAppSettingsTab({
   const [tokenLoading, setTokenLoading] = useState(false)
   const [tokenMasked, setTokenMasked] = useState(initialSettings.whatsappAccessTokenMasked)
   const [tokenSet, setTokenSet] = useState(initialSettings.whatsappAccessTokenSet)
-
-  // ── OTP channel state ──
-  const [otpChannel, setOtpChannel] = useState(initialSettings.otpChannel)
-  const [otpBothMode, setOtpBothMode] = useState(initialSettings.otpBothMode || "USER_CHOOSES")
-  const [savingOtp, setSavingOtp] = useState(false)
 
   // ── Template mappings state ──
   const [templates, setTemplates] = useState<TemplateMapping[]>(initialTemplates)
@@ -213,25 +205,6 @@ export function WhatsAppSettingsTab({
     } finally {
       setTokenLoading(false)
     }
-  }
-
-  const handleSaveOtp = async () => {
-    setSavingOtp(true)
-    toast.promise(
-      saveOtpChannelSettings({
-        otpChannel: otpChannel as any,
-        otpBothMode: otpBothMode as any,
-      }).then((res) => {
-        if (!res.ok) throw new Error((res as any).error)
-        return res
-      }),
-      {
-        loading: "Saving OTP settings…",
-        success: "OTP channel settings saved",
-        error: (e) => e.message || "Failed to save",
-      }
-    )
-    setSavingOtp(false)
   }
 
   const handleTemplateChange = (id: string, field: "metaTemplateName" | "isActive", value: string | boolean) => {
@@ -500,113 +473,6 @@ export function WhatsAppSettingsTab({
           </div>
         </div>
       )}
-
-      <div style={{ height: 1, background: "var(--adm-border)" }} />
-
-      {/* ─────────────────────────────────────────────────────
-          2.2 OTP delivery panel
-      ───────────────────────────────────────────────────── */}
-      <div>
-        <div className="adm-section-label" style={{ marginBottom: 4 }}>OTP Delivery Channel</div>
-        <p style={{ fontSize: 13.5, color: "var(--adm-muted)", marginBottom: 18 }}>
-          Controls which channel is used to send the 6-digit verification code during registration.
-        </p>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
-          {[
-            { value: "EMAIL", label: "Email only", desc: "Standard email OTP. Always works, no WhatsApp credentials required." },
-            { value: "WHATSAPP", label: "WhatsApp only", desc: "Send OTP via WhatsApp template. Falls back to email automatically if the send fails." },
-            { value: "BOTH", label: "Both channels", desc: "Configure whether users can choose or both codes are sent simultaneously." },
-          ].map((opt) => (
-            <label
-              key={opt.value}
-              htmlFor={`otp-channel-${opt.value}`}
-              style={{
-                display: "flex", alignItems: "flex-start", gap: 12, cursor: "pointer",
-                padding: "12px 16px",
-                border: `1px solid ${otpChannel === opt.value ? "rgba(30,70,56,0.35)" : "var(--adm-border)"}`,
-                borderRadius: 10,
-                background: otpChannel === opt.value ? "rgba(30,70,56,0.05)" : "transparent",
-              }}
-            >
-              <input
-                type="radio"
-                id={`otp-channel-${opt.value}`}
-                name="otpChannel"
-                value={opt.value}
-                checked={otpChannel === opt.value}
-                onChange={() => setOtpChannel(opt.value)}
-                style={{ marginTop: 2 }}
-              />
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 13.5 }}>{opt.label}</div>
-                <div style={{ fontSize: 12.5, color: "var(--adm-muted)", marginTop: 2 }}>{opt.desc}</div>
-              </div>
-            </label>
-          ))}
-        </div>
-
-        {/* Sub-option for BOTH */}
-        {otpChannel === "BOTH" && (
-          <div style={{
-            marginBottom: 20, marginLeft: 16, paddingLeft: 16,
-            borderLeft: "3px solid rgba(30,70,56,0.2)",
-          }}>
-            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10, color: "var(--adm-muted)" }}>
-              When both channels are selected:
-            </div>
-            {[
-              { value: "USER_CHOOSES", label: "Let the user choose at registration", desc: "Show a small selector at step 1: \"Verify via WhatsApp\" or \"Verify via Email\"." },
-              { value: "SEND_BOTH", label: "Send to both automatically", desc: "Both codes are sent simultaneously. Either code verifies the account." },
-            ].map((opt) => (
-              <label
-                key={opt.value}
-                htmlFor={`otp-both-mode-${opt.value}`}
-                style={{
-                  display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer",
-                  padding: "10px 14px",
-                  border: `1px solid ${otpBothMode === opt.value ? "rgba(30,70,56,0.3)" : "var(--adm-border)"}`,
-                  borderRadius: 8, marginBottom: 8,
-                  background: otpBothMode === opt.value ? "rgba(30,70,56,0.04)" : "transparent",
-                }}
-              >
-                <input
-                  type="radio"
-                  id={`otp-both-mode-${opt.value}`}
-                  name="otpBothMode"
-                  value={opt.value}
-                  checked={otpBothMode === opt.value}
-                  onChange={() => setOtpBothMode(opt.value)}
-                  style={{ marginTop: 2 }}
-                />
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{opt.label}</div>
-                  <div style={{ fontSize: 12.5, color: "var(--adm-muted)", marginTop: 2 }}>{opt.desc}</div>
-                </div>
-              </label>
-            ))}
-          </div>
-        )}
-
-        {/* Fallback note */}
-        <div className="adm-info-box" style={{ marginBottom: 18 }}>
-          <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-          <span style={{ fontSize: 13 }}>
-            <strong>Automatic fallback:</strong> If WhatsApp is selected but the send fails (invalid number,
-            API error, or not connected), the system automatically falls back to email — the user is never
-            left without a way to verify their account.
-          </span>
-        </div>
-
-        <button
-          className="adm-btn adm-btn-primary"
-          onClick={handleSaveOtp}
-          disabled={savingOtp}
-          id="wa-save-otp-settings-btn"
-        >
-          Save OTP settings
-        </button>
-      </div>
 
       <div style={{ height: 1, background: "var(--adm-border)" }} />
 

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { getFileUrl } from "@/lib/file-utils"
 import { getStorageStats, getVaultDocuments } from "@/server/actions/documents"
 import { HardDrive, FileText, Download, FolderOpen, Archive, Image as ImageIcon, Search } from "lucide-react"
 
@@ -158,7 +159,7 @@ export function StorageTab() {
                   <td className="px-4 py-3 text-ink-soft">{doc.patient?.name}</td>
                   <td className="px-4 py-3 text-ink-soft">{(doc.sizeBytes / 1024 / 1024).toFixed(2)} MB</td>
                   <td className="px-4 py-3 text-right space-x-2">
-                    <a href={doc.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[7px] text-[12.5px] font-medium bg-paper border border-line text-ink hover:bg-paper-raised transition-colors">
+                    <a href={getFileUrl(doc.url)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[7px] text-[12.5px] font-medium bg-paper border border-line text-ink hover:bg-paper-raised transition-colors">
                       View
                     </a>
                   </td>

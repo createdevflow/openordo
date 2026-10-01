@@ -1,10 +1,12 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { sendVerificationOtp } from "@/lib/email"
 import { signIn } from "@/lib/auth"
 import { isRedirectError } from "next/dist/client/components/redirect-error"
 import { sendClinicScopedWhatsAppMessage } from "@/lib/whatsapp-send"
+import { sendSms } from "@/lib/sms"
+import { sendNotificationEmail } from "@/lib/notifications/send"
+import { renderEmailVerificationOtp } from "@/lib/notifications/templates"
 
 export async function verifyOtpAction(prevState: any, formData: FormData) {
   const email = (formData.get("email") as string)?.trim().toLowerCase()
@@ -60,46 +62,73 @@ export async function verifyOtpAction(prevState: any, formData: FormData) {
 
 export async function deliverOtp(userId: string | null, email: string, phone: string | null, code: string): Promise<{ success: boolean; fallbackTriggered?: boolean; error?: string }> {
   const settings = await db.platformCommunicationSettings.findFirst()
-  const channel = settings?.otpChannel || "EMAIL"
-  const bothMode = settings?.otpBothMode || "SEND_BOTH"
+  const channels = settings?.otpChannels || ["EMAIL"]
+  const mode = settings?.otpMode || "USER_CHOOSES"
 
   let whatsappSuccess = false
+  let smsSuccess = false
   let emailSuccess = false
+  
   let attemptedWhatsApp = false
+  let attemptedSms = false
   let fallbackTriggered = false
 
-  // 1. Try WhatsApp if configured
-  if (channel === "WHATSAPP" || (channel === "BOTH" && bothMode === "SEND_BOTH")) {
-    if (phone && settings?.whatsappConnected) {
-      attemptedWhatsApp = true
-      const res = await sendClinicScopedWhatsAppMessage({
-        toPhone: phone,
-        eventType: "OTP_VERIFICATION",
-        variables: { otp_code: code, expiry_minutes: "15" },
-        userId: userId ?? undefined
-      })
-      whatsappSuccess = res.sent
-    }
+  // Determine if a channel should be tried actively
+  const shouldTry = (ch: string) => {
+    if (channels.length === 1 && channels.includes(ch)) return true
+    if (channels.includes(ch) && mode === "SEND_ALL") return true
+    return false
   }
 
-  // 2. Fallback logic or direct Email
+  // 1. Try WhatsApp
+  if (shouldTry("WHATSAPP") && phone && settings?.whatsappConnected) {
+    attemptedWhatsApp = true
+    const res = await sendClinicScopedWhatsAppMessage({
+      toPhone: phone,
+      eventType: "OTP_VERIFICATION",
+      variables: { otp_code: code, expiry_minutes: "15" },
+      userId: userId ?? undefined
+    })
+    whatsappSuccess = res.sent
+  }
+
+  // 2. Try SMS
+  if (shouldTry("SMS") && phone) {
+    attemptedSms = true
+    const res = await sendSms({
+      toPhone: phone,
+      eventType: "OTP_VERIFICATION",
+      variables: { otp_code: code, expiry_minutes: "15" },
+      userId: userId ?? undefined
+    })
+    smsSuccess = res.sent
+  }
+
+  // 3. Fallback logic or direct Email
+  // Send email if:
+  // a) EMAIL is an active channel in SEND_ALL
+  // b) EMAIL is the ONLY channel selected
+  // c) We tried WA or SMS and they failed (fallback)
+  // d) It's USER_CHOOSES and no choice is passed in (we default to email to ensure they get something)
   const shouldSendEmail = 
-    channel === "EMAIL" || 
-    (channel === "BOTH" && bothMode === "SEND_BOTH") ||
-    (attemptedWhatsApp && !whatsappSuccess)
+    shouldTry("EMAIL") || 
+    (attemptedWhatsApp && !whatsappSuccess) ||
+    (attemptedSms && !smsSuccess) ||
+    (!attemptedWhatsApp && !attemptedSms) // catches USER_CHOOSES where we haven't sent anything yet
 
   if (shouldSendEmail) {
-    emailSuccess = await sendVerificationOtp(email, code)
-    if (attemptedWhatsApp && !whatsappSuccess) {
+    const result = await sendNotificationEmail(
+      "EMAIL_VERIFICATION_OTP",
+      { toEmail: email, ownerType: "USER", ownerId: userId || null },
+      renderEmailVerificationOtp({ code })
+    )
+    emailSuccess = result.sent
+    if ((attemptedWhatsApp && !whatsappSuccess) || (attemptedSms && !smsSuccess)) {
       fallbackTriggered = true
     }
   }
 
-  if (channel === "WHATSAPP" && !shouldSendEmail && !whatsappSuccess) {
-     return { success: false, error: "Failed to send WhatsApp message and email fallback was not engaged." }
-  }
-  
-  if (!whatsappSuccess && !emailSuccess) {
+  if (!whatsappSuccess && !smsSuccess && !emailSuccess) {
     return { success: false, error: "Failed to send verification code." }
   }
 

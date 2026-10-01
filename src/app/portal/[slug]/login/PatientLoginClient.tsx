@@ -56,11 +56,7 @@ export function PatientLoginClient({
         setStep("HAS_PASSWORD")
       } else {
         setStep("VERIFY_CODE")
-        if (res.dummyCode) {
-          setMessage(`Demo mode — your code is: ${res.dummyCode}`)
-        } else {
-          setMessage("A login code has been sent to your registered email.")
-        }
+        setMessage("A login code has been sent to your registered email.")
       }
     }
     setLoading(false)
@@ -77,12 +73,7 @@ export function PatientLoginClient({
       setError(res.error)
     } else {
       setStep("VERIFY_CODE")
-      const r = res as any
-      if (r.dummyCode) {
-        setMessage(`Demo mode — your code is: ${r.dummyCode}`)
-      } else {
-        setMessage("A login code has been sent to your registered email.")
-      }
+      setMessage("A login code has been sent to your registered email.")
     }
     setLoading(false)
   }

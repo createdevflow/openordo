@@ -8,6 +8,8 @@ import { hasActivePlugin } from "@/lib/plugins"
 import { sendClinicScopedWhatsAppMessage } from "@/lib/whatsapp-send"
 import { fmtDateShort, fmtTime12 } from "@/components/DashboardHelpers"
 import { notifyPatient } from "@/lib/patient-notifications"
+import { sendNotificationEmail } from "@/lib/notifications/send"
+import { renderAppointmentConfirmed, renderAppointmentChangedByClinic, renderNewBookingReceived } from "@/lib/notifications/templates"
 
 export async function createAppointmentAction(data: {
   patientId?: string
@@ -88,8 +90,6 @@ export async function createAppointmentAction(data: {
   // Send WhatsApp confirmation fire-and-forget
   if (appointment.patient.phone && appointment.patient.phone !== "—") {
     hasActivePlugin(clinicId, "whatsapp-reminders").then(async (isActive) => {
-      if (!isActive) return
-      
       const p = appointment.patient
       const d = appointment.doctor
       const c = appointment.clinic
@@ -104,14 +104,29 @@ export async function createAppointmentAction(data: {
         time: fmtTime12(appointment.time),
       }
 
-      await sendClinicScopedWhatsAppMessage({
-        toPhone: p.phone!,
-        eventType: "APPOINTMENT_CONFIRMATION",
-        variables: vars,
-        clinicId,
-        patientId: p.id,
-        appointmentId: appointment.id
-      })
+      if (isActive) {
+        await sendClinicScopedWhatsAppMessage({
+          toPhone: p.phone!,
+          eventType: "APPOINTMENT_CONFIRMATION",
+          variables: vars,
+          clinicId,
+          patientId: p.id,
+          appointmentId: appointment.id
+        })
+      } else {
+        const commSettings = await db.platformCommunicationSettings.findFirst()
+        if (commSettings?.appointmentConfirmationFallbackChannel === "SMS") {
+          const { sendSms } = await import("@/lib/sms")
+          await sendSms({
+            toPhone: p.phone!,
+            eventType: "APPOINTMENT_CONFIRMATION",
+            variables: vars,
+            clinicId,
+            patientId: p.id,
+            appointmentId: appointment.id
+          })
+        }
+      }
     }).catch(console.error)
   }
 
@@ -124,6 +139,48 @@ export async function createAppointmentAction(data: {
     body: `Your appointment with Dr. ${appointment.doctor.name} on ${fmtDateShort(appointment.date.toISOString().split("T")[0])} at ${fmtTime12(appointment.time)} has been scheduled.`,
     relatedId: appointment.id
   }).catch(console.error)
+
+  // Email: APPOINTMENT_CONFIRMED to patient (if they have a PatientAccount with an email)
+  const patientEmail = appointment.patient.email
+  if (patientEmail) {
+    const APP = process.env.NEXT_PUBLIC_APP_URL || "https://openordo.com"
+    const patientAccount = await db.patientAccount.findFirst({ where: { email: patientEmail } })
+    sendNotificationEmail(
+      "APPOINTMENT_CONFIRMED",
+      { toEmail: patientEmail, ownerType: "PATIENT_ACCOUNT", ownerId: patientAccount?.id || null, clinicId },
+      renderAppointmentConfirmed({
+        patientName: appointment.patient.name,
+        clinicName: appointment.clinic.name,
+        date: fmtDateShort(appointment.date.toISOString().split("T")[0]),
+        time: fmtTime12(appointment.time),
+        doctorName: `Dr. ${appointment.doctor.name}`,
+        loginUrl: `${APP}/patient-portal`,
+        preferencesUrl: `${APP}/patient-portal/settings`,
+      })
+    ).catch(console.error)
+  }
+
+  // Email: NEW_BOOKING_RECEIVED for clinic staff (toggleable)
+  const clinicOwners = await db.membership.findMany({
+    where: { clinicId, role: "OWNER" },
+    include: { user: { select: { id: true, email: true, name: true } } }
+  })
+  for (const m of clinicOwners) {
+    if (!m.user.email) continue
+    const APP = process.env.NEXT_PUBLIC_APP_URL || "https://openordo.com"
+    sendNotificationEmail(
+      "NEW_BOOKING_RECEIVED",
+      { toEmail: m.user.email, ownerType: "USER", ownerId: m.user.id, clinicId },
+      renderNewBookingReceived({
+        clinicName: appointment.clinic.name,
+        patientName: appointment.patient.name,
+        date: fmtDateShort(appointment.date.toISOString().split("T")[0]),
+        time: fmtTime12(appointment.time),
+        reason: appointment.reason,
+        dashboardUrl: `${APP}/dashboard/appointments`,
+      })
+    ).catch(console.error)
+  }
 
   revalidatePath("/dashboard", "layout")
   return appointment
@@ -187,6 +244,26 @@ export async function updateAppointmentAction(id: string, data: {
       body: `Your appointment with Dr. ${appointment.doctor.name} has been rescheduled to ${fmtDateShort(appointment.date.toISOString().split("T")[0])} at ${fmtTime12(appointment.time)}.`,
       relatedId: appointment.id
     }).catch(console.error)
+
+    // Email: APPOINTMENT_CHANGED_BY_CLINIC for patient
+    const patientEmail = appointment.patient.email
+    if (patientEmail) {
+      const APP = process.env.NEXT_PUBLIC_APP_URL || "https://openordo.com"
+      const patientAccount = await db.patientAccount.findFirst({ where: { email: patientEmail } })
+      sendNotificationEmail(
+        "APPOINTMENT_CHANGED_BY_CLINIC",
+        { toEmail: patientEmail, ownerType: "PATIENT_ACCOUNT", ownerId: patientAccount?.id || null, clinicId },
+        renderAppointmentChangedByClinic({
+          patientName: appointment.patient.name,
+          clinicName: appointment.clinic.name,
+          changeType: "rescheduled",
+          newDate: fmtDateShort(appointment.date.toISOString().split("T")[0]),
+          newTime: fmtTime12(appointment.time),
+          loginUrl: `${APP}/patient-portal`,
+          preferencesUrl: `${APP}/patient-portal/settings`,
+        })
+      ).catch(console.error)
+    }
   }
 
   revalidatePath("/dashboard", "layout")

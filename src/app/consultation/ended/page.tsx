@@ -1,10 +1,25 @@
-import Link from "next/link"
+import { db } from "@/lib/db"
 
-export default function ConsultationEnded({
+export default async function ConsultationEnded({
   searchParams,
 }: {
   searchParams: Promise<{ room?: string }>
 }) {
+  const { room } = await searchParams
+  let waNumber: string | null = null
+  
+  if (room) {
+    const appt = await db.appointment.findFirst({
+      where: { roomId: room },
+      select: { clinic: { select: { whatsappNumber: true, phone: true } } }
+    })
+    if (appt?.clinic) {
+      waNumber = appt.clinic.whatsappNumber || appt.clinic.phone || null
+    }
+  }
+
+  const waLink = waNumber ? `https://wa.me/${waNumber.replace(/\D/g, '')}` : null
+
   return (
     <div style={{
       minHeight: "100dvh",
@@ -32,7 +47,7 @@ export default function ConsultationEnded({
         Consultation ended
       </h1>
       <p style={{ fontSize: 15, color: "#B9C8C0", margin: "0 0 36px", maxWidth: 360 }}>
-        Your session has been completed. Thank you for using OpenORDO Telehealth.
+        Your session has been completed. Thank you for using OpenORDO.
       </p>
 
       {/* Actions */}
@@ -47,23 +62,25 @@ export default function ConsultationEnded({
         >
           Back to Home
         </a>
-        <a
-          href="https://wa.me/"
-          target="_blank"
-          rel="noreferrer"
-          style={{
-            display: "block", background: "rgba(255,255,255,0.08)",
-            border: "1px solid rgba(255,255,255,0.15)",
-            color: "#fff", padding: "13px 24px", borderRadius: 8,
-            textDecoration: "none", fontSize: 14, fontWeight: 600,
-          }}
-        >
-          Contact clinic on WhatsApp
-        </a>
+        {waLink && (
+          <a
+            href={waLink}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: "block", background: "rgba(255,255,255,0.08)",
+              border: "1px solid rgba(255,255,255,0.15)",
+              color: "#fff", padding: "13px 24px", borderRadius: 8,
+              textDecoration: "none", fontSize: 14, fontWeight: 600,
+            }}
+          >
+            Contact clinic on WhatsApp
+          </a>
+        )}
       </div>
 
       <p style={{ fontSize: 12, color: "rgba(185,200,192,0.5)", marginTop: 40 }}>
-        OpenORDO Telehealth · Encrypted & secure
+        OpenORDO · Encrypted & secure
       </p>
     </div>
   )

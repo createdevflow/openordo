@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { canAcceptBooking } from "@/lib/features"
+import { checkRateLimit } from "@/lib/rate-limit"
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = req.headers.get("x-forwarded-for") || "unknown"
+    if (!checkRateLimit(`booking_api_v1_${ip}`, 20, 60000)) { // 20 requests per minute
+      return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 })
+    }
+
     // Validate API key from header
     const apiKey = req.headers.get("x-api-key")
     if (!apiKey) {

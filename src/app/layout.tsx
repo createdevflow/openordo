@@ -32,7 +32,11 @@ export async function generateMetadata(): Promise<Metadata> {
     return acc;
   }, {});
 
-  const title = config.SEO_META_TITLE || "OpenORDO";
+  let title = config.SEO_META_TITLE || "OpenORDO";
+  if (title === "OpenORDO Admin" || title === "OpenORDO Clinic") {
+    title = "OpenORDO";
+  }
+
   const description = config.SEO_META_DESC || "Clinic management system";
   const favicon = config.SEO_FAVICON_URL || null;
   const ogImage = config.SEO_OG_IMAGE_URL || "";

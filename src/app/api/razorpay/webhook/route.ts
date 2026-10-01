@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import crypto from "crypto"
 import { getRazorpayWebhookSecret } from "@/lib/razorpay-utils"
+import { createTaxInvoice } from "@/server/actions/tax-invoice"
+import { logger } from "@/lib/logger"
 
 export async function POST(req: Request) {
   const secret = await getRazorpayWebhookSecret()
@@ -18,7 +20,10 @@ export async function POST(req: Request) {
     .update(rawBody)
     .digest("hex")
 
-  if (expectedSignature !== signature) {
+  const expectedBuffer = Buffer.from(expectedSignature)
+  const signatureBuffer = Buffer.from(signature)
+
+  if (expectedBuffer.length !== signatureBuffer.length || !crypto.timingSafeEqual(expectedBuffer, signatureBuffer)) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
   }
 
@@ -32,7 +37,7 @@ export async function POST(req: Request) {
       const { clinicId, type, itemId } = notes
 
       if (clinicId && type === "PLAN") {
-        await db.subscription.upsert({
+        const sub = await db.subscription.upsert({
           where: { clinicId },
           update: { 
             planId: itemId, 
@@ -48,9 +53,26 @@ export async function POST(req: Request) {
             razorpayCustomerId: subscription.customer_id
           }
         })
-        console.log(`[webhook] Plan ${itemId} provisioned for clinic ${clinicId}`)
+        logger.info("Plan provisioned via webhook", { clinicId, planId: itemId })
+
+        // Generate GST invoice on successful charge (fire-and-forget)
+        if (event === "subscription.charged") {
+          const chargeAmount = payload.payload.payment?.entity?.amount // in paise
+          if (chargeAmount) {
+            const clinic = await db.clinic.findUnique({ where: { id: clinicId } }).catch(() => null)
+            createTaxInvoice({
+              clinicId,
+              billingType: "PLAN_SUBSCRIPTION",
+              relatedId: sub.id,
+              currency: "INR",
+              countryCode: clinic?.countryCode || "IN",
+              placeOfSupply: clinic?.billingConfig ? (() => { try { return JSON.parse(clinic.billingConfig!).state } catch { return undefined } })() : undefined,
+              taxableValue: chargeAmount,
+            }).catch(err => logger.error("Failed to create plan subscription invoice", err, { clinicId }))
+          }
+        }
       } else if (clinicId && type === "PLUGIN") {
-        await db.clinicPlugin.upsert({
+        const cp = await db.clinicPlugin.upsert({
           where: { clinicId_pluginId: { clinicId, pluginId: itemId } },
           update: {
             status: "ACTIVE",
@@ -67,7 +89,24 @@ export async function POST(req: Request) {
             razorpaySubscriptionId: subscription.id,
           }
         })
-        console.log(`[webhook] Plugin ${itemId} provisioned for clinic ${clinicId}`)
+        logger.info("Plugin provisioned via webhook", { clinicId, pluginId: itemId })
+
+        // Generate invoice on charged event
+        if (event === "subscription.charged") {
+          const chargeAmount = payload.payload.payment?.entity?.amount
+          if (chargeAmount) {
+            const clinic = await db.clinic.findUnique({ where: { id: clinicId } }).catch(() => null)
+            createTaxInvoice({
+              clinicId,
+              billingType: "PLUGIN_PURCHASE",
+              relatedId: cp.id,
+              currency: "INR",
+              countryCode: clinic?.countryCode || "IN",
+              placeOfSupply: clinic?.billingConfig ? (() => { try { return JSON.parse(clinic.billingConfig!).state } catch { return undefined } })() : undefined,
+              taxableValue: chargeAmount,
+            }).catch(err => logger.error("Failed to create plugin invoice", err, { clinicId }))
+          }
+        }
       }
     } else if (event === "order.paid" || event === "payment.captured") {
       // For one-time payments
@@ -76,7 +115,7 @@ export async function POST(req: Request) {
       const { clinicId, type, itemId } = notes
 
       if (clinicId && type === "PLUGIN") {
-        await db.clinicPlugin.upsert({
+        const cp = await db.clinicPlugin.upsert({
           where: { clinicId_pluginId: { clinicId, pluginId: itemId } },
           update: {
             status: "ACTIVE",
@@ -93,13 +132,32 @@ export async function POST(req: Request) {
             razorpayOrderId: entity.order_id || entity.id,
           }
         })
-        console.log(`[webhook] One-Time Plugin ${itemId} provisioned for clinic ${clinicId}`)
+        logger.info("One-time plugin provisioned", { clinicId, pluginId: itemId })
+
+        // Generate invoice for one-time purchase
+        const chargeAmount = entity.amount
+        if (chargeAmount) {
+          const currency = (entity.currency === "USD") ? "USD" : "INR"
+          const clinic = await db.clinic.findUnique({ where: { id: clinicId } }).catch(() => null)
+          createTaxInvoice({
+            clinicId,
+            billingType: "PLUGIN_PURCHASE",
+            relatedId: cp.id,
+            currency,
+            countryCode: clinic?.countryCode || (currency === "INR" ? "IN" : "US"),
+            placeOfSupply: currency === "INR" && clinic?.billingConfig
+              ? (() => { try { return JSON.parse(clinic.billingConfig!).state } catch { return undefined } })()
+              : undefined,
+            taxableValue: chargeAmount,
+          }).catch(err => logger.error("Failed to create one-time plugin invoice", err, { clinicId }))
+        }
       }
     }
 
     return NextResponse.json({ received: true })
   } catch (err: any) {
-    console.error("Webhook processing error:", err)
+    logger.error("Webhook processing error", err, { event })
     return NextResponse.json({ error: "Processing failed" }, { status: 500 })
   }
 }
+

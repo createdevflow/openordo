@@ -1,6 +1,8 @@
 import { db } from "@/lib/db"
+
+import { getFileUrl } from "@/lib/file-utils";
 import { notFound, redirect } from "next/navigation"
-import { getPatientAccountSession } from "@/lib/patient-auth"
+import { getPatientAccountSession, requirePatientConsent } from "@/lib/patient-auth"
 import { PatientPortalClient } from "./PatientPortalClient"
 
 export default async function PatientPortalPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -15,6 +17,14 @@ export default async function PatientPortalPage({ params }: { params: Promise<{ 
     where: { slug: resolvedParams.slug },
     include: { bookingPageConfig: true }
   })
+
+  if (!clinic || clinic.status !== "ACTIVE") {
+    notFound()
+  }
+
+  // ── Enforcement (CHARTWELL_PRELAUNCH_OPS_SPEC.md §2.4) ──
+  await requirePatientConsent(session.patientAccountId, resolvedParams.slug)
+
 
   if (!clinic || clinic.status !== "ACTIVE") {
     notFound()
@@ -86,7 +96,7 @@ export default async function PatientPortalPage({ params }: { params: Promise<{ 
       clinic={clinic}
       account={account}
       accentColor={config?.accentColor || "#1E4638"}
-      logoUrl={config?.logoUrl}
+      logoUrl={getFileUrl(config?.logoUrl)}
       linkedClinics={linkedClinics}
       shareRecords={clinic.shareRecordsWithPatients}
     />

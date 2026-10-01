@@ -2,10 +2,16 @@ import { db } from "@/lib/db"
 import { Building2, Users as UsersIcon, CalendarClock, CreditCard, AlertTriangle, ShieldCheck } from "lucide-react"
 import Link from "next/link"
 
+import { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: "Admin Overview",
+}
+
 export default async function AdminOverviewPage() {
   const [
     totalClinics, totalUsers, totalAppointments, totalRevenue,
-    suspendedClinics, activePromos,
+    suspendedClinics, activePromos, pendingBaaRequests,
     recentClinics, recentUsers
   ] = await Promise.all([
     db.clinic.count(),
@@ -14,6 +20,7 @@ export default async function AdminOverviewPage() {
     db.payment.aggregate({ where: { status: "succeeded" }, _sum: { amount: true } }),
     db.clinic.count({ where: { status: "SUSPENDED" } }),
     db.promo.count({ where: { isActive: true } }),
+    db.baaRequest.count({ where: { status: "PENDING" } }),
     db.clinic.findMany({
       orderBy: { createdAt: "desc" },
       take: 5,
@@ -52,6 +59,7 @@ export default async function AdminOverviewPage() {
   const needsAttention = [
     suspendedClinics > 0 && { label: `${suspendedClinics} clinic${suspendedClinics > 1 ? "s" : ""} suspended`, href: "/admin/clinics", tone: "coral" },
     activePromos > 0 && { label: `${activePromos} promo${activePromos > 1 ? "s" : ""} currently live`, href: "/admin/promotions", tone: "amber" },
+    pendingBaaRequests > 0 && { label: `${pendingBaaRequests} BAA request${pendingBaaRequests > 1 ? "s" : ""} pending`, href: "/admin/baa-requests", tone: "amber" },
   ].filter(Boolean) as { label: string; href: string; tone: string }[]
 
   return (

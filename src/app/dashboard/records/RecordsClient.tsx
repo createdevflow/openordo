@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useTransition } from "react"
+import { getFileUrl } from "@/lib/file-utils"
 import { Search, Plus, FileText, X, Download } from "lucide-react"
 import { fmtDate, toISO } from "@/components/DashboardHelpers"
 import { createRecordAction } from "@/server/actions/records"
@@ -39,12 +40,15 @@ export function RecordsClient({ records, patients, doctors, clinic }: any) {
         
         const formData = new FormData()
         formData.append("file", fileToUpload)
+        formData.append("category", "PATIENT_RECORD_ATTACHMENT")
+        // Since patientId is needed for PATIENT scoped file:
+        formData.append("patientId", data.patientId)
 
         const res = await fetch("/api/upload", { method: "POST", body: formData })
         if (!res.ok) throw new Error("Upload failed")
         
         const json = await res.json()
-        documentUrl = json.url
+        documentUrl = json.id
         documentSize = json.sizeBytes
         documentName = json.originalFilename
       } catch (err) {
@@ -98,7 +102,7 @@ export function RecordsClient({ records, patients, doctors, clinic }: any) {
           <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>{r.notes || ""}</div>
           {r.documentUrl && (
             <div style={{ fontSize: 12.5, marginTop: 8 }}>
-              <a href={r.documentUrl} target="_blank" rel="noreferrer" style={{ color: "var(--forest)", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <a href={getFileUrl(r.documentUrl)} target="_blank" rel="noreferrer" style={{ color: "var(--forest)", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}>
                 <FileText size={14} /> View Attached Document
               </a>
             </div>
@@ -116,25 +120,27 @@ export function RecordsClient({ records, patients, doctors, clinic }: any) {
       {modalOpen && <RecordModal patients={patients} doctors={doctors} onClose={() => setModalOpen(false)} onSave={saveRecord} isPending={isPending || isUploading} />}
       
       {printingRecord && (
-        <PrescriptionPrintTemplate 
-          record={printingRecord}
-          patient={patients.find((p: any) => p.id === printingRecord.patientId)}
-          doctor={doctors.find((d: any) => d.id === printingRecord.doctorId)}
-          clinic={clinic}
-        />
+        <div id="print-root">
+          <PrescriptionPrintTemplate 
+            record={printingRecord}
+            patient={patients.find((p: any) => p.id === printingRecord.patientId)}
+            doctor={doctors.find((d: any) => d.id === printingRecord.doctorId)}
+            clinic={clinic}
+          />
+        </div>
       )}
     </div>
   )
 }
 
-function PrescriptionPrintTemplate({ record, clinic, patient, doctor }: any) {
+export function PrescriptionPrintTemplate({ record, clinic, patient, doctor }: any) {
   let config: any = {};
   try {
     config = JSON.parse(clinic.billingConfig || "{}");
   } catch(e) {}
   
   return (
-    <div id="print-root" style={{ padding: "40px", maxWidth: "800px", margin: "0 auto", color: "#000", fontFamily: "sans-serif" }}>
+    <div style={{ padding: "40px", maxWidth: "800px", margin: "0 auto", color: "#000", fontFamily: "sans-serif", background: "white" }}>
       <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "3px solid var(--forest)", paddingBottom: "20px", marginBottom: "30px" }}>
         <div style={{ flex: 1 }}>
           {config.invoiceLogo ? (

@@ -9,13 +9,15 @@ import {
   deleteApiKeyAction,
   changeClinicPlanAction,
   exportClinicDataAction,
-  cancelSubscriptionAction
+  cancelSubscriptionAction,
+  submitBaaRequestAction
 } from "@/server/actions/settings"
 import { saveBookingPageConfig } from "@/server/actions/bookingPageConfig"
-import { Copy, RefreshCw, Eye, EyeOff, ExternalLink, Lock, Check, ArrowUpRight, Sparkles, Download, Calendar, Receipt, Users, X, FileText, Palette, Globe, Plus, Trash2, ImagePlus } from "lucide-react"
+import { Copy, RefreshCw, Eye, EyeOff, ExternalLink, Lock, Check, ArrowUpRight, Sparkles, Download, Calendar, Receipt, Users, X, FileText, Palette, Globe, Plus, Trash2, ImagePlus, Upload } from "lucide-react"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { toast } from "sonner"
 import { StorageTab } from "./StorageTab"
+import { PriceWithTax } from "@/components/ui/PriceWithTax"
 
 export function SettingsClient({ 
   initialClinic, 
@@ -26,6 +28,7 @@ export function SettingsClient({
   hasBrandedBooking = false,
   initialBookingConfig = null,
   doctors = [],
+  baaRequest = null,
 }: any) {
   const { confirm, showAlert } = useConfirm()
   const [tab, setTab] = useState(initialTab === "booking" ? "developer" : initialTab)
@@ -41,7 +44,7 @@ export function SettingsClient({
   const [showApiKey, setShowApiKey] = useState(false)
   
   // Clinic Profile State
-  const [clinic, setClinic] = useState(initialClinic || { name: "", type: "General practice", phone: "", address: "", openTime: "09:00", closeTime: "18:00" })
+  const [clinic, setClinic] = useState(initialClinic || { name: "", type: "General practice", phone: "", whatsappNumber: "", address: "", openTime: "09:00", closeTime: "18:00" })
   
   // User Account State
   const [user, setUser] = useState({ name: initialUser?.name || "", email: initialUser?.email || "", password: "" })
@@ -63,7 +66,7 @@ export function SettingsClient({
     }
   } catch(e) {}
   const [billing, setBilling] = useState({
-    country: initialClinic?.country || "US",
+    countryCode: initialClinic?.countryCode || "US",
     config: initialBillingConfig
   })
 
@@ -104,9 +107,32 @@ export function SettingsClient({
   })
   const [customEnd, setCustomEnd] = useState(() => new Date().toISOString().split("T")[0])
 
-  const isIndia = clinic.country === "IN"
+  const isIndia = clinic.countryCode === "IN"
 
   const [promoTimeLeft, setPromoTimeLeft] = useState<{ d: number, h: number, m: number, s: number } | null>(null)
+  const [showBillingModal, setShowBillingModal] = useState(false)
+  const [showBaaModal, setShowBaaModal] = useState(false)
+  const [baaForm, setBaaForm] = useState({
+    clinicLegalName: initialClinic?.name || "",
+    ownerFullName: initialUser?.name || "",
+    ownerTitle: "Clinic Owner",
+    bizRegCertFile: null as File | null,
+    skipBizRegCert: false,
+    signatoryAuthFile: null as File | null,
+    skipSignatoryAuth: false,
+    photoIdFile: null as File | null,
+    skipPhotoId: false,
+    addressProofFile: null as File | null,
+    skipAddressProof: false,
+    practiceLicenseFile: null as File | null,
+    skipPracticeLicense: false,
+  })
+
+  const [origin, setOrigin] = useState("")
+
+  useEffect(() => {
+    setOrigin(window.location.origin)
+  }, [])
 
   useEffect(() => {
     if (!planDetails?.promoExpiresAt) return
@@ -231,13 +257,63 @@ export function SettingsClient({
     startTransition(async () => {
       try {
         await updateBillingSettingsAction({
-          country: billing.country,
+          countryCode: billing.countryCode,
           billingConfig: billing.config
         })
         showAlert({ title: "Success", body: "Billing & Compliance settings saved", tone: "primary" })
       } catch (err) {
         console.error(err)
         showAlert({ title: "Error", body: "Failed to save billing settings", tone: "danger" })
+      }
+    })
+  }
+
+  function handleRequestBaaSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    startTransition(async () => {
+      try {
+        if (
+          (!baaForm.bizRegCertFile && !baaForm.skipBizRegCert) || 
+          (!baaForm.signatoryAuthFile && !baaForm.skipSignatoryAuth) || 
+          (!baaForm.photoIdFile && !baaForm.skipPhotoId) || 
+          (!baaForm.addressProofFile && !baaForm.skipAddressProof) || 
+          (!baaForm.practiceLicenseFile && !baaForm.skipPracticeLicense)
+        ) {
+          throw new Error("Please upload all verification documents or mark them as not applicable.")
+        }
+
+        const uploadFile = async (f: File | null) => {
+          if (!f) return null
+          const fd = new FormData()
+          fd.append("file", f)
+          fd.append("category", "CLINIC_COMPLIANCE")
+          const res = await fetch("/api/upload", { method: "POST", body: fd })
+          const json = await res.json()
+          if (!res.ok) throw new Error(json.error || "File upload failed")
+          return json.id
+        }
+
+        const bizRegCertKey = await uploadFile(baaForm.bizRegCertFile)
+        const signatoryAuthKey = await uploadFile(baaForm.signatoryAuthFile)
+        const photoIdKey = await uploadFile(baaForm.photoIdFile)
+        const addressProofKey = await uploadFile(baaForm.addressProofFile)
+        const practiceLicenseKey = await uploadFile(baaForm.practiceLicenseFile)
+
+        await submitBaaRequestAction({
+          clinicLegalName: baaForm.clinicLegalName,
+          ownerFullName: baaForm.ownerFullName,
+          ownerTitle: baaForm.ownerTitle,
+          bizRegCertKey,
+          signatoryAuthKey,
+          photoIdKey,
+          addressProofKey,
+          practiceLicenseKey,
+        })
+        showAlert({ title: "Success", body: "BAA request submitted successfully. Our team will review and confirm shortly.", tone: "primary" })
+        setShowBaaModal(false)
+      } catch (err: any) {
+        console.error(err)
+        showAlert({ title: "Error", body: err.message || "Failed to request BAA", tone: "danger" })
       }
     })
   }
@@ -427,6 +503,12 @@ export function SettingsClient({
             Account & Export
           </button>
           <button 
+            onClick={() => handleTabChange("data-requests")}
+            className={`text-left whitespace-nowrap px-3 py-2 rounded-md ${tab === "data-requests" ? "bg-paper-raised font-semibold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "font-medium text-ink-soft hover:text-ink hover:bg-paper-raised"}`}
+          >
+            Patient Data Requests
+          </button>
+          <button 
             onClick={() => handleTabChange("storage")}
             className={`text-left whitespace-nowrap px-3 py-2 rounded-md ${tab === "storage" ? "bg-paper-raised font-semibold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "font-medium text-ink-soft hover:text-ink hover:bg-paper-raised"}`}
           >
@@ -465,11 +547,27 @@ export function SettingsClient({
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="cw-field !mb-0"><label>Phone</label><input className="cw-input" value={clinic.phone || ""} onChange={e => setClinic({ ...clinic, phone: e.target.value })} disabled={isPending} /></div>
-              <div className="cw-field !mb-0"><label>Address</label><input className="cw-input" value={clinic.address || ""} onChange={e => setClinic({ ...clinic, address: e.target.value })} disabled={isPending} /></div>
+              <div className="cw-field !mb-0"><label>WhatsApp number</label><input className="cw-input" value={clinic.whatsappNumber || ""} onChange={e => setClinic({ ...clinic, whatsappNumber: e.target.value })} disabled={isPending} /></div>
             </div>
+            <div className="cw-field !mb-0"><label>Address</label><input className="cw-input" value={clinic.address || ""} onChange={e => setClinic({ ...clinic, address: e.target.value })} disabled={isPending} /></div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="cw-field !mb-0"><label>Opens at</label><input className="cw-input" type="time" value={clinic.openTime || "09:00"} onChange={e => setClinic({ ...clinic, openTime: e.target.value })} disabled={isPending} /></div>
               <div className="cw-field !mb-0"><label>Closes at</label><input className="cw-input" type="time" value={clinic.closeTime || "18:00"} onChange={e => setClinic({ ...clinic, closeTime: e.target.value })} disabled={isPending} /></div>
+            </div>
+            <div className="border-t border-line pt-5 mt-2">
+              <label className="flex items-start gap-3 cursor-pointer group">
+                <input 
+                  type="checkbox" 
+                  className="mt-0.5 cw-checkbox" 
+                  checked={clinic.shareRecordsWithPatients} 
+                  onChange={e => setClinic({ ...clinic, shareRecordsWithPatients: e.target.checked })} 
+                  disabled={isPending} 
+                />
+                <div className="flex flex-col">
+                  <span className="font-semibold text-ink group-hover:text-forest transition-colors">Share Records with Patients</span>
+                  <span className="text-sm text-ink-soft mt-0.5">Allow patients to view their medical records, prescriptions, and invoices via the Patient Portal.</span>
+                </div>
+              </label>
             </div>
           </div>
           <div className="px-6 py-4 bg-paper-raised border-t border-line flex justify-end">
@@ -602,9 +700,8 @@ export function SettingsClient({
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 {allPlans.map((plan: any) => {
                   const isCurrent = plan.name.toLowerCase() === (planDetails?.planName || "").toLowerCase()
-                  const price = isIndia 
-                    ? `₹${plan.priceMonthlyInr?.toLocaleString("en-IN") || 0}/mo`
-                    : `$${plan.priceMonthlyUsd || 0}/mo`
+                  const priceValue = isIndia ? (plan.priceMonthlyInr || 0) : (plan.priceMonthlyUsd || 0)
+                  const priceCurrency = isIndia ? "INR" : "USD"
 
                   const catalogFeatures = (plan.planFeatures || [])
                     .filter((pf: any) => pf.feature?.isGloballyEnabled !== false)
@@ -670,7 +767,9 @@ export function SettingsClient({
                         </div>
 
                         <div style={{ textAlign: "right" }}>
-                          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--ink)" }}>{price}</div>
+                          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--ink)" }}>
+                            <PriceWithTax amount={priceValue} currency={priceCurrency} countryCode={clinic.countryCode} />/mo
+                          </div>
                           {isCurrent ? (
                             <button className="cw-btn cw-btn-ghost cw-btn-sm" disabled style={{ marginTop: 6, opacity: 0.8 }}>
                               Active
@@ -731,7 +830,7 @@ export function SettingsClient({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="cw-field !mb-0">
                 <label>Country</label>
-                <select className="cw-select" value={billing.country} onChange={e => setBilling({ ...billing, country: e.target.value })} disabled={isPending}>
+                <select className="cw-select" value={billing.countryCode} onChange={e => setBilling({ ...billing, countryCode: e.target.value })} disabled={isPending}>
                   <option value="US">🇺🇸 United States</option>
                   <option value="CA">🇨🇦 Canada</option>
                   <option value="AE">🇦🇪 United Arab Emirates</option>
@@ -759,10 +858,11 @@ export function SettingsClient({
                   try {
                     const formData = new FormData()
                     formData.append("file", file)
+                    formData.append("category", "CLINIC_BRANDING_PUBLIC") // Invoice logo is public or billing? Let's use CLINIC_BRANDING_PUBLIC or CLINIC_BILLING. Since it's on invoices sent to patient. Let's use CLINIC_BRANDING_PUBLIC.
                     const res = await fetch("/api/upload", { method: "POST", body: formData })
                     if (!res.ok) throw new Error("Upload failed")
                     const json = await res.json()
-                    setBilling({ ...billing, config: { ...billing.config, invoiceLogo: json.url } })
+                    setBilling({ ...billing, config: { ...billing.config, invoiceLogo: json.id } })
                   } catch {
                     showAlert({ title: "Upload Failed", body: "Failed to upload logo", tone: "danger" })
                   }
@@ -786,7 +886,7 @@ export function SettingsClient({
               </div>
             </div>
 
-            {billing.country === "US" && (
+            {billing.countryCode === "US" && (
               <div className="p-4 border border-line rounded-lg bg-paper-raised space-y-4 mb-4">
                 <div className="cw-field">
                   <label>EIN (Employer Identification Number)</label>
@@ -803,7 +903,7 @@ export function SettingsClient({
               </div>
             )}
 
-            {billing.country === "IN" && (
+            {billing.countryCode === "IN" && (
               <div className="p-4 border border-line rounded-lg bg-paper-raised space-y-4 mb-4">
                 <div className="cw-field">
                   <label>GSTIN</label>
@@ -816,7 +916,7 @@ export function SettingsClient({
               </div>
             )}
 
-            {billing.country === "AE" && (
+            {billing.countryCode === "AE" && (
               <div className="p-4 border border-line rounded-lg bg-paper-raised space-y-4 mb-4">
                 <div className="cw-field">
                   <label>TRN</label>
@@ -829,7 +929,7 @@ export function SettingsClient({
               </div>
             )}
 
-            {billing.country === "CA" && (
+            {billing.countryCode === "CA" && (
               <div className="p-4 border border-line rounded-lg bg-paper-raised space-y-4 mb-4">
                 <div className="cw-field">
                   <label>CRA Business Number</label>
@@ -838,7 +938,7 @@ export function SettingsClient({
               </div>
             )}
 
-            {["ZA", "NG", "KE"].includes(billing.country) && (
+            {["ZA", "NG", "KE"].includes(billing.countryCode) && (
               <div className="p-4 border border-line rounded-lg bg-paper-raised space-y-4 mb-4">
                 <div className="cw-field">
                   <label>Facility Registration Number</label>
@@ -847,6 +947,68 @@ export function SettingsClient({
                 <div className="cw-field">
                   <label>Tax Identification Number (TIN)</label>
                   <input className="cw-input" value={billing.config.tin || ""} onChange={e => setBilling({ ...billing, config: { ...billing.config, tin: e.target.value } })} disabled={isPending} />
+                </div>
+              </div>
+            )}
+
+            {billing.countryCode === "US" && (
+              <div className="p-4 border border-line rounded-lg bg-paper-raised space-y-4 mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                   <h4 className="font-bold text-[15px] m-0 text-ink">HIPAA Business Associate Agreement (BAA)</h4>
+                </div>
+                <p className="text-[13px] text-ink-soft mb-4 mt-1">
+                  A Business Associate Agreement is required for covered entities under HIPAA. OpenORDO provides a standard BAA for clinics on eligible plans.
+                </p>
+                <div className="flex items-center gap-4">
+                  {!baaRequest && (
+                    <button type="button" className="cw-btn cw-btn-primary cw-btn-sm" onClick={() => setShowBaaModal(true)} disabled={isPending}>
+                      Request BAA
+                    </button>
+                  )}
+                  {baaRequest?.status === "PENDING" && (
+                    <span className="text-[13px] font-bold text-amber bg-amber-soft px-3 py-1.5 rounded-full border border-amber/20">
+                      BAA Requested on {new Date(baaRequest.requestedAt).toLocaleDateString()}. Pending Review.
+                    </span>
+                  )}
+                  {baaRequest?.status === "REJECTED" && (
+                    <div className="flex flex-col gap-2">
+                      <span className="text-[13px] font-bold text-coral bg-coral-soft px-3 py-1.5 rounded-full border border-coral/20">
+                        BAA Request Rejected. {baaRequest.rejectedReason && `Reason: ${baaRequest.rejectedReason}`}
+                      </span>
+                      <button 
+                        type="button" 
+                        className="cw-btn cw-btn-ghost cw-btn-sm self-start text-coral"
+                        onClick={() => {
+                          setBaaForm({
+                            ...baaForm,
+                            clinicLegalName: baaRequest.clinicLegalName,
+                            ownerFullName: baaRequest.ownerFullName,
+                            ownerTitle: baaRequest.ownerTitle,
+                            bizRegCertFile: null,
+                            signatoryAuthFile: null,
+                            photoIdFile: null,
+                            addressProofFile: null,
+                            practiceLicenseFile: null,
+                          })
+                          setShowBaaModal(true)
+                        }}
+                      >
+                        Apply Again
+                      </button>
+                    </div>
+                  )}
+                  {baaRequest?.status === "APPROVED" && (
+                    <div className="flex items-center gap-4">
+                      <span className="text-[13px] font-bold text-forest bg-[#e2f2e5] px-3 py-1.5 rounded-full border border-forest/20 flex items-center gap-1.5">
+                        <Check size={14} /> BAA Active since {new Date(baaRequest.approvedAt).toLocaleDateString()}.
+                      </span>
+                      {baaRequest.pdfFileKey && (
+                        <button type="button" onClick={() => window.open(`/api/baa-download?id=${baaRequest.id}`, '_blank')} className="cw-btn cw-btn-ghost cw-btn-sm flex items-center gap-2">
+                          <FileText size={13} /> View Agreement <Download size={13} />
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -917,6 +1079,8 @@ export function SettingsClient({
         </div>
       )}
 
+      {tab === "data-requests" && <ClinicDataRequestsTab />}
+
       {tab === "notifs" && (
         <div className="bg-white border border-line rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.02)] overflow-hidden">
           <div className="px-6 py-5 border-b border-line bg-paper-raised">
@@ -977,8 +1141,8 @@ export function SettingsClient({
 
       {tab === "developer" && (() => {
         const hasOnlineBooking = planDetails?.activeFeatures?.includes("scheduling.online_booking")
-        const bookingUrl = typeof window !== "undefined"
-          ? `${window.location.origin}/book/${initialClinic?.slug}`
+        const bookingUrl = origin 
+          ? `${origin}/book/${initialClinic?.slug}`
           : `/book/${initialClinic?.slug}`
         
         const embedSnippet = `<!-- OpenORDO Booking Widget -->
@@ -1053,10 +1217,11 @@ export function SettingsClient({
         async function handleImageUpload(field: "logoUrl" | "faviconUrl" | "coverUrl", file: File) {
           const fd = new FormData()
           fd.append("file", file)
+          fd.append("category", "CLINIC_BRANDING_PUBLIC")
           const res = await fetch("/api/upload", { method: "POST", body: fd })
           if (!res.ok) { toast.error("Upload failed"); return }
-          const { url } = await res.json()
-          setBpc(prev => ({ ...prev, [field]: url }))
+          const { id } = await res.json()
+          setBpc(prev => ({ ...prev, [field]: id }))
         }
 
         function ImageUploadField({ label, field, value, hint }: { label: string; field: "logoUrl" | "faviconUrl" | "coverUrl"; value: string; hint?: string }) {
@@ -1066,7 +1231,7 @@ export function SettingsClient({
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 {value ? (
                   <div style={{ position: "relative", display: "inline-block" }}>
-                    <img src={value} alt={label} style={{ height: field === "coverUrl" ? 60 : 40, width: field === "coverUrl" ? 120 : 40, objectFit: "cover", borderRadius: field === "coverUrl" ? 6 : "50%", border: "1px solid var(--line)" }} />
+                    <img src={value.startsWith("http") || value.startsWith("data:") || value.startsWith("/api/files") ? value : `/api/files/${value}`} alt={label} style={{ height: field === "coverUrl" ? 60 : 40, width: field === "coverUrl" ? 120 : 40, objectFit: "cover", borderRadius: field === "coverUrl" ? 6 : "50%", border: "1px solid var(--line)" }} />
                     <button
                       type="button"
                       onClick={() => setBpc(prev => ({ ...prev, [field]: "" }))}
@@ -1887,8 +2052,252 @@ export function SettingsClient({
           </div>
         </div>
       )}
+
+      {showBaaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-line bg-paper-raised flex items-center justify-between shrink-0">
+              <div>
+                <h3 className="font-bold text-[17px] text-ink m-0">Request BAA</h3>
+                <p className="text-[13px] text-ink-soft m-0">Please confirm the details below for your Business Associate Agreement.</p>
+              </div>
+              <button onClick={() => setShowBaaModal(false)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/5 text-ink-soft hover:text-ink transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleRequestBaaSubmit} className="p-6 overflow-y-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div className="cw-field !mb-0">
+                  <label>Clinic Legal Name</label>
+                  <input 
+                    className="cw-input" 
+                    value={baaForm.clinicLegalName} 
+                    onChange={e => setBaaForm({ ...baaForm, clinicLegalName: e.target.value })} 
+                    required 
+                    disabled={isPending}
+                  />
+                </div>
+                
+                <div className="cw-field !mb-0">
+                  <label>Signatory Full Name</label>
+                  <input 
+                    className="cw-input" 
+                    value={baaForm.ownerFullName} 
+                    onChange={e => setBaaForm({ ...baaForm, ownerFullName: e.target.value })} 
+                    required 
+                    disabled={isPending}
+                  />
+                </div>
+              </div>
+
+              <div className="cw-field mb-6">
+                <label>Signatory Title</label>
+                <input 
+                  className="cw-input" 
+                  value={baaForm.ownerTitle} 
+                  onChange={e => setBaaForm({ ...baaForm, ownerTitle: e.target.value })} 
+                  required 
+                  disabled={isPending}
+                />
+              </div>
+
+              <div style={{ padding: "16px", background: "var(--paper-raised)", borderRadius: 8, border: "1px solid var(--line)", marginBottom: 24 }}>
+                <h4 style={{ fontSize: 13, fontWeight: 700, margin: "0 0 12px 0", color: "var(--ink)" }}>Verification Documents</h4>
+                <p style={{ fontSize: 12, color: "var(--ink-soft)", margin: "0 0 16px 0" }}>To generate your BAA, we require the following compliance documents to verify your entity.</p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FileDropzone 
+                    label="1. Business Registration Certificate" 
+                    file={baaForm.bizRegCertFile} 
+                    onChange={e => setBaaForm({ ...baaForm, bizRegCertFile: e.target.files?.[0] || null })} 
+                    disabled={isPending || baaForm.skipBizRegCert} 
+                    skipped={baaForm.skipBizRegCert}
+                    onToggleSkip={(val) => setBaaForm({ ...baaForm, skipBizRegCert: val })}
+                  />
+                  <FileDropzone 
+                    label="2. Proof of Authority to Sign" 
+                    file={baaForm.signatoryAuthFile} 
+                    onChange={e => setBaaForm({ ...baaForm, signatoryAuthFile: e.target.files?.[0] || null })} 
+                    disabled={isPending || baaForm.skipSignatoryAuth} 
+                    skipped={baaForm.skipSignatoryAuth}
+                    onToggleSkip={(val) => setBaaForm({ ...baaForm, skipSignatoryAuth: val })}
+                  />
+                  <FileDropzone 
+                    label="3. Government-issued Photo ID" 
+                    file={baaForm.photoIdFile} 
+                    onChange={e => setBaaForm({ ...baaForm, photoIdFile: e.target.files?.[0] || null })} 
+                    disabled={isPending || baaForm.skipPhotoId} 
+                    skipped={baaForm.skipPhotoId}
+                    onToggleSkip={(val) => setBaaForm({ ...baaForm, skipPhotoId: val })}
+                  />
+                  <FileDropzone 
+                    label="4. Proof of Address" 
+                    file={baaForm.addressProofFile} 
+                    onChange={e => setBaaForm({ ...baaForm, addressProofFile: e.target.files?.[0] || null })} 
+                    disabled={isPending || baaForm.skipAddressProof} 
+                    skipped={baaForm.skipAddressProof}
+                    onToggleSkip={(val) => setBaaForm({ ...baaForm, skipAddressProof: val })}
+                  />
+                  <FileDropzone 
+                    label="5. Medical Practice License" 
+                    file={baaForm.practiceLicenseFile} 
+                    onChange={e => setBaaForm({ ...baaForm, practiceLicenseFile: e.target.files?.[0] || null })} 
+                    disabled={isPending || baaForm.skipPracticeLicense} 
+                    skipped={baaForm.skipPracticeLicense}
+                    onToggleSkip={(val) => setBaaForm({ ...baaForm, skipPracticeLicense: val })}
+                  />
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-3 justify-end pt-4 border-t border-line">
+                <button type="button" className="cw-btn cw-btn-ghost" onClick={() => setShowBaaModal(false)} disabled={isPending}>Cancel</button>
+                <button type="submit" className="cw-btn cw-btn-primary" disabled={isPending}>{isPending ? "Submitting..." : "Submit Request"}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
     </div>
   )
 }
+
+function ClinicDataRequestsTab() {
+  const [loading, setLoading] = React.useState(true)
+  const [requests, setRequests] = React.useState<any[]>([])
+  const [processingId, setProcessingId] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    import("@/server/actions/data-export").then(mod => {
+      mod.clinicGetDataRequestsAction().then(res => {
+        setRequests(res)
+        setLoading(false)
+      })
+    })
+  }, [])
+
+  return (
+    <div className="bg-white border border-line rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.02)] overflow-hidden">
+      <div className="px-6 py-5 border-b border-line bg-paper-raised">
+        <h3 className="text-[17px] font-bold m-0 text-ink">Patient Data Requests</h3>
+        <p className="text-[13px] text-ink-soft mt-1 mb-0">Review and fulfill requests from patients for their medical data.</p>
+      </div>
+      <div className="p-6">
+        {loading ? (
+          <div className="text-sm text-ink-soft">Loading requests...</div>
+        ) : requests.length === 0 ? (
+          <div className="text-center py-10 bg-paper/50 rounded-lg border border-dashed border-line text-ink-soft">
+            <FileText size={32} className="mx-auto mb-2 opacity-50" />
+            No data requests yet.
+          </div>
+        ) : (
+          <div className="border border-line rounded-lg overflow-hidden">
+            <div className="bg-paper px-4 py-2 text-xs font-semibold text-ink-soft uppercase tracking-wider border-b border-line">
+              Requests
+            </div>
+            <div className="divide-y divide-line">
+              {requests.map(req => (
+                <div key={req.id} className="flex justify-between items-center p-4">
+                  <div>
+                    <div className="font-semibold text-ink text-sm flex items-center gap-2">
+                      {req.patientAccount.name} <span className="text-xs text-ink-soft font-normal">({req.patientAccount.email})</span>
+                    </div>
+                    <div className="text-xs text-ink-soft mt-1">Requested: {new Date(req.createdAt).toLocaleString()}</div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {req.status === "PENDING" ? (
+                      <button 
+                        onClick={async () => {
+                          setProcessingId(req.id)
+                          try {
+                            const { clinicProcessDataRequestAction } = await import("@/server/actions/data-export")
+                            await clinicProcessDataRequestAction(req.id)
+                            
+                            // Re-fetch requests
+                            const mod = await import("@/server/actions/data-export")
+                            const res = await mod.clinicGetDataRequestsAction()
+                            setRequests(res)
+                            toast.success("Data export generated and sent to patient!")
+                          } catch (e: any) {
+                            toast.error(e.message || "Failed to process request")
+                          } finally {
+                            setProcessingId(null)
+                          }
+                        }}
+                        disabled={processingId === req.id}
+                        className={`px-4 py-1.5 text-white text-xs font-semibold rounded transition-colors ${processingId === req.id ? 'bg-forest/60 cursor-not-allowed' : 'bg-forest hover:bg-forest-dark'}`}
+                      >
+                        {processingId === req.id ? "Processing..." : "Generate & Send"}
+                      </button>
+                    ) : req.status === "COMPLETED" ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-green-700 bg-green-50 px-2 py-1 rounded">Completed</span>
+                        <a href={req.downloadUrl} download className="text-xs text-forest font-semibold underline hover:text-forest-dark">View</a>
+                      </div>
+                    ) : (
+                      <span className="text-xs font-semibold text-ink-soft uppercase">{req.status}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export function FileDropzone({ label, file, onChange, disabled, skipped, onToggleSkip }: { label: string, file: File | null, onChange: (e: any) => void, disabled: boolean, skipped?: boolean, onToggleSkip?: (val: boolean) => void }) {
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-1.5">
+        <label className="text-[13px] font-semibold text-ink block">{label}</label>
+      </div>
+      <div className={`relative group border-2 border-dashed border-line hover:border-forest hover:bg-forest/5 transition-colors rounded-lg overflow-hidden flex flex-col items-center justify-center p-4 cursor-pointer min-h-[80px] ${skipped ? 'bg-paper/30 opacity-60 grayscale' : 'bg-paper'}`}>
+        <input 
+          type="file" 
+          accept="image/*,application/pdf" 
+          disabled={disabled}
+          onChange={onChange}
+          required={!file && !skipped}
+          className={`absolute inset-0 w-full h-full opacity-0 z-10 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`} 
+        />
+        {skipped ? (
+          <div className="flex flex-col items-center text-center relative z-20 pointer-events-none">
+            <span className="text-[13px] font-semibold text-ink-soft">Not Applicable</span>
+          </div>
+        ) : file ? (
+          <div className="flex flex-col items-center text-center relative z-20 pointer-events-none">
+            <span className="text-[13px] font-semibold text-forest line-clamp-1">{file.name}</span>
+            <span className="text-[11px] text-ink-soft mt-1">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center text-center text-ink-soft group-hover:text-forest transition-colors relative z-20 pointer-events-none">
+            <Upload size={16} className="mb-1.5" />
+            <span className="text-[12px] font-medium">Click to upload or drag & drop</span>
+            <span className="text-[10px] mt-0.5 opacity-70">PDF, JPG, PNG up to 10MB</span>
+          </div>
+        )}
+      </div>
+      {onToggleSkip && (
+        <div className="flex items-center gap-2 mt-2">
+          <input 
+            type="checkbox" 
+            id={`skip-${label}`}
+            checked={skipped}
+            onChange={(e) => onToggleSkip(e.target.checked)}
+            className="rounded border-line text-forest focus:ring-forest w-3.5 h-3.5"
+          />
+          <label htmlFor={`skip-${label}`} className="text-[11px] text-ink-soft cursor-pointer select-none">
+            I don't have this document
+          </label>
+        </div>
+      )}
+    </div>
+  )
+}
+
 

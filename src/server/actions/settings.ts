@@ -4,6 +4,8 @@ import { db } from "@/lib/db"
 import { requireClinicId, requireUser } from "@/lib/auth-utils"
 import { revalidatePath } from "next/cache"
 import { hasFeature } from "@/lib/features"
+import { sendNotificationEmail } from "@/lib/notifications/send"
+import { renderPlanChanged, renderSubscriptionCanceled } from "@/lib/notifications/templates"
 
 export async function updateClinicSettingsAction(data: {
   name: string
@@ -12,6 +14,8 @@ export async function updateClinicSettingsAction(data: {
   address: string
   openTime: string
   closeTime: string
+  whatsappNumber?: string
+  shareRecordsWithPatients?: boolean
 }) {
   const clinicId = await requireClinicId()
 
@@ -26,7 +30,7 @@ export async function updateClinicSettingsAction(data: {
 }
 
 export async function updateBillingSettingsAction(data: {
-  country: string
+  countryCode: string
   billingConfig: Record<string, string>
 }) {
   const clinicId = await requireClinicId()
@@ -34,13 +38,77 @@ export async function updateBillingSettingsAction(data: {
   const clinic = await db.clinic.update({
     where: { id: clinicId },
     data: {
-      country: data.country,
+      countryCode: data.countryCode,
       billingConfig: JSON.stringify(data.billingConfig)
     }
   })
 
   revalidatePath("/dashboard/settings")
   return clinic
+}
+
+export async function submitBaaRequestAction(data: {
+  clinicLegalName: string
+  ownerFullName: string
+  ownerTitle: string
+  bizRegCertKey: string | null
+  signatoryAuthKey: string | null
+  photoIdKey: string | null
+  addressProofKey: string | null
+  practiceLicenseKey: string | null
+}) {
+  const clinicId = await requireClinicId()
+  const user = await requireUser()
+  
+  // Find if a request already exists
+  const existing = await db.baaRequest.findFirst({
+    where: { clinicId }
+  })
+  
+  if (existing) {
+    if (existing.status === "PENDING" || existing.status === "APPROVED") {
+      throw new Error(`A BAA request is already ${existing.status.toLowerCase()} for this clinic.`)
+    }
+    
+    // If rejected, update the existing request
+    const req = await db.baaRequest.update({
+      where: { id: existing.id },
+      data: {
+        clinicLegalName: data.clinicLegalName,
+        ownerFullName: data.ownerFullName,
+        ownerTitle: data.ownerTitle,
+        bizRegCertKey: data.bizRegCertKey,
+        signatoryAuthKey: data.signatoryAuthKey,
+        photoIdKey: data.photoIdKey,
+        addressProofKey: data.addressProofKey,
+        practiceLicenseKey: data.practiceLicenseKey,
+        status: "PENDING",
+        rejectedReason: null,
+        requestedAt: new Date()
+      }
+    })
+    revalidatePath("/dashboard/settings")
+    return req
+  }
+
+  const req = await db.baaRequest.create({
+    data: {
+      clinicId,
+      requestedByUserId: user.id,
+      clinicLegalName: data.clinicLegalName,
+      ownerFullName: data.ownerFullName,
+      ownerTitle: data.ownerTitle,
+      bizRegCertKey: data.bizRegCertKey,
+      signatoryAuthKey: data.signatoryAuthKey,
+      photoIdKey: data.photoIdKey,
+      addressProofKey: data.addressProofKey,
+      practiceLicenseKey: data.practiceLicenseKey,
+      status: "PENDING"
+    }
+  })
+
+  revalidatePath("/dashboard/settings")
+  return req
 }
 
 export async function updateUserSettingsAction(data: {
@@ -121,8 +189,12 @@ export async function deleteApiKeyAction() {
 
 export async function changeClinicPlanAction(targetPlanId: string) {
   const clinicId = await requireClinicId()
+  const user = await requireUser()
   const targetPlan = await db.plan.findUnique({ where: { id: targetPlanId } })
   if (!targetPlan) throw new Error("Plan not found")
+
+  const currentSub = await db.subscription.findUnique({ where: { clinicId }, include: { plan: true } })
+  const clinic = await db.clinic.findUnique({ where: { id: clinicId } })
 
   await db.subscription.upsert({
     where: { clinicId },
@@ -133,6 +205,22 @@ export async function changeClinicPlanAction(targetPlanId: string) {
       status: "ACTIVE"
     }
   })
+
+  // PLAN_CHANGED — mandatory billing notification
+  if (user.email && clinic) {
+    const APP = process.env.NEXT_PUBLIC_APP_URL || "https://openordo.com"
+    sendNotificationEmail(
+      "PLAN_CHANGED",
+      { toEmail: user.email, ownerType: "USER", ownerId: user.id, clinicId },
+      renderPlanChanged({
+        name: user.name || "there",
+        oldPlan: currentSub?.plan?.name || "previous plan",
+        newPlan: targetPlan.name,
+        effectiveDate: new Date().toLocaleDateString(),
+        settingsUrl: `${APP}/dashboard/settings`,
+      })
+    ).catch(console.error)
+  }
 
   revalidatePath("/dashboard", "layout")
   return true
@@ -286,8 +374,9 @@ export async function exportClinicDataAction(filter?: {
 
 export async function cancelSubscriptionAction() {
   const clinicId = await requireClinicId()
+  const user = await requireUser()
 
-  const sub = await db.subscription.findUnique({ where: { clinicId } })
+  const sub = await db.subscription.findUnique({ where: { clinicId }, include: { plan: true } })
   if (!sub) throw new Error("No subscription found")
 
   const { getRazorpayKeyId, getRazorpayKeySecret } = await import("@/lib/razorpay-utils")
@@ -315,6 +404,24 @@ export async function cancelSubscriptionAction() {
       })()
     }
   })
+
+  // SUBSCRIPTION_CANCELED — mandatory billing notification
+  if (user.email) {
+    const APP = process.env.NEXT_PUBLIC_APP_URL || "https://openordo.com"
+    const endDate = sub.currentPeriodEnd
+      ? sub.currentPeriodEnd.toLocaleDateString()
+      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()
+    sendNotificationEmail(
+      "SUBSCRIPTION_CANCELED",
+      { toEmail: user.email, ownerType: "USER", ownerId: user.id, clinicId },
+      renderSubscriptionCanceled({
+        name: user.name || "there",
+        planName: sub.plan?.name || "your plan",
+        endDate,
+        reactivateUrl: `${APP}/dashboard/settings`,
+      })
+    ).catch(console.error)
+  }
 
   revalidatePath("/dashboard/settings")
   return { ok: true, currentPeriodEnd: sub.currentPeriodEnd }

@@ -1,4 +1,6 @@
 "use client"
+import { getFileUrl } from "@/lib/file-utils";
+
 
 import React, { useState, useEffect } from "react"
 import { MapPin, Phone, Clock, Globe, CheckCircle, Loader2, ChevronDown, User2 } from "lucide-react"
@@ -98,7 +100,7 @@ export function BookingPageLayout({
           }}>
             {/* Logo or initial avatar */}
             {logoUrl ? (
-              <img src={logoUrl} alt={displayName} style={{
+              <img src={getFileUrl(logoUrl)} alt={displayName} style={{
                 width: 56, height: 56, objectFit: "contain", borderRadius: 10,
                 border: "2px solid var(--line)", flexShrink: 0, background: "#fff",
               }} />

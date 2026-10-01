@@ -5,7 +5,7 @@ import Link from "next/link"
 import { signOut } from "next-auth/react"
 import {
   LayoutDashboard, Building2, Users as UsersIcon, Settings,
-  LogOut, Package, Megaphone, CreditCard, ShieldCheck, ArrowLeft, Puzzle, UserMinus
+  LogOut, Package, Megaphone, CreditCard, ShieldCheck, ArrowLeft, Puzzle, UserMinus, FileDown, Activity
 } from "lucide-react"
 
 const NAV_TOP = [
@@ -16,6 +16,7 @@ const NAV_MANAGE = [
   { href: "/admin/clinics",    label: "Clinics",    icon: Building2 },
   { href: "/admin/users",      label: "Users",      icon: UsersIcon },
   { href: "/admin/deletion-requests", label: "Deletion Requests", icon: UserMinus },
+  { href: "/admin/data-requests", label: "Data Requests", icon: FileDown },
 ]
 
 const NAV_CRM = [
@@ -32,6 +33,7 @@ const NAV_BILLING = [
 
 const NAV_SYSTEM = [
   { href: "/admin/audit-log",  label: "Audit Log",  icon: ShieldCheck },
+  { href: "/admin/observability", label: "Observability", icon: Activity },
   { href: "/admin/settings",   label: "Settings",   icon: Settings },
 ]
 

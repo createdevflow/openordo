@@ -5,6 +5,12 @@ import { hasActivePlugin } from "@/lib/plugins"
 import { FeatureGate } from "@/components/ui/FeatureGate"
 import { AppointmentsClient } from "./AppointmentsClient"
 
+import { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: "Appointments",
+}
+
 export default async function AppointmentsPage() {
   const clinicId = await requireClinicId()
 

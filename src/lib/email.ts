@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer"
 import { db } from "./db"
+import { decrypt } from "./crypto"
 
 // Fetch SMTP credentials from the GlobalSetting table
 async function getSmtpConfig() {
@@ -16,7 +17,7 @@ async function getSmtpConfig() {
     host: (config.SMTP_HOST || process.env.SMTP_HOST || "").trim(),
     port: parseInt((config.SMTP_PORT || process.env.SMTP_PORT || "587").trim(), 10),
     user: (config.SMTP_USER || process.env.SMTP_USER || "").trim(),
-    pass: (config.SMTP_PASS || process.env.SMTP_PASS || "").trim(),
+    pass: (config.SMTP_PASS ? decrypt(config.SMTP_PASS) : (process.env.SMTP_PASS || "")).trim(),
     from: (config.SMTP_FROM && config.SMTP_FROM.includes("@")) 
       ? config.SMTP_FROM.trim()
       : (config.SMTP_FROM ? `${config.SMTP_FROM.trim()} <noreply@openordo.com>` : process.env.SMTP_FROM || "OpenORDO <noreply@openordo.com>"),
@@ -401,6 +402,47 @@ export async function sendPatientNotificationEmail({
     from: getFromAddress("general", config),
     to,
     subject: `${title} — ${clinicName}`,
+    html,
+  }).catch(console.error)
+}
+
+export async function sendClinicNotificationEmail({
+  to,
+  clinicName,
+  title,
+  body,
+  ctaUrl,
+  ctaText = "View Dashboard"
+}: {
+  to: string
+  clinicName: string
+  title: string
+  body: string
+  ctaUrl?: string
+  ctaText?: string
+}) {
+  const transporter = await getTransporter()
+  const config = await getSmtpConfig()
+
+  if (process.env.NODE_ENV !== "production" || !transporter) {
+    console.log(`[CLINIC NOTIF] To: ${to} | ${title}`)
+    return
+  }
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+      <h2 style="color: #1a382c;">${title}</h2>
+      <p>Hi ${clinicName} Admin,</p>
+      <p>${body}</p>
+      ${ctaUrl ? `<div style="margin: 24px 0;"><a href="${ctaUrl}" style="background:#1a382c;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold;">${ctaText}</a></div>` : ""}
+      <p style="font-size:12px;color:#999;">OpenORDO</p>
+    </div>
+  `
+
+  await transporter.sendMail({
+    from: getFromAddress("general", config),
+    to,
+    subject: `${title}`,
     html,
   }).catch(console.error)
 }

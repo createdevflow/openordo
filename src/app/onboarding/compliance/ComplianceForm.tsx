@@ -5,7 +5,7 @@ import { saveComplianceAction } from "@/server/actions/onboarding"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 
-export function ComplianceForm({ country }: { country: string }) {
+export function ComplianceForm({ countryCode }: { countryCode: string }) {
   const [state, formAction, pending] = useActionState(saveComplianceAction, null)
   const [invoiceLogo, setInvoiceLogo] = useState("")
   const [isUploading, setIsUploading] = useState(false)
@@ -29,10 +29,11 @@ export function ComplianceForm({ country }: { country: string }) {
               try {
                 const formData = new FormData()
                 formData.append("file", file)
+                formData.append("category", "CLINIC_BRANDING_PUBLIC")
                 const res = await fetch("/api/upload", { method: "POST", body: formData })
                 if (!res.ok) throw new Error("Upload failed")
                 const json = await res.json()
-                setInvoiceLogo(json.url)
+                setInvoiceLogo(json.id)
               } catch (err) {
                 alert("Failed to upload logo")
               } finally {
@@ -42,7 +43,7 @@ export function ComplianceForm({ country }: { country: string }) {
             <p className="text-[11px] text-ink-soft mt-1">This will be printed at the top of all generated invoices.</p>
             {invoiceLogo && (
               <div className="mt-2">
-                <img src={invoiceLogo} alt="Invoice Logo" className="h-10 object-contain rounded" />
+                <img src={invoiceLogo.startsWith("http") || invoiceLogo.startsWith("data:") || invoiceLogo.startsWith("/api/files") ? invoiceLogo : `/api/files/${invoiceLogo}`} alt="Invoice Logo" className="h-10 object-contain rounded" />
               </div>
             )}
           </div>
@@ -69,7 +70,7 @@ export function ComplianceForm({ country }: { country: string }) {
         </div>
 
         {/* Region Specific Fields */}
-        {country === "US" && (
+        {countryCode === "US" && (
           <div className="p-4 border border-line rounded-lg bg-paper-raised space-y-4 mt-4">
             <h4 className="text-[13.5px] font-bold m-0">United States Requirements</h4>
             <div>
@@ -87,7 +88,7 @@ export function ComplianceForm({ country }: { country: string }) {
           </div>
         )}
 
-        {country === "AE" && (
+        {countryCode === "AE" && (
           <div className="p-4 border border-line rounded-lg bg-paper-raised space-y-4 mt-4">
             <h4 className="text-[13.5px] font-bold m-0">UAE Requirements</h4>
             <div>
@@ -101,7 +102,7 @@ export function ComplianceForm({ country }: { country: string }) {
           </div>
         )}
 
-        {country === "CA" && (
+        {countryCode === "CA" && (
           <div className="p-4 border border-line rounded-lg bg-paper-raised space-y-4 mt-4">
             <h4 className="text-[13.5px] font-bold m-0">Canada Requirements</h4>
             <div>
@@ -111,7 +112,7 @@ export function ComplianceForm({ country }: { country: string }) {
           </div>
         )}
 
-        {country === "IN" && (
+        {countryCode === "IN" && (
           <div className="p-4 border border-line rounded-lg bg-paper-raised space-y-4 mt-4">
             <h4 className="text-[13.5px] font-bold m-0">India Requirements</h4>
             <div>
@@ -125,7 +126,7 @@ export function ComplianceForm({ country }: { country: string }) {
           </div>
         )}
 
-        {["ZA", "NG", "KE"].includes(country) && (
+        {["ZA", "NG", "KE"].includes(countryCode) && (
           <div className="p-4 border border-line rounded-lg bg-paper-raised space-y-4 mt-4">
             <h4 className="text-[13.5px] font-bold m-0">Regional Medical Board</h4>
             <div>

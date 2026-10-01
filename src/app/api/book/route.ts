@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { canAcceptBooking } from "@/lib/features"
+import { checkRateLimit } from "@/lib/rate-limit"
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = req.headers.get("x-forwarded-for") || "unknown"
+    if (!checkRateLimit(`booking_api_${ip}`, 10, 60000)) { // 10 requests per minute
+      return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 })
+    }
+
     const body = await req.json()
     const { clinicId, name, email, phone, doctorId, date, time, reason, notes } = body
 

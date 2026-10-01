@@ -2,6 +2,7 @@ import { db } from "@/lib/db"
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, Building2, Users, Calendar, FileText } from "lucide-react"
+import { BaaClinicSection } from "./BaaClinicSection"
 
 export default async function AdminClinicDetailPage({ params }: { params: Promise<{ clinicId: string }> }) {
   const { clinicId } = await params
@@ -18,6 +19,9 @@ export default async function AdminClinicDetailPage({ params }: { params: Promis
       },
       _count: {
         select: { patients: true, appointments: true, invoices: true, doctors: true },
+      },
+      baaRequests: {
+        orderBy: { createdAt: "desc" },
       },
     },
   })
@@ -50,7 +54,7 @@ export default async function AdminClinicDetailPage({ params }: { params: Promis
             </span>
           </h1>
           <div style={{ fontSize: 13, color: "var(--adm-muted)", fontFamily: "var(--font-mono, monospace)" }}>
-            /{clinic.slug} · {clinic.type} · {clinic.country}
+            /{clinic.slug} · {clinic.type} · {clinic.countryCode}
           </div>
         </div>
       </div>
@@ -161,6 +165,9 @@ export default async function AdminClinicDetailPage({ params }: { params: Promis
           )}
         </div>
       </div>
+
+      {/* BAA Requests Section */}
+      <BaaClinicSection clinicId={clinic.id} baaRequests={clinic.baaRequests} />
 
       {/* Audit log for this clinic */}
       {recentAuditLogs.length > 0 && (

@@ -1,8 +1,10 @@
-﻿"use server"
+"use server"
 
 import { db } from "@/lib/db"
 import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
+import { sendNotificationEmail } from "@/lib/notifications/send"
+import { renderOnboardingComplete, renderPromoLifecycle } from "@/lib/notifications/templates"
 
 export async function createClinicAction(prevState: any, formData: FormData) {
   const session = await auth()
@@ -11,6 +13,8 @@ export async function createClinicAction(prevState: any, formData: FormData) {
   const name = formData.get("name") as string
   const type = formData.get("type") as string
   const country = formData.get("country") as string || "US"
+  const region = formData.get("region") as string
+  const taxId = formData.get("taxId") as string
   
   if (!name || !type) return { error: "Missing required fields" }
 
@@ -26,7 +30,14 @@ export async function createClinicAction(prevState: any, formData: FormData) {
   }
 
   const clinic = await db.clinic.create({
-    data: { name, slug, type, country }
+    data: { 
+      name, 
+      slug, 
+      type, 
+      countryCode: country,
+      region: region || null,
+      taxId: taxId || null
+    }
   })
 
   await db.membership.create({
@@ -153,6 +164,22 @@ export async function selectPlanAction(prevState: any, formData: FormData) {
       data: { onboardingStep: "COMPLETED" }
     })
 
+    // ONBOARDING_COMPLETE — fire to clinic owner
+    if (session.user.email) {
+      const APP = process.env.NEXT_PUBLIC_APP_URL || "https://openordo.com"
+      const clinic = await db.clinic.findUnique({ where: { id: clinicId } })
+      sendNotificationEmail(
+        "ONBOARDING_COMPLETE",
+        { toEmail: session.user.email, ownerType: "USER", ownerId: session.user.id, clinicId },
+        renderOnboardingComplete({
+          name: session.user.name || "there",
+          clinicName: clinic?.name || "your clinic",
+          planName: plan.name,
+          dashboardUrl: `${APP}/dashboard`,
+        })
+      ).catch(console.error)
+    }
+
     redirect("/dashboard")
   }
 }
@@ -192,6 +219,33 @@ export async function redeemPromoAction(prevState: any, formData: FormData) {
     }),
     db.user.update({ where: { id: session.user.id }, data: { onboardingStep: "COMPLETED" } })
   ])
+
+  // PROMO_LIFECYCLE (applied) + ONBOARDING_COMPLETE
+  if (session.user.email) {
+    const APP = process.env.NEXT_PUBLIC_APP_URL || "https://openordo.com"
+    const clinic = await db.clinic.findUnique({ where: { id: clinicId } })
+    sendNotificationEmail(
+      "PROMO_LIFECYCLE",
+      { toEmail: session.user.email, ownerType: "USER", ownerId: session.user.id, clinicId },
+      renderPromoLifecycle({
+        name: session.user.name || "there",
+        promoName: promo.name || promoId,
+        phase: "applied",
+        expiresAt: expiresAt.toLocaleDateString(),
+        settingsUrl: `${APP}/dashboard/settings`,
+      })
+    ).catch(console.error)
+    sendNotificationEmail(
+      "ONBOARDING_COMPLETE",
+      { toEmail: session.user.email, ownerType: "USER", ownerId: session.user.id, clinicId },
+      renderOnboardingComplete({
+        name: session.user.name || "there",
+        clinicName: clinic?.name || "your clinic",
+        planName: "Promotional plan",
+        dashboardUrl: `${APP}/dashboard`,
+      })
+    ).catch(console.error)
+  }
 
   redirect("/dashboard")
 }

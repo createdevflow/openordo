@@ -6,6 +6,7 @@ import {
   Zap, CheckCircle, ArrowRight
 } from "lucide-react"
 import Link from "next/link"
+import { PriceWithTax } from "./PriceWithTax"
 
 export function ExpandableDescription({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false)
@@ -64,21 +65,23 @@ export interface PluginCardData {
   isComingSoon?: boolean
 }
 
-function formatAmt(amount: number, currency: "INR" | "USD"): string {
-  if (currency === "INR") return `₹${(amount / 100).toLocaleString("en-IN")}`
-  return `$${(amount / 100).toFixed(2)}`
+function getAmt(amount: number, currency: "INR" | "USD") {
+  return amount / 100
 }
 
-function buildPricingLines(plugin: PluginCardData, currency: "INR" | "USD"): { label: string; model: string }[] {
-  const lines: { label: string; model: string }[] = []
+function buildPricingLines(plugin: PluginCardData, currency: "INR" | "USD", countryCode?: string | null): { label: React.ReactNode; model: string }[] {
+  const lines: { label: React.ReactNode; model: string }[] = []
   if (plugin.priceOneTimeINR && plugin.priceOneTimeUSD) {
-    lines.push({ label: `${formatAmt(currency === "INR" ? plugin.priceOneTimeINR : plugin.priceOneTimeUSD, currency)} one-time`, model: "ONE_TIME" })
+    const amt = getAmt(currency === "INR" ? plugin.priceOneTimeINR : plugin.priceOneTimeUSD, currency)
+    lines.push({ label: <><PriceWithTax amount={amt} currency={currency} countryCode={countryCode} /> one-time</>, model: "ONE_TIME" })
   }
   if (plugin.priceMonthlyINR && plugin.priceMonthlyUSD) {
-    lines.push({ label: `${formatAmt(currency === "INR" ? plugin.priceMonthlyINR : plugin.priceMonthlyUSD, currency)}/mo`, model: "MONTHLY" })
+    const amt = getAmt(currency === "INR" ? plugin.priceMonthlyINR : plugin.priceMonthlyUSD, currency)
+    lines.push({ label: <><PriceWithTax amount={amt} currency={currency} countryCode={countryCode} />/mo</>, model: "MONTHLY" })
   }
   if (plugin.priceYearlyINR && plugin.priceYearlyUSD) {
-    lines.push({ label: `${formatAmt(currency === "INR" ? plugin.priceYearlyINR : plugin.priceYearlyUSD, currency)}/yr`, model: "YEARLY" })
+    const amt = getAmt(currency === "INR" ? plugin.priceYearlyINR : plugin.priceYearlyUSD, currency)
+    lines.push({ label: <><PriceWithTax amount={amt} currency={currency} countryCode={countryCode} />/yr</>, model: "YEARLY" })
   }
   return lines
 }
@@ -90,6 +93,7 @@ interface PluginCardProps {
   variant?: "landing" | "addons" | "admin"
   onPurchase?: (plugin: PluginCardData) => void
   isLoggedIn?: boolean
+  countryCode?: string | null
 }
 
 export function PluginCard({
@@ -98,8 +102,9 @@ export function PluginCard({
   variant = "landing",
   onPurchase,
   isLoggedIn = false,
+  countryCode
 }: PluginCardProps) {
-  const pricingLines = buildPricingLines(plugin, currency)
+  const pricingLines = buildPricingLines(plugin, currency, countryCode)
   const primaryPrice = pricingLines[0]?.label ?? "Free"
   const categoryColor = plugin.category === "Clinical" ? "#14b8a6" : "#8b5cf6"
 

@@ -4,6 +4,12 @@ import { hasFeature, getClinicSubscriptionDetails } from "@/lib/features"
 import { FeatureGate } from "@/components/ui/FeatureGate"
 import { PatientsClient } from "./PatientsClient"
 
+import { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: "Patients",
+}
+
 export default async function PatientsPage({ searchParams }: { searchParams: Promise<{ search?: string }> }) {
   const clinicId = await requireClinicId()
   const resolvedParams = await searchParams

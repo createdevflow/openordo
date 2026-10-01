@@ -1,12 +1,14 @@
 "use client"
+import { getFileUrl } from "@/lib/file-utils";
 
-import React, { useState } from "react"
-import { useRouter } from "next/navigation"
+
+import React, { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import {
   Calendar, FileText, Pill, Receipt, FolderOpen, Video, FileDown,
-  LogOut, Clock, Menu, X, User, Bell, ChevronDown, Check, AlertCircle
+  LogOut, Clock, Menu, X, User, Bell, ChevronDown, Check, AlertCircle, Settings
 } from "lucide-react"
-import { markPatientNotificationReadAction } from "@/server/actions/patient-portal"
+import { markPatientNotificationReadAction, requestRecordsAccessAction } from "@/server/actions/patient-portal"
 
 type LinkedClinic = {
   id: string
@@ -43,11 +45,34 @@ export function PatientPortalClient({
   shareRecords
 }: Props) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const initialTab = (searchParams.get("tab") as any) || "HOME"
+
   const [activeTab, setActiveTab] = useState<
-    "HOME" | "APPOINTMENTS" | "RECORDS" | "PRESCRIPTIONS" | "BILLING" | "DOCUMENTS" | "PROFILE" | "NOTIFICATIONS"
-  >("HOME")
+    "HOME" | "APPOINTMENTS" | "RECORDS" | "PRESCRIPTIONS" | "BILLING" | "DOCUMENTS" | "PROFILE" | "NOTIFICATIONS" | "SETTINGS"
+  >(initialTab)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [clinicDropdownOpen, setClinicDropdownOpen] = useState(false)
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false)
+
+  useEffect(() => {
+    const urlTab = (searchParams.get("tab") as any) || "HOME"
+    if (activeTab !== urlTab) {
+      setActiveTab(urlTab)
+    }
+  }, [searchParams])
+
+  function handleTabChange(id: string) {
+    setActiveTab(id as any)
+    const params = new URLSearchParams(searchParams.toString())
+    if (id === "HOME") {
+      params.delete("tab")
+    } else {
+      params.set("tab", id)
+    }
+    const current = params.toString()
+    router.replace(`?${current}`, { scroll: false })
+  }
 
   const upcomingAppointments = patient.appointments.filter(
     (a: any) => new Date(a.date) >= new Date() && a.status !== "CANCELLED" && a.status !== "cancelled"
@@ -68,13 +93,28 @@ export function PatientPortalClient({
     await markPatientNotificationReadAction(id)
   }
 
+  const [requestStatus, setRequestStatus] = useState<"IDLE" | "LOADING" | "SENT" | "ERROR">("IDLE")
+
+  async function handleRequestAccess() {
+    setRequestStatus("LOADING")
+    const res = await requestRecordsAccessAction(clinic.id)
+    if (res?.error) {
+      alert(res.error)
+      setRequestStatus("ERROR")
+    } else {
+      setRequestStatus("SENT")
+    }
+  }
+
   const SidebarItem = ({ id, label, icon: Icon }: { id: any; label: string; icon: any }) => (
     <button
-      onClick={() => { setActiveTab(id); setMobileMenuOpen(false) }}
-      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium text-sm transition-all ${
-        activeTab === id ? "text-white" : "text-ink-soft hover:bg-line hover:text-ink"
+      onClick={() => { 
+        handleTabChange(id)
+        setMobileMenuOpen(false)
+      }}
+      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all text-left ${
+        activeTab === id ? "bg-[#1E4638] text-white" : "text-[#B9C8C0] hover:bg-white/5 hover:text-white"
       }`}
-      style={activeTab === id ? { backgroundColor: accentColor } : {}}
     >
       <Icon size={17} />
       {label}
@@ -89,7 +129,8 @@ export function PatientPortalClient({
     BILLING: "Billing & Invoices",
     DOCUMENTS: "Documents",
     PROFILE: "My Profile",
-    NOTIFICATIONS: "Notifications"
+    NOTIFICATIONS: "Notifications",
+    SETTINGS: "Settings"
   }
 
   return (
@@ -100,30 +141,30 @@ export function PatientPortalClient({
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white border-r border-line flex flex-col transform transition-transform duration-200 lg:translate-x-0 ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-[#123025] flex flex-col transform transition-transform duration-200 lg:translate-x-0 ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}>
         {/* Logo */}
-        <div className="h-16 flex items-center px-5 border-b border-line gap-3 justify-between">
+        <div className="h-16 flex items-center px-5 border-b border-white/10 gap-3 justify-between">
           <div className="flex items-center gap-3 min-w-0">
             {logoUrl ? (
-              <img src={logoUrl} alt={clinic.name} className="h-8 flex-shrink-0" />
+              <img src={getFileUrl(logoUrl)} alt={clinic.name} className="h-8 flex-shrink-0" />
             ) : (
               <div className="w-8 h-8 rounded flex items-center justify-center font-bold text-white text-sm flex-shrink-0" style={{ backgroundColor: accentColor }}>
                 {clinic.name.charAt(0)}
               </div>
             )}
-            <span className="font-bold text-ink text-sm truncate">{clinic.name}</span>
+            <span className="font-bold text-white text-sm truncate">{clinic.name}</span>
           </div>
-          <button onClick={() => setMobileMenuOpen(false)} className="lg:hidden text-ink-soft hover:text-ink flex-shrink-0">
+          <button onClick={() => setMobileMenuOpen(false)} className="lg:hidden text-[#B9C8C0] hover:text-white flex-shrink-0">
             <X size={18} />
           </button>
         </div>
 
         {/* Clinic switcher (shown when linked to multiple) */}
         {linkedClinics.length > 1 && (
-          <div className="px-4 py-3 border-b border-line relative">
+          <div className="px-4 py-3 relative border-b border-white/10">
             <button
               onClick={() => setClinicDropdownOpen(v => !v)}
-              className="w-full flex items-center justify-between text-xs text-ink-soft hover:text-ink transition-colors font-semibold uppercase tracking-wider"
+              className="w-full flex items-center justify-between text-xs text-[#B9C8C0] hover:text-white transition-colors font-semibold uppercase tracking-wider"
             >
               <span>Viewing: {clinic.name}</span>
               <ChevronDown size={14} className={`transition-transform ${clinicDropdownOpen ? "rotate-180" : ""}`} />
@@ -145,27 +186,15 @@ export function PatientPortalClient({
           </div>
         )}
 
-        <nav className="flex-1 p-4 space-y-0.5 overflow-y-auto">
-          <div className="text-[10px] font-semibold text-ink-soft uppercase tracking-wider px-4 mb-2">Main Menu</div>
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+          <div className="text-[10px] font-semibold text-[#B9C8C0]/60 uppercase tracking-wider px-3 mb-2">Main Menu</div>
           <SidebarItem id="HOME" label="Dashboard" icon={Calendar} />
           <SidebarItem id="APPOINTMENTS" label="Appointments" icon={Clock} />
           <SidebarItem id="RECORDS" label="Medical Records" icon={FileText} />
           <SidebarItem id="PRESCRIPTIONS" label="Prescriptions" icon={Pill} />
           <SidebarItem id="BILLING" label="Billing & Invoices" icon={Receipt} />
           <SidebarItem id="DOCUMENTS" label="Documents" icon={FolderOpen} />
-          <div className="text-[10px] font-semibold text-ink-soft uppercase tracking-wider px-4 mb-2 mt-5">Account</div>
-          <SidebarItem id="NOTIFICATIONS" label="Notifications" icon={Bell} />
-          <SidebarItem id="PROFILE" label="My Profile" icon={User} />
         </nav>
-
-        <div className="p-4 border-t border-line">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-coral hover:bg-coral-soft transition-colors"
-          >
-            <LogOut size={17} /> Sign Out
-          </button>
-        </div>
       </aside>
 
       {/* Main */}
@@ -179,15 +208,40 @@ export function PatientPortalClient({
             <h1 className="text-lg font-semibold text-ink hidden sm:block">{tabTitle[activeTab]}</h1>
           </div>
           <div className="flex items-center gap-3">
-            <div className="text-right hidden sm:block">
-              <div className="text-sm font-semibold text-ink">{account?.name || patient.name}</div>
-              <div className="text-xs text-ink-soft">Patient ID: {patient.displayId}</div>
-            </div>
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-sm flex-shrink-0"
-              style={{ backgroundColor: patient.colorTag || accentColor }}
-            >
-              {patient.name.charAt(0)}
+            <button onClick={() => handleTabChange("NOTIFICATIONS")} className="relative p-2 rounded-full hover:bg-paper text-ink-soft hover:text-ink outline-none">
+              <Bell size={20} />
+              {(account as any)?.notifications?.filter((n: any) => !n.readAt && n.clinicId === clinic.id).length > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-coral"></span>
+              )}
+            </button>
+            <div className="relative">
+              <button onClick={() => setProfileDropdownOpen(v => !v)} className="flex items-center gap-3 outline-none text-left">
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-sm flex-shrink-0"
+                  style={{ backgroundColor: patient.colorTag || accentColor }}
+                >
+                  {patient.name.charAt(0)}
+                </div>
+              </button>
+              
+              {profileDropdownOpen && (
+                <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-line rounded-lg shadow-lg z-50 py-1">
+                  <div className="px-4 py-3 border-b border-line mb-1">
+                    <div className="text-sm font-semibold text-ink">{account?.name || patient.name}</div>
+                    <div className="text-xs text-ink-soft">Patient ID: {patient.displayId}</div>
+                  </div>
+                  <button onClick={() => { handleTabChange("PROFILE"); setProfileDropdownOpen(false) }} className="w-full text-left px-4 py-2 text-sm text-ink hover:bg-paper flex items-center gap-2">
+                    <User size={16} className="text-ink-soft" /> My Profile
+                  </button>
+                  <button onClick={() => { handleTabChange("SETTINGS"); setProfileDropdownOpen(false) }} className="w-full text-left px-4 py-2 text-sm text-ink hover:bg-paper flex items-center gap-2">
+                    <Settings size={16} className="text-ink-soft" /> Settings
+                  </button>
+                  <div className="h-px bg-line my-1" />
+                  <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm text-coral hover:bg-coral-soft flex items-center gap-2">
+                    <LogOut size={16} /> Sign Out
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </header>
@@ -214,7 +268,7 @@ export function PatientPortalClient({
                   ].map(s => (
                     <button
                       key={s.tab}
-                      onClick={() => setActiveTab(s.tab as any)}
+                      onClick={() => handleTabChange(s.tab)}
                       className="bg-white border border-line rounded-xl p-5 text-left hover:shadow-md transition-shadow"
                     >
                       <s.icon size={22} className="mb-3" style={{ color: accentColor }} />
@@ -241,7 +295,7 @@ export function PatientPortalClient({
                       </div>
                       {upcomingAppointments[0].visitType === "VIDEO" && upcomingAppointments[0].roomId && (
                         <a
-                          href={`/consultation/${upcomingAppointments[0].roomId}`}
+                          href={`/consultation/join/${upcomingAppointments[0].roomId}`}
                           target="_blank" rel="noreferrer"
                           className="px-4 py-2 rounded-lg text-white text-sm font-semibold hover:opacity-90 flex-shrink-0"
                           style={{ backgroundColor: accentColor }}
@@ -304,7 +358,15 @@ export function PatientPortalClient({
                   <div className="bg-white border border-line rounded-xl p-8 text-center">
                     <AlertCircle size={40} className="mx-auto mb-3 text-ink-soft/50" />
                     <p className="font-semibold text-ink">Records not shared by this clinic</p>
-                    <p className="text-sm text-ink-soft mt-1">Contact {clinic.name} directly to request your medical records.</p>
+                    <p className="text-sm text-ink-soft mt-1 mb-4">Contact {clinic.name} directly or request access through the portal.</p>
+                    <button 
+                      onClick={handleRequestAccess}
+                      disabled={requestStatus !== "IDLE"}
+                      className="px-4 py-2 rounded-lg text-white text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
+                      style={{ backgroundColor: accentColor }}
+                    >
+                      {requestStatus === "IDLE" ? "Request Access" : requestStatus === "LOADING" ? "Requesting..." : requestStatus === "ERROR" ? "Failed to request" : "Request Sent!"}
+                    </button>
                   </div>
                 ) : patient.records.length === 0 ? (
                   <EmptyState icon={FileText} message="No medical records available." />
@@ -429,7 +491,7 @@ export function PatientPortalClient({
                     {patient.PatientDocument.map((doc: any) => (
                       <a
                         key={doc.id}
-                        href={doc.url}
+                        href={getFileUrl(doc.url)}
                         target="_blank" rel="noreferrer"
                         className="bg-white flex items-start gap-4 p-5 border border-line rounded-xl hover:shadow-md transition-all group"
                       >
@@ -490,6 +552,11 @@ export function PatientPortalClient({
               </div>
             )}
 
+            {/* SETTINGS */}
+            {activeTab === "SETTINGS" && (
+              <SettingsPanel clinicId={clinic.id} clinicName={clinic.name} handleLogout={handleLogout} />
+            )}
+
           </div>
         </div>
       </main>
@@ -524,7 +591,7 @@ function AppointmentCard({ app, accentColor }: { app: any; accentColor: string }
       </div>
       {app.visitType === "VIDEO" && app.roomId && app.status !== "CANCELLED" && (
         <a
-          href={`/consultation/${app.roomId}`}
+          href={`/consultation/join/${app.roomId}`}
           target="_blank" rel="noreferrer"
           className="mt-4 flex items-center justify-center py-2.5 rounded-lg text-white font-semibold text-sm hover:opacity-90"
           style={{ backgroundColor: accentColor }}
@@ -601,6 +668,105 @@ function NotificationsPanel({ clinicSlug, accentColor }: { clinicSlug: string; a
           )}
         </div>
       ))}
+    </div>
+  )
+}
+
+function SettingsPanel({ clinicId, clinicName, handleLogout }: { clinicId: string; clinicName: string; handleLogout: () => void }) {
+  const [loading, setLoading] = React.useState(true)
+  const [requests, setRequests] = React.useState<any[]>([])
+  const [requesting, setRequesting] = React.useState(false)
+  const [error, setError] = React.useState("")
+  const [success, setSuccess] = React.useState("")
+
+  React.useEffect(() => {
+    import("@/server/actions/data-export").then(mod => {
+      mod.getPatientDataExportsAction(clinicId).then(res => {
+        if (res.success) setRequests(res.requests)
+        setLoading(false)
+      })
+    })
+  }, [clinicId])
+
+  async function handleRequestExport() {
+    setRequesting(true)
+    setError("")
+    setSuccess("")
+    const mod = await import("@/server/actions/data-export")
+    const res = await mod.requestDataExportAction(clinicId)
+    if (res.error) {
+      setError(res.error)
+    } else {
+      setSuccess("Export request submitted! You will be notified when it is ready.")
+      if (res.request) {
+        setRequests(prev => [res.request, ...prev])
+      }
+    }
+    setRequesting(false)
+  }
+
+  const pendingRequest = requests.find(r => r.status === "PENDING")
+
+  return (
+    <div className="bg-white border border-line rounded-xl shadow-sm overflow-hidden max-w-2xl">
+      <div className="p-6 border-b border-line bg-paper/30">
+        <h2 className="text-xl font-bold text-ink">Account Settings</h2>
+        <p className="text-sm text-ink-soft mt-1">Manage your data and privacy preferences.</p>
+      </div>
+      <div className="p-6 space-y-6">
+        <div>
+          <h3 className="text-sm font-semibold text-ink mb-2">Export Data</h3>
+          <p className="text-sm text-ink-soft mb-4">Download a copy of your medical records and prescriptions from {clinicName}.</p>
+          
+          {error && <div className="text-coral text-sm mb-3">{error}</div>}
+          {success && <div className="text-green-700 text-sm mb-3 bg-green-50 p-2 rounded">{success}</div>}
+
+          {pendingRequest ? (
+            <div className="text-sm font-medium text-amber-700 bg-amber-50 p-3 rounded-lg border border-amber-200">
+              You have a pending request created on {new Date(pendingRequest.createdAt).toLocaleDateString()}. The clinic will process it shortly.
+            </div>
+          ) : (
+            <button 
+              onClick={handleRequestExport} 
+              disabled={requesting}
+              className="px-4 py-2 bg-paper border border-line text-ink font-semibold rounded-lg text-sm hover:bg-line transition-colors disabled:opacity-50"
+            >
+              {requesting ? "Requesting..." : "Request Export"}
+            </button>
+          )}
+
+          {requests.filter(r => r.status === "COMPLETED").length > 0 && (
+            <div className="mt-6 border border-line rounded-lg overflow-hidden">
+              <div className="bg-paper px-4 py-2 text-xs font-semibold text-ink-soft uppercase tracking-wider border-b border-line">
+                Past Exports
+              </div>
+              <div className="divide-y divide-line">
+                {requests.filter(r => r.status === "COMPLETED").map(r => (
+                  <div key={r.id} className="flex justify-between items-center p-4">
+                    <div>
+                      <div className="text-sm font-medium text-ink">Data Export</div>
+                      <div className="text-xs text-ink-soft">Completed {new Date(r.completedAt).toLocaleDateString()}</div>
+                    </div>
+                    {r.downloadUrl && (
+                      <a href={r.downloadUrl} download className="px-3 py-1.5 text-xs font-semibold bg-forest text-white rounded-md hover:bg-forest-dark">
+                        Download ZIP
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        
+        <div className="border-t border-line pt-6">
+          <h3 className="text-sm font-semibold text-coral mb-2">Danger Zone</h3>
+          <p className="text-sm text-ink-soft mb-4">Permanently delete your portal account and request data removal from the clinic.</p>
+          <button className="px-4 py-2 border border-coral-soft bg-coral-soft text-coral font-semibold rounded-lg text-sm hover:bg-coral hover:text-white transition-colors">
+            Delete Account
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
