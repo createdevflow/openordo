@@ -3,7 +3,7 @@
 import { db } from "@/lib/db"
 import { auth } from "@/lib/auth"
 import { hasActivePlugin } from "@/lib/plugins"
-import { randomBytes } from "crypto"
+import crypto, { randomBytes } from "crypto"
 import jwt from "jsonwebtoken"
 import { redirect } from "next/navigation"
 
@@ -416,7 +416,6 @@ export async function getCallCredentials(identifier: string): Promise<{
   
   const username = `${exp}:${appointment.id}`;
   
-  const crypto = require('crypto');
   const hmac = crypto.createHmac('sha1', turnSecret);
   hmac.update(username);
   const credential = hmac.digest('base64');
@@ -436,7 +435,7 @@ export async function getCallCredentials(identifier: string): Promise<{
 
   // If super admin debug flag "Force relay" is checked... we'd pull it from DB,
   // but for now default to "all"
-  let turnPolicy: "all" | "relay" = "all";
+  const turnPolicy: "all" | "relay" = "all";
 
   return {
     ok: true,
