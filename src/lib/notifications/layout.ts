@@ -11,6 +11,8 @@
  * This renders a complete HTML string compatible with every major email client.
  */
 
+import { Routes } from "../routes"
+
 export interface BaseLayoutOptions {
   /** Pre-rendered inner content (the per-template section) */
   body: string
@@ -97,9 +99,9 @@ export function baseEmailLayout({
         <!-- Legal links -->
         <tr>
           <td style="padding:0 40px 20px 40px;text-align:center;">
-            <a href="https://openordo.com/privacy" style="font-size:11px;color:#b0bdb8;text-decoration:none;margin:0 8px;">Privacy Policy</a>
+            <a href="https://openordo.com${Routes.Privacy}" style="font-size:11px;color:#b0bdb8;text-decoration:none;margin:0 8px;">Privacy Policy</a>
             <span style="font-size:11px;color:#b0bdb8;">&middot;</span>
-            <a href="https://openordo.com/terms" style="font-size:11px;color:#b0bdb8;text-decoration:none;margin:0 8px;">Terms of Service</a>
+            <a href="https://openordo.com${Routes.Terms}" style="font-size:11px;color:#b0bdb8;text-decoration:none;margin:0 8px;">Terms of Service</a>
           </td>
         </tr>
 

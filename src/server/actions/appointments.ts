@@ -9,6 +9,7 @@ import { sendClinicScopedWhatsAppMessage } from "@/lib/whatsapp-send"
 import { fmtDateShort, fmtTime12 } from "@/components/DashboardHelpers"
 import { notifyPatient } from "@/lib/patient-notifications"
 import { sendNotificationEmail } from "@/lib/notifications/send"
+import { Routes } from "@/lib/routes"
 import { renderAppointmentConfirmed, renderAppointmentChangedByClinic, renderNewBookingReceived } from "@/lib/notifications/templates"
 
 export async function createAppointmentAction(data: {
@@ -154,8 +155,8 @@ export async function createAppointmentAction(data: {
         date: fmtDateShort(appointment.date.toISOString().split("T")[0]),
         time: fmtTime12(appointment.time),
         doctorName: `Dr. ${appointment.doctor.name}`,
-        loginUrl: `${APP}/patient-portal`,
-        preferencesUrl: `${APP}/patient-portal/settings`,
+        loginUrl: `${APP}${Routes.PatientPortalForClinic(appointment.clinic.slug)}`,
+        preferencesUrl: `${APP}${Routes.PatientPortalSettingsForClinic(appointment.clinic.slug)}`,
       })
     ).catch(console.error)
   }

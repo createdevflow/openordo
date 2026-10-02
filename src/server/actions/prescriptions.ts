@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache"
 import { notifyPatient } from "@/lib/patient-notifications"
 import { sendNotificationEmail } from "@/lib/notifications/send"
 import { renderPrescriptionIssued } from "@/lib/notifications/templates"
+import { Routes } from "@/lib/routes"
 
 export async function createPrescriptionAction(data: {
   patientId: string
@@ -75,8 +76,8 @@ export async function createPrescriptionAction(data: {
       renderPrescriptionIssued({
         patientName: rxPatient.name,
         clinicName: rxPatient.clinic.name,
-        loginUrl: `${APP}/patient-portal`,
-        preferencesUrl: `${APP}/patient-portal/settings`,
+        loginUrl: `${APP}${Routes.PatientPortalForClinic(rxPatient.clinic.slug)}`,
+        preferencesUrl: `${APP}${Routes.PatientPortalSettingsForClinic(rxPatient.clinic.slug)}`,
       })
     ).catch(console.error)
   }

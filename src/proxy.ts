@@ -6,6 +6,7 @@
 
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
+import { NEVER_INDEX_PREFIXES } from "./lib/seo/routes"
 
 // ─── Routes exempt from maintenance mode ─────────────────────────────────────
 
@@ -151,8 +152,19 @@ function maintenancePage(message: string, etaText: string): string {
 // ─── Main middleware / proxy ───────────────────────────────────────────────────
 
 export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl
+  const { pathname, searchParams } = request.nextUrl
   const baseUrl = `${request.nextUrl.protocol}//${request.nextUrl.host}`
+
+  // 0. Enforce canonical host and trailing slash (Single-hop 308)
+  const isWww = request.nextUrl.hostname.startsWith("www.")
+  const hasTrailingSlash = pathname !== "/" && pathname.endsWith("/")
+  if (isWww || hasTrailingSlash) {
+    const newHost = isWww ? request.nextUrl.host.replace("www.", "") : request.nextUrl.host
+    const newPath = hasTrailingSlash ? pathname.slice(0, -1) : pathname
+    request.nextUrl.host = newHost
+    request.nextUrl.pathname = newPath
+    return NextResponse.redirect(request.nextUrl, 308)
+  }
 
   // 1. Maintenance mode check — runs before proxy/auth
   if (!isMaintenanceExempt(pathname)) {
@@ -163,6 +175,7 @@ export async function proxy(request: NextRequest) {
         headers: {
           "Content-Type": "text/html; charset=utf-8",
           "Retry-After": "300",
+          "X-Robots-Tag": "noindex, nofollow",
         },
       })
     }
@@ -181,15 +194,27 @@ export async function proxy(request: NextRequest) {
     requestHeaders.set('x-admin-geo-sim', simGeo)
   }
 
-  // We could delegate to next-auth here, but NextAuth middleware is often tricky in proxy.ts 
-  // Let's just return NextResponse.next with the new headers. 
-  // Auth protection might be handled at layout/page level or we can import next-auth middleware.
-  
-  return NextResponse.next({
+  const response = NextResponse.next({
     request: {
       headers: requestHeaders,
     },
   })
+
+  // 3. Apply X-Robots-Tag for private routes and non-production environments
+  const isNonProd = 
+    (process.env.VERCEL_ENV && process.env.VERCEL_ENV !== "production") || 
+    (process.env.APP_ENV && process.env.APP_ENV !== "production")
+  
+  const isPrivate = NEVER_INDEX_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`))
+  
+  // also noindex if there are search/filter query variants (ignore API)
+  const hasSearchVariants = searchParams.size > 0 && !pathname.startsWith("/api")
+
+  if (isNonProd || isPrivate || hasSearchVariants) {
+    response.headers.set("X-Robots-Tag", "noindex, nofollow")
+  }
+
+  return response
 }
 
 export const config = {

@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache"
 import { notifyPatient } from "@/lib/patient-notifications"
 import { sendNotificationEmail } from "@/lib/notifications/send"
 import { renderInvoiceEvent } from "@/lib/notifications/templates"
+import { Routes } from "@/lib/routes"
 
 export async function createInvoiceAction(data: {
   patientId: string
@@ -133,8 +134,8 @@ export async function createInvoiceAction(data: {
         invoiceDisplayId: displayId,
         amount: `${patient.clinic.countryCode === "IN" ? "₹" : "$"}${total.toFixed(2)}`,
         status: "created",
-        loginUrl: `${APP}/patient-portal`,
-        preferencesUrl: `${APP}/patient-portal/settings`,
+        loginUrl: `${APP}${Routes.PatientPortalForClinic(patient.clinic.slug)}`,
+        preferencesUrl: `${APP}${Routes.PatientPortalSettingsForClinic(patient.clinic.slug)}`,
       })
     ).catch(console.error)
   }
@@ -177,8 +178,8 @@ export async function markInvoicePaidAction(id: string) {
         invoiceDisplayId: invoice.displayId,
         amount: "—",
         status: "paid",
-        loginUrl: `${APP}/patient-portal`,
-        preferencesUrl: `${APP}/patient-portal/settings`,
+        loginUrl: `${APP}${Routes.PatientPortalForClinic(paidPatient.clinic.slug)}`,
+        preferencesUrl: `${APP}${Routes.PatientPortalSettingsForClinic(paidPatient.clinic.slug)}`,
       })
     ).catch(console.error)
   }

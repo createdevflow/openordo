@@ -42,6 +42,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const ogImage = config.SEO_OG_IMAGE_URL || "";
 
   return {
+    metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://openordo.com"),
     title: {
       template: `%s | ${title}`,
       default: title,

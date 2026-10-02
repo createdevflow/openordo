@@ -71,6 +71,7 @@ storageRoot              String?  @unique
   detectedCountryAtSignup  String?
     status        String    @default("ACTIVE") // Enum ClinicStatus
   countryCode   String?   // FK-equivalent to TaxCountryConfig.countryCode, set at onboarding
+  timezone      String    @default("Asia/Kolkata")
   region        String?   // state/province — required when the selected country uses SPLIT_BY_SUPPLY_REGION, optional otherwise
   taxId         String?   // the clinic's own tax ID (their GSTIN/VAT number) if they have one — B2B invoicing
   billingConfig String? // JSON string for region-specific compliance
@@ -278,6 +279,8 @@ model Appointment {
   doctor  Doctor  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
 
   videoAccessLogs VideoCallAccessLog[]
+  callQualityLogs CallQualityLog[]
+  consultationMessages ConsultationMessage[]
 }
 
 model Invoice {
@@ -1049,4 +1052,74 @@ model SeoSitemapEntry {
   changefreq String   @default("weekly")
   mode       String   @default("INCLUDE")
   updatedAt  DateTime @updatedAt
+}
+
+
+model CheckoutQuote {
+  id              String   @id @default(cuid())
+  clinicId        String
+  itemType        String   // "PLAN" | "PLUGIN"
+  itemId          String
+  interval        String   // "MONTHLY" | "YEARLY" | "ONE_TIME"
+  currency        String   // "INR" | "USD"
+  countryCode     String
+  baseAmount      Int      // stored in smallest currency unit (e.g., paise/cents)
+  taxLabel        String   // "GST" | "VAT" | "No Tax"
+  taxRate         Float
+  taxAmount       Int      // computed based on baseAmount and taxRate
+  cgst            Int?
+  sgst            Int?
+  igst            Int?
+  totalAmount     Int      // baseAmount + taxAmount
+  gateway         String   // "RAZORPAY" | "STRIPE"
+  trialEndsAt     DateTime?
+  status          String   @default("PENDING") // "PENDING" | "PAID"
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model GatewayPriceMap {
+  id              String   @id @default(cuid())
+  planId          String
+  interval        String   // "MONTHLY" | "YEARLY"
+  currency        String
+  taxRate         Float
+  gatewayPlanId   String   // the Razorpay or Stripe plan ID
+  createdAt       DateTime @default(now())
+  
+  @@unique([planId, interval, currency, taxRate])
+}
+
+model CallQualityLog {
+  id             String   @id @default(cuid())
+  appointmentId  String
+  role           String   // "host" | "guest"
+  durationSec    Int
+  connectionType String   // "host" | "srflx" | "relay"
+  videoCodec     String?
+  audioCodec     String?
+  avgRttMs       Int?
+  avgLossPct     Float?
+  avgSendKbps    Int?
+  avgRecvKbps    Int?
+  lowestTier     String?
+  iceRestarts    Int      @default(0)
+  wsReconnects   Int      @default(0)
+  failureReason  String?
+  browser        String?
+  os             String?
+  createdAt      DateTime @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+}
+
+model ConsultationMessage {
+  id            String   @id @default(cuid())
+  appointmentId String
+  sender        String   // "Doctor" | "Patient" | "System"
+  text          String
+  time          String
+  createdAt     DateTime @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
 }
