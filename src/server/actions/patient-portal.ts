@@ -5,6 +5,7 @@ import { setPatientAccountSession, getPatientAccountSession, clearPatientAccount
 import { checkRateLimit } from "@/lib/rate-limit"
 import { sendNotificationEmail } from "@/lib/notifications/send"
 import { renderPatientLoginCode, renderPatientPasswordSet, renderPatientContactChanged } from "@/lib/notifications/templates"
+import { Routes } from "@/lib/routes"
 import bcrypt from "bcryptjs"
 import { randomInt } from "crypto"
 
@@ -97,7 +98,7 @@ export async function requestPatientLoginCodeAction(identifier: string) {
         patientName: account.name,
         clinicName: "Patient Portal", // generic — no clinic scope at login time
         code: rawCode,
-        loginUrl: `${APP}/patient-portal`,
+        loginUrl: `${APP}`,
       })
     ).catch(console.error)
 
@@ -260,8 +261,8 @@ export async function setPatientPasswordAction(newPassword: string, confirmPassw
         renderPatientPasswordSet({
           patientName: account.name,
           clinicName: firstClinic.name,
-          loginUrl: `${APP}/patient-portal`,
-          preferencesUrl: `${APP}/patient-portal/settings`,
+          loginUrl: `${APP}`,
+          preferencesUrl: `${APP}/settings`,
         })
       ).catch(console.error)
     }
@@ -441,7 +442,7 @@ export async function updatePatientContactInfoAction(data: {
           patientName: accountBefore.name,
           clinicName: firstClinic.name,
           changedField,
-          loginUrl: `${APP}/patient-portal`,
+          loginUrl: `${APP}`,
         })
       ).catch(console.error)
     }

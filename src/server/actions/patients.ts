@@ -68,6 +68,14 @@ export async function updatePatientAction(id: string, data: {
     data
   })
 
+  // Patient portal: update/link PatientAccount
+  ensurePatientAccount(clinicId, {
+    id: patient.id,
+    name: patient.name,
+    email: patient.email,
+    phone: patient.phone
+  }).catch(console.error)
+
   revalidatePath("/dashboard", "layout")
   return patient
 }

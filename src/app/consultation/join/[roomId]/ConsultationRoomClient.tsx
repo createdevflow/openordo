@@ -28,7 +28,9 @@ import {
   generatePatientLinkToken,
   autosaveConsultationNotes,
   logCallEnded,
+  getCallCredentials
 } from "@/server/actions/video-consultation"
+import { useCall } from "@/lib/video/useCall"
 
 // ── Brand tokens (dark surface) ───────────────────────────────────────────────
 const T = {
@@ -375,24 +377,15 @@ export default function ConsultationRoomClient({
   const [cameraOn,        setCameraOn]        = useState(true)
   const [cameraError,     setCameraError]     = useState(false)
   const [cameraAcquiring, setCameraAcquiring] = useState(false)
+
   const [micAcquiring, setMicAcquiring] = useState(false)
   const videoRef      = useRef<HTMLVideoElement | null>(null)
   const streamRef     = useRef<MediaStream | null>(null)
   const videoTrackRef = useRef<MediaStreamTrack | null>(null)
 
   // ── Room presence ─────────────────────────────────────────────────────────
-  const [presence,      setPresence]      = useState<RoomPresence>({})
-  const [presenceError, setPresenceError] = useState(false)
-  const [roomFull,      setRoomFull]      = useState(false)
 
   // ── Derived remote peer state ─────────────────────────────────────────────
-  const remoteParticipants = Object.entries(presence).filter(
-    ([id]) => id !== myParticipantId.current
-  )
-  const remotePeer = remoteParticipants[0]?.[1] ?? null
-  const remoteJoined   = remotePeer !== null
-  const remoteCameraOn = remotePeer?.cameraOn ?? false
-  const remoteMicOn    = remotePeer?.micOn    ?? false
 
   // Names
   const patientName  = appointment?.patient?.name  ?? null
@@ -401,6 +394,47 @@ export default function ConsultationRoomClient({
     ? `Dr. ${appointment.doctor.name}` : "Doctor"
   const doctorColor  = appointment?.doctor?.colorTag ?? T.amber
   const clinicName   = appointment?.clinic?.name ?? "OpenORDO"
+
+
+  const [creds, setCreds] = useState<any>(null);
+  
+  useEffect(() => {
+    async function initCreds() {
+      if (!appointment) return;
+      const res = await getCallCredentials(isHost ? appointment.id : (appointment.patientLinkToken || appointment.roomId));
+      if (res.ok) {
+        setCreds(res);
+      } else {
+        if (res.error === "ROOM_FULL") alert("Room is full");
+        else alert("Failed to join: " + res.error);
+      }
+    }
+    initCreds();
+  }, [appointment, isHost]);
+
+  const {
+    connectionState,
+    remoteJoined,
+    remoteVideoTrack,
+    remoteAudioTrack,
+    remoteCameraOn,
+    remoteMicOn,
+    chatMessages,
+    sendChat,
+    sharedFiles,
+    shareFile,
+    qualityBars,
+    remoteQualityBars,
+    audioFirst
+  } = useCall({
+    signalToken: creds?.signalToken,
+    iceServers: creds?.iceServers || [],
+    turnPolicy: creds?.turnPolicy || "all",
+    isHost,
+    videoTrack: videoTrackRef.current,
+    audioTrack: streamRef.current?.getAudioTracks()[0] || null,
+    appointmentId: appointment?.id
+  });
 
   const remoteName  = isHost ? patientName  : doctorName
   const remoteColor = isHost ? patientColor : doctorColor
@@ -426,11 +460,9 @@ export default function ConsultationRoomClient({
   const [activeTab, setActiveTab] = useState<"patient" | "chat" | "files">(
     isHost ? "patient" : "chat"
   )
-  const [chatMessages, setChatMessages] = useState<{ sender: string; text: string; time: string }[]>([
-    { sender: "System", text: "End-to-end encrypted session started.", time: "" }
-  ])
+  
   const [newMessage,  setNewMessage]  = useState("")
-  const [sharedFiles, setSharedFiles] = useState<{ name: string; size: string; sender: string; url?: string }[]>([])
+
   const chatEndRef = useRef<HTMLDivElement | null>(null)
 
   // ── UI state ──────────────────────────────────────────────────────────────
@@ -589,6 +621,8 @@ export default function ConsultationRoomClient({
         videoRef.current.play().catch(() => {})
       }
       setCameraOn(true)
+
+
     } catch (err: any) {
       console.warn("[Media] Retry failed:", err)
       alert("Could not access camera/microphone: " + (err.message || "Please check permissions or if another app is using them."))
@@ -634,6 +668,8 @@ export default function ConsultationRoomClient({
           videoRef.current.srcObject = stream
           videoRef.current.play().catch(() => {})
         }
+
+
       } catch (err: any) {
         console.warn("[Media] getUserMedia totally failed:", err)
         if (active) {
@@ -655,65 +691,6 @@ export default function ConsultationRoomClient({
       videoTrackRef.current = null
     }
   }, [])
-
-  // ── Presence heartbeat ────────────────────────────────────────────────────
-  const postHeartbeat = useCallback(async (extra: any = {}) => {
-    try {
-      const res = await fetch(`/api/room/${roomId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          participantId: myParticipantId.current,
-          role: isHost ? "host" : "guest",
-          cameraOn,
-          micOn,
-          ...extra,
-        }),
-      })
-      if (res.status === 403) {
-        const data = await res.json().catch(() => ({}))
-        if (data?.code === "ROOM_FULL") {
-          setRoomFull(true)
-          return
-        }
-      }
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      setPresence(data.participants ?? {})
-      if (data.messages && data.messages.length > 0) setChatMessages(data.messages)
-      if (data.files && data.files.length > 0) setSharedFiles(data.files)
-      setPresenceError(false)
-      setRoomFull(false)
-    } catch (err) {
-      console.warn("[Presence] Heartbeat failed:", err)
-      setPresenceError(true)
-    }
-  }, [roomId, isHost, cameraOn, micOn])
-
-  useEffect(() => {
-    postHeartbeat()
-    const heartbeatInterval = setInterval(postHeartbeat, 4000)
-    const pollInterval = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/room/${roomId}`)
-        if (res.ok) {
-          const data = await res.json()
-          setPresence(data.participants ?? {})
-          if (data.messages && data.messages.length > 0) setChatMessages(data.messages)
-          if (data.files && data.files.length > 0) setSharedFiles(data.files)
-        }
-      } catch { /* silent */ }
-    }, 2000)
-    return () => {
-      clearInterval(heartbeatInterval)
-      clearInterval(pollInterval)
-      fetch(`/api/room/${roomId}`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ participantId: myParticipantId.current }),
-      }).catch(() => {})
-    }
-  }, [postHeartbeat, roomId])
 
   // Join toast (host only)
   useEffect(() => {
@@ -776,18 +753,12 @@ export default function ConsultationRoomClient({
     }
   }
 
-  const sendChat = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newMessage.trim()) return
-    const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    const msg = { sender: isHost ? "Doctor" : "Patient", text: newMessage, time: now }
-    
-    // immediate optimistic update
-    setChatMessages(prev => [...prev, msg])
-    setNewMessage("")
-    
-    // push to server
-    postHeartbeat({ newMessage: msg })
+
+  const onChatSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim()) return;
+    sendChat(newMessage);
+    setNewMessage("");
   }
 
   const uploadFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -806,9 +777,7 @@ export default function ConsultationRoomClient({
       const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
       const msg = { sender: "System", text: `📎 Shared: ${file.name}`, time: now }
 
-      setSharedFiles(prev => [...prev, newFile])
-      setChatMessages(prev => [...prev, msg])
-      postHeartbeat({ newFile, newMessage: msg })
+      shareFile(Math.random().toString(36), file.name, size)
     }
     reader.readAsDataURL(file)
   }
@@ -819,7 +788,7 @@ export default function ConsultationRoomClient({
     patientExpanded, setPatientExpanded,
     notes, setNotes,
     chatMessages, chatEndRef,
-    newMessage, setNewMessage, sendChat,
+    newMessage, setNewMessage, sendChat: onChatSubmit,
     sharedFiles, uploadFile,
   }
 
@@ -890,17 +859,6 @@ export default function ConsultationRoomClient({
     <div className="cw-room-root">
 
       {/* ── Room full banner ────────────────────────────────────────────────── */}
-      {roomFull && (
-        <div style={{
-          position: "fixed", top: 0, left: 0, right: 0, zIndex: 200,
-          background: T.coral, color: "#fff", padding: "12px 20px",
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-          fontSize: 14, fontWeight: 600,
-        }}>
-          <AlertTriangle size={16} />
-          This room already has two participants. You cannot join at this time.
-        </div>
-      )}
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="cw-room-header">
@@ -944,7 +902,6 @@ export default function ConsultationRoomClient({
               background: remoteJoined ? T.successGreen : T.amber,
             }} />
             {remoteJoined ? "Connected" : "Waiting…"}
-            {presenceError && <span style={{ color: T.coral, marginLeft: 4 }}>⚠</span>}
           </div>
         </div>
 

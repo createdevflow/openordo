@@ -23,6 +23,7 @@ import {
   para,
   note,
 } from "./layout"
+import { Routes } from "../routes"
 
 export interface RenderedEmail {
   subject: string
@@ -112,7 +113,7 @@ export function renderPasswordChanged(data: { name: string; changedAt: string })
     heading("Your password was changed") +
     para(`Hi ${data.name}, your OpenORDO password was successfully changed on ${data.changedAt}.`) +
     para("If you made this change, no action is needed. If you did not, please contact support immediately.") +
-    ctaButton("Contact Support", "https://openordo.com/contact")
+    ctaButton("Contact Support", `${APP}${Routes.Contact}`)
   return { subject: "OpenORDO — your password was changed", html: noPrefs(body) }
 }
 
@@ -121,7 +122,7 @@ export function renderEmailOrPhoneChanged(data: { name: string; changedField: st
     heading(`Security notice: your ${data.changedField} was changed`) +
     para(`Hi ${data.name}, your account ${data.changedField} was updated to <strong>${data.newValue}</strong> on ${data.changedAt}.`) +
     para("This notice was sent to your previous address. If you did not make this change, please contact support immediately.") +
-    ctaButton("Contact Support", "https://openordo.com/contact")
+    ctaButton("Contact Support", `${APP}${Routes.Contact}`)
   return { subject: `OpenORDO — your ${data.changedField} was changed`, html: noPrefs(body) }
 }
 

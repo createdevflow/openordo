@@ -11,6 +11,7 @@
 import { db } from "@/lib/db"
 import { hasFeature } from "@/lib/features"
 import { sendPatientWelcomeEmail } from "@/lib/email"
+import { Routes } from "@/lib/routes"
 
 /**
  * After a clinic-scoped Patient row is created, either:
@@ -94,7 +95,7 @@ export async function ensurePatientAccount(
         to: email,
         patientName: patient.name,
         clinicName: clinic.name,
-        loginUrl: `${process.env.NEXT_PUBLIC_APP_URL || "https://openordo.com"}/login`
+        loginUrl: `${process.env.NEXT_PUBLIC_APP_URL || "https://openordo.com"}${Routes.PatientPortalForClinic(clinic.slug)}`
       }).catch(console.error)
     }
   }
