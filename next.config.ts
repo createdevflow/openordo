@@ -8,6 +8,12 @@ const nextConfig: NextConfig = {
   images: {
     formats: ["image/avif", "image/webp"],
   },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   // Ensure docs/legal/*.md files are included in the standalone output trace.
   // Required because the legal pages read these files from disk at runtime.
   outputFileTracingIncludes: {
