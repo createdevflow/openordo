@@ -1,5 +1,7 @@
 import { MetadataRoute } from 'next'
 import { db } from '@/lib/db'
+
+export const dynamic = "force-dynamic";
 import { PUBLIC_ROUTES, assertIndexable } from '@/lib/seo/routes'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

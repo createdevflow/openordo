@@ -1,5 +1,7 @@
 import { db } from "@/lib/db"
 import { UsersClient } from "./UsersClient"
+
+export const dynamic = "force-dynamic";
 import { cleanupExpiredDemosAction } from "@/server/actions/demo"
 
 import { Metadata } from "next"
