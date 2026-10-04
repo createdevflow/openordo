@@ -32,6 +32,39 @@ import {
 } from "@/server/actions/video-consultation"
 import { useCall } from "@/lib/video/useCall"
 
+function RemoteVideo({ track, cameraOn }: { track: MediaStreamTrack | null, cameraOn: boolean }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    if (ref.current && track) {
+      const stream = new MediaStream([track]);
+      ref.current.srcObject = stream;
+    }
+  }, [track]);
+  return (
+    <video 
+      ref={ref} 
+      autoPlay 
+      playsInline 
+      style={{
+        width: "100%", height: "100%", objectFit: "cover",
+        display: cameraOn ? "block" : "none",
+        position: "absolute", top: 0, left: 0, zIndex: 1
+      }} 
+    />
+  );
+}
+
+function RemoteAudio({ track }: { track: MediaStreamTrack | null }) {
+  const ref = useRef<HTMLAudioElement>(null);
+  useEffect(() => {
+    if (ref.current && track) {
+      const stream = new MediaStream([track]);
+      ref.current.srcObject = stream;
+    }
+  }, [track]);
+  return <audio ref={ref} autoPlay />;
+}
+
 // ── Brand tokens (dark surface) ───────────────────────────────────────────────
 const T = {
   stageBg:       "#123025",
@@ -975,16 +1008,8 @@ export default function ConsultationRoomClient({
         <div className="cw-video-col">
           <div className="cw-stage">
             {/* Remote participant view */}
-            {remoteJoined && remoteCameraOn ? (
-              /**
-               * NOTE: No WebRTC SDK wired. Remote camera-on shows their avatar.
-               * When a real provider (Daily.co/Twilio/LiveKit) is integrated,
-               * replace this block with <VideoTile participantId={...} />.
-               */
-              <AvatarPlaceholder
-                name={remoteName} colorTag={remoteColor}
-                size={130} label={remoteName || undefined} sublabel="Live feed active"
-              />
+            {remoteJoined && remoteCameraOn && remoteVideoTrack && !audioFirst ? (
+              <RemoteVideo track={remoteVideoTrack} cameraOn={remoteCameraOn} />
             ) : (
               <AvatarPlaceholder
                 name={!remoteJoined ? undefined : remoteName}
@@ -1023,6 +1048,7 @@ export default function ConsultationRoomClient({
             )}
 
             {/* ── Self-view PIP ──────────────────────────────────────────────── */}
+            <RemoteAudio track={remoteAudioTrack} />
             <div className="cw-pip-video">
               <video
                 ref={videoRef}
