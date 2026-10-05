@@ -12,6 +12,17 @@ services:
       - SIGNAL_JWT_SECRET=${SIGNAL_JWT_SECRET}
       - API_URL=https://openordo.com
     restart: unless-stopped
+    networks:
+      - proxy
+      - default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.signal.rule=Host(`signal.openordo.com`)"
+      - "traefik.http.routers.signal.entrypoints=websecure"
+      - "traefik.http.routers.signal.tls=true"
+      - "traefik.http.routers.signal.tls.certresolver=le"
+      - "traefik.http.services.signal.loadbalancer.server.port=4001"
 
   coturn:
     image: coturn/coturn:latest
@@ -24,3 +35,7 @@ services:
       - TURN_SECRET=${TURN_SECRET}
     restart: unless-stopped
     # Use network_mode: host because TURN requires large UDP port ranges which are inefficient to map in docker proxy
+
+networks:
+  proxy:
+    external: true

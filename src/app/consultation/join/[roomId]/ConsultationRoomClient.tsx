@@ -492,6 +492,19 @@ export default function ConsultationRoomClient({
   const [showJoinToast,    setShowJoinToast]    = useState(false)
   const prevRemoteJoinedRef = useRef(false)
 
+  // Start timer only when the peer joins
+  useEffect(() => {
+    let timer: NodeJS.Timeout
+    if (remoteJoined) {
+      timer = setInterval(() => {
+        setCallDuration(prev => prev + 1)
+      }, 1000)
+    }
+    return () => {
+      if (timer) clearInterval(timer)
+    }
+  }, [remoteJoined])
+
   // ── Chat state ────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<"patient" | "chat" | "files">(
     isHost ? "patient" : "chat"
