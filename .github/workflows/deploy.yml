@@ -77,6 +77,10 @@ jobs:
             echo "🧹 Pruning unused Docker images..."
             docker image prune -f
 
+            echo "🐳 Building and restarting video signaling server..."
+            cd deploy/video
+            docker compose -f docker-compose.video.yml up -d --build --remove-orphans
+
             echo "✅ Deployment complete!"
             echo "🌐 Web:    https://openordo.com"
             echo "🔑 Admin:  https://openordo.com/admin"
