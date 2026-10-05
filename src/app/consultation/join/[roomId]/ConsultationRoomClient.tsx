@@ -434,7 +434,10 @@ export default function ConsultationRoomClient({
   useEffect(() => {
     async function initCreds() {
       if (!appointment) return;
-      const res = await getCallCredentials(isHost ? appointment.id : (appointment.patientLinkToken || appointment.roomId));
+      // Doctor: identifier = appointment.id, isHost=true
+      // Patient: identifier = patientLinkToken (stored on appointment passed from the /p/[token] page), isHost=false
+      const identifier = isHost ? appointment.id : (appointment.patientLinkToken || appointment.roomId);
+      const res = await getCallCredentials(identifier, isHost);
       if (res.ok) {
         setCreds(res);
       } else {

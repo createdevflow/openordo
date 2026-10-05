@@ -293,9 +293,12 @@ export function PatientPortalClient({
                         <div className="text-sm mt-2 font-medium text-ink">Dr. {upcomingAppointments[0].doctor.name}</div>
                         <div className="text-sm text-ink-soft">{upcomingAppointments[0].reason}</div>
                       </div>
-                      {upcomingAppointments[0].visitType === "VIDEO" && upcomingAppointments[0].roomId && (
+                      {upcomingAppointments[0].visitType === "VIDEO" && (upcomingAppointments[0].patientLinkToken || upcomingAppointments[0].roomId) && (
                         <a
-                          href={`/consultation/join/${upcomingAppointments[0].roomId}`}
+                          href={upcomingAppointments[0].patientLinkToken 
+                            ? `/consultation/join/p/${upcomingAppointments[0].patientLinkToken}`
+                            : `/consultation/join/${upcomingAppointments[0].roomId}`
+                          }
                           target="_blank" rel="noreferrer"
                           className="px-4 py-2 rounded-lg text-white text-sm font-semibold hover:opacity-90 flex-shrink-0"
                           style={{ backgroundColor: accentColor }}
@@ -589,9 +592,12 @@ function AppointmentCard({ app, accentColor }: { app: any; accentColor: string }
         </div>
         <div className="text-sm text-ink-soft">{app.reason}</div>
       </div>
-      {app.visitType === "VIDEO" && app.roomId && app.status !== "CANCELLED" && (
+      {app.visitType === "VIDEO" && (app.patientLinkToken || app.roomId) && app.status !== "CANCELLED" && (
         <a
-          href={`/consultation/join/${app.roomId}`}
+          href={app.patientLinkToken 
+            ? `/consultation/join/p/${app.patientLinkToken}`
+            : `/consultation/join/${app.roomId}`
+          }
           target="_blank" rel="noreferrer"
           className="mt-4 flex items-center justify-center py-2.5 rounded-lg text-white font-semibold text-sm hover:opacity-90"
           style={{ backgroundColor: accentColor }}
