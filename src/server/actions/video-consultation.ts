@@ -406,11 +406,13 @@ export async function getCallCredentials(
     // Patient path: look up by patientLinkToken only — NO session check
     appointment = await db.appointment.findFirst({
       where: { patientLinkToken: identifier },
+      include: { clinic: true },
     });
     if (!appointment) return { ok: false, error: "Invalid link" };
 
     // Check time window
-    const { opensAt, expiresAt } = computeTokenWindow(appointment as any);
+    const timezone = appointment.clinic?.timezone || "UTC";
+    const { opensAt, expiresAt } = computeTokenWindow(appointment as any, timezone);
     const now = new Date();
     if (now < opensAt) return { ok: false, error: "too_early" };
     if (now > expiresAt) return { ok: false, error: "expired" };
