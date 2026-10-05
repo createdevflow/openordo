@@ -18,11 +18,11 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
-      - "traefik.http.routers.signal.rule=Host(`signal.openordo.com`)"
-      - "traefik.http.routers.signal.entrypoints=websecure"
-      - "traefik.http.routers.signal.tls=true"
-      - "traefik.http.routers.signal.tls.certresolver=le"
-      - "traefik.http.services.signal.loadbalancer.server.port=4001"
+      - "traefik.http.routers.videosignal.rule=Host(`signal.openordo.com`)"
+      - "traefik.http.routers.videosignal.entrypoints=websecure"
+      - "traefik.http.routers.videosignal.tls=true"
+      - "traefik.http.routers.videosignal.tls.certresolver=le"
+      - "traefik.http.services.videosignal.loadbalancer.server.port=4001"
 
   coturn:
     image: coturn/coturn:latest

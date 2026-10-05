@@ -79,7 +79,7 @@ jobs:
 
             echo "🐳 Building and restarting video signaling server..."
             cd deploy/video
-            docker compose -f docker-compose.video.yml up -d --build --remove-orphans
+            docker compose --env-file ../../.env -f docker-compose.video.yml up -d --build --remove-orphans
 
             echo "✅ Deployment complete!"
             echo "🌐 Web:    https://openordo.com"
