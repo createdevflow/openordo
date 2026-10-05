@@ -65,16 +65,27 @@ export default async function PatientJoinPage({
     return <ErrorPage heading="Not a video appointment" body="This appointment is not scheduled as a video consultation. Please contact your clinic for details." />
   }
 
-  // Time-window check using clinic timezone
-  const timezone = appointment.clinic?.timezone || "UTC"
-  const dateStr = appointment.date.toISOString().split("T")[0]
-  const apptStart = new Date(`${dateStr}T${appointment.time}:00`)
-  const opensAt = new Date(apptStart.getTime() - 10 * 60 * 1000)
-  const expiresAt = new Date(apptStart.getTime() + (appointment.duration + 60) * 60 * 1000)
+  // Time-window check (timezone-correct)
+  // appointment.date is UTC midnight of the local clinic date; appointment.time is HH:MM in clinic local time
+  const timezone = (appointment.clinic as any)?.timezone || "UTC"
 
-  // Compare in clinic timezone
-  const nowStr = new Date().toLocaleString("en-US", { timeZone: timezone, hourCycle: "h23" })
-  const now = new Date(nowStr)
+  // Get local date string in clinic's timezone
+  const localDateStr = appointment.date.toLocaleDateString("en-CA", { timeZone: timezone })
+  const [hh, mm] = appointment.time.split(":").map(Number)
+
+  // Build a reference treating the time as UTC, then measure the actual UTC offset
+  const ref = new Date(`${localDateStr}T${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")}:00Z`)
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone, hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(ref)
+  const localH = parseInt(parts.find(p => p.type === "hour")?.value || "0")
+  const localM = parseInt(parts.find(p => p.type === "minute")?.value || "0")
+  const offsetMin = (localH - hh) * 60 + (localM - mm)
+  const apptStartUtc = new Date(ref.getTime() - offsetMin * 60_000)
+
+  const opensAt   = new Date(apptStartUtc.getTime() - 10 * 60_000)
+  const expiresAt = new Date(apptStartUtc.getTime() + (appointment.duration + 60) * 60_000)
+  const now = new Date()
 
   if (now < opensAt) {
     return <ErrorPage
