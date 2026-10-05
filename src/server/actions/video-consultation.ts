@@ -143,20 +143,34 @@ export async function generatePatientLinkToken(appointmentId: string): Promise<{
   })
   if (!membership) return { error: "Forbidden" }
 
-  const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"
+  // Generate or reuse a persistent patient token
+  let token = appointment.patientLinkToken
+  if (!token) {
+    token = generateToken() // 256-bit hex, unguessable
+    await db.appointment.update({
+      where: { id: appointmentId },
+      data: { patientLinkToken: token },
+    })
+  }
+
+  const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
   return {
-    url: `${baseUrl}/consultation/join/${appointment.roomId}`,
+    // Patient URL is /consultation/join/p/[token] — completely separate from doctor URL
+    url: `${baseUrl}/consultation/join/p/${token}`,
   }
 }
 
 /**
- * Validate a join request by roomId.
- * Returns the appointment and whether the user is Host or Guest.
+ * validateJoinAccess — called by the DOCTOR entry point /consultation/join/[roomId].
+ *
+ * Security contract: the roomId-based URL is ONLY for authenticated clinic staff.
+ * Non-members (patients) must use /consultation/join/p/[token] instead.
+ * isHost is ALWAYS true when this returns valid:true.
  */
 export async function validateJoinAccess(roomId: string): Promise<{
   valid: true
   appointment: any
-  isHost: boolean
+  isHost: true
   hasEprescriptions: boolean
 } | { valid: false; reason: "expired" | "invalid" | "too_early" | "not_video" }> {
   if (!roomId || roomId.length < 5) return { valid: false, reason: "invalid" }
@@ -169,35 +183,18 @@ export async function validateJoinAccess(roomId: string): Promise<{
   if (!appointment) return { valid: false, reason: "invalid" }
   if (appointment.visitType !== "VIDEO") return { valid: false, reason: "not_video" }
 
+  // MUST be an authenticated clinic member — no guest fallback on this URL
   const session = await auth()
-  let isHost = false
+  if (!session?.user?.id) return { valid: false, reason: "invalid" }
 
-  if (session?.user?.id) {
-    const membership = await db.membership.findFirst({
-      where: { userId: session.user.id, clinicId: appointment.clinicId },
-    })
-    if (membership) {
-      isHost = true
-    }
-  }
+  const membership = await db.membership.findFirst({
+    where: { userId: session.user.id, clinicId: appointment.clinicId },
+  })
+  if (!membership) return { valid: false, reason: "invalid" }
 
-  // If not host (patient guest), check time window
-  if (!isHost) {
-    const timezone = appointment.clinic?.timezone || "UTC"
-    
-    // Map current UTC time into the clinic's local time string, then parse it locally
-    const nowStr = new Date().toLocaleString("en-US", { timeZone: timezone, hourCycle: "h23" })
-    const now = new Date(nowStr)
-    
-    const { opensAt, expiresAt } = computeTokenWindow(appointment as any, timezone)
-
-    if (now < opensAt) return { valid: false, reason: "too_early" }
-    if (now > expiresAt) return { valid: false, reason: "expired" }
-  }
-
-  const hasEprescriptions = isHost ? await hasActivePlugin(appointment.clinicId, "e-prescriptions") : false
-
-  return { valid: true, appointment, isHost, hasEprescriptions }
+  // Clinic staff can join any time — no time window restriction
+  const hasEprescriptions = await hasActivePlugin(appointment.clinicId, "e-prescriptions")
+  return { valid: true, appointment, isHost: true, hasEprescriptions }
 }
 
 /**
@@ -335,56 +332,62 @@ export async function autosaveConsultationNotes(
 
 
 
-export async function getCallCredentials(identifier: string): Promise<{
+/**
+ * getCallCredentials — mints a Signal JWT and TURN credentials.
+ *
+ * Doctor path:  called with appointment.id (from ConsultationRoomClient when isHost=true)
+ *               requires an active clinic membership session.
+ * Patient path: called with appointment.patientLinkToken (from ConsultationRoomClient
+ *               when isHost=false, routed through /p/[token]).
+ */
+export async function getCallCredentials(
+  identifier: string,
+  callerIsHost: boolean
+): Promise<{
   ok: true;
   signalToken: string;
   iceServers: any[];
   turnPolicy: "all" | "relay";
   isHost: boolean;
 } | { ok: false; error: string }> {
-  // 1. Determine if this is a doctor (roomId) or patient (patientLinkToken)
-  let appointment;
+  let appointment: any = null;
   let isHost = false;
   let sub = "";
 
-  const session = await auth();
+  if (callerIsHost) {
+    // Doctor path: look up by appointment ID, require auth + membership
+    const session = await auth();
+    if (!session?.user?.id) return { ok: false, error: "Not authenticated" };
 
-  // Try to find by roomId first (doctor path)
-  appointment = await db.appointment.findFirst({
-    where: { OR: [{ roomId: identifier }, { id: identifier }] },
-  });
+    appointment = await db.appointment.findFirst({
+      where: { OR: [{ id: identifier }, { roomId: identifier }] },
+    });
+    if (!appointment) return { ok: false, error: "Invalid appointment" };
 
-  if (appointment && session?.user?.id) {
-    // Check doctor access
     const membership = await db.membership.findFirst({
       where: { userId: session.user.id, clinicId: appointment.clinicId },
     });
-    if (membership) {
-      const pluginActive = await hasActivePlugin(appointment.clinicId, "video-consultation");
-      if (pluginActive) {
-        isHost = true;
-        sub = session.user.id;
-      }
-    }
-  }
+    if (!membership) return { ok: false, error: "Forbidden" };
 
-  // If not host, try by patientLinkToken (patient path)
-  if (!isHost) {
+    const pluginActive = await hasActivePlugin(appointment.clinicId, "video-consultation");
+    if (!pluginActive) return { ok: false, error: "Plugin not active" };
+
+    isHost = true;
+    sub = session.user.id;
+  } else {
+    // Patient path: look up by patientLinkToken only — NO session check
     appointment = await db.appointment.findFirst({
       where: { patientLinkToken: identifier },
     });
-    if (!appointment) {
-      // Maybe they passed a roomId but aren't logged in, check join window
-      appointment = await db.appointment.findFirst({
-        where: { roomId: identifier },
-      });
-      if (!appointment) return { ok: false, error: "Invalid appointment" };
-    }
-    
-    const now = new Date();
+    if (!appointment) return { ok: false, error: "Invalid link" };
+
+    // Check time window
     const { opensAt, expiresAt } = computeTokenWindow(appointment as any);
+    const now = new Date();
     if (now < opensAt) return { ok: false, error: "too_early" };
     if (now > expiresAt) return { ok: false, error: "expired" };
+
+    isHost = false;
     sub = `patient:${appointment.patientId}`;
   }
 

@@ -10,7 +10,8 @@ import { fmtDateShort, fmtTime12 } from "@/components/DashboardHelpers"
 import { notifyPatient } from "@/lib/patient-notifications"
 import { sendNotificationEmail } from "@/lib/notifications/send"
 import { Routes } from "@/lib/routes"
-import { renderAppointmentConfirmed, renderAppointmentChangedByClinic, renderNewBookingReceived } from "@/lib/notifications/templates"
+import { renderAppointmentConfirmed, renderAppointmentChangedByClinic, renderNewBookingReceived, renderVideoConsultLink } from "@/lib/notifications/templates"
+import { randomBytes } from "crypto"
 
 export async function createAppointmentAction(data: {
   patientId?: string
@@ -67,6 +68,8 @@ export async function createAppointmentAction(data: {
   const roomId = visitType === "VIDEO" 
     ? "room-" + Math.random().toString(36).substring(2, 8) + "-" + Date.now().toString(36)
     : null
+  // Pre-generate the patient join token so the link is ready immediately
+  const patientLinkToken = visitType === "VIDEO" ? randomBytes(32).toString("hex") : null
 
   const appointment = await db.appointment.create({
     data: {
@@ -79,7 +82,8 @@ export async function createAppointmentAction(data: {
       clinicId,
       status: "scheduled",
       visitType,
-      roomId
+      roomId,
+      patientLinkToken
     },
     include: {
       patient: true,
@@ -141,7 +145,7 @@ export async function createAppointmentAction(data: {
     relatedId: appointment.id
   }).catch(console.error)
 
-  // Email: APPOINTMENT_CONFIRMED to patient (if they have a PatientAccount with an email)
+  // Email: APPOINTMENT_CONFIRMED to patient (if they have an email)
   const patientEmail = appointment.patient.email
   if (patientEmail) {
     const APP = process.env.NEXT_PUBLIC_APP_URL || "https://openordo.com"
@@ -159,6 +163,23 @@ export async function createAppointmentAction(data: {
         preferencesUrl: `${APP}${Routes.PatientPortalSettingsForClinic(appointment.clinic.slug)}`,
       })
     ).catch(console.error)
+
+    // For VIDEO appointments, also send the patient join link in a separate email
+    if (visitType === "VIDEO" && appointment.patientLinkToken) {
+      sendNotificationEmail(
+        "VIDEO_CONSULT_LINK",
+        { toEmail: patientEmail, ownerType: "PATIENT_ACCOUNT", ownerId: patientAccount?.id || null, clinicId },
+        renderVideoConsultLink({
+          patientName: appointment.patient.name,
+          clinicName: appointment.clinic.name,
+          date: fmtDateShort(appointment.date.toISOString().split("T")[0]),
+          time: fmtTime12(appointment.time),
+          joinUrl: `${APP}/consultation/join/p/${appointment.patientLinkToken}`,
+          loginUrl: `${APP}${Routes.PatientPortalForClinic(appointment.clinic.slug)}`,
+          preferencesUrl: `${APP}${Routes.PatientPortalSettingsForClinic(appointment.clinic.slug)}`,
+        })
+      ).catch(console.error)
+    }
   }
 
   // Email: NEW_BOOKING_RECEIVED for clinic staff (toggleable)

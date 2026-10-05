@@ -4,6 +4,7 @@ import React, { useState, useTransition } from "react"
 import { Search, Plus, LayoutGrid, List as ListIcon, ChevronLeft, ChevronRight, X, Pencil, Trash2, Lock, Video } from "lucide-react"
 import { initials, fmtDate, fmtDateShort, fmtTime12, toISO, pad, StatusBadge } from "@/components/DashboardHelpers"
 import { createAppointmentAction, updateAppointmentAction, updateAppointmentStatusAction } from "@/server/actions/appointments"
+import { generatePatientLinkToken } from "@/server/actions/video-consultation"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import Link from "next/link"
 
@@ -198,14 +199,18 @@ export function AppointmentsClient({
                           <button
                             className="cw-btn cw-btn-ghost cw-btn-sm"
                             style={{ padding: "3px 6px", fontSize: 11.5 }}
-                            onClick={() => {
-                              const url = `${window.location.origin}/consultation/join/${a.roomId || a.id}`;
-                              navigator.clipboard.writeText(url);
-                              showAlert({ title: "Copied", body: "Video link copied to clipboard!", tone: "primary" });
+                            onClick={async () => {
+                              const result = await generatePatientLinkToken(a.id);
+                              if ('error' in result) {
+                                showAlert({ title: "Error", body: result.error, tone: "danger" });
+                                return;
+                              }
+                              navigator.clipboard.writeText(result.url);
+                              showAlert({ title: "Copied", body: "Patient video link copied to clipboard!", tone: "primary" });
                             }}
-                            title="Copy Invite Link"
+                            title="Copy Patient Invite Link"
                           >
-                            📋 Copy Link
+                            📋 Copy Patient Link
                           </button>
                         </div>
                       )}
@@ -284,12 +289,16 @@ export function AppointmentsClient({
                             <button
                               className="cw-btn cw-btn-ghost cw-btn-icon"
                               style={{ padding: "3px 6px", fontSize: 11 }}
-                              onClick={() => {
-                                const url = `${window.location.origin}/consultation/join/${a.roomId || a.id}`;
-                                navigator.clipboard.writeText(url);
-                                showAlert({ title: "Copied", body: "Video link copied to clipboard!", tone: "primary" });
+                              onClick={async () => {
+                                const result = await generatePatientLinkToken(a.id);
+                                if ('error' in result) {
+                                  showAlert({ title: "Error", body: result.error, tone: "danger" });
+                                  return;
+                                }
+                                navigator.clipboard.writeText(result.url);
+                                showAlert({ title: "Copied", body: "Patient video link copied!", tone: "primary" });
                               }}
-                              title="Copy Invite Link"
+                              title="Copy Patient Invite Link"
                             >
                               📋
                             </button>
