@@ -2,21 +2,17 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy package files to the root /app directory
-COPY signaling/package.json signaling/package-lock.json* ./
+# Copy package files
+COPY package.json package-lock.json* ./
 
-# Install dependencies at the root level so both signaling and shared can find them
+# Install dependencies
 RUN npm ci
 
-# Copy the shared directory
-COPY shared ./shared
-
-# Copy the signaling source
-COPY signaling ./signaling
+# Copy source files
+COPY . .
 
 # Build the TypeScript code
-RUN cd signaling && npm run build
+RUN npm run build
 
 # Start the server
-WORKDIR /app/signaling
 CMD ["npm", "start"]

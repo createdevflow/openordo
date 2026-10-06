@@ -2,8 +2,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import * as http from "http";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-// Need relative path since tsconfig includes ../shared
-import { ClientMessageSchema, ServerMessage } from "../../shared/video-protocol";
+import { ClientMessageSchema, ServerMessage } from "./video-protocol";
 
 const PORT = process.env.PORT || 4001;
 const SIGNAL_JWT_SECRET = process.env.SIGNAL_JWT_SECRET || "fallback_secret_for_dev";

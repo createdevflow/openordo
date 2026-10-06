@@ -2,11 +2,11 @@
   "name": "signaling",
   "version": "1.0.0",
   "description": "Chartwell Signaling Server",
-  "main": "dist/signaling/src/index.js",
+  "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/signaling/src/index.js",
-    "dev": "tsc -w & node --watch dist/signaling/src/index.js"
+    "start": "node dist/index.js",
+    "dev": "tsc -w & node --watch dist/index.js"
   },
   "dependencies": {
     "jsonwebtoken": "^9.0.0",
