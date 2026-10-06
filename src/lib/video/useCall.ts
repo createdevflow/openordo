@@ -83,6 +83,17 @@ export function useCall({
 
     let isClosed = false;
 
+    // IMPORTANT: Create RTCPeerConnection FIRST so pcRef.current is set
+    // before the WebSocket connects and receives messages.
+    const pc = new RTCPeerConnection({
+      iceServers,
+      iceTransportPolicy: turnPolicy,
+      bundlePolicy: "max-bundle",
+      rtcpMuxPolicy: "require",
+      iceCandidatePoolSize: 2,
+    });
+    pcRef.current = pc;
+
     const connectWs = () => {
       if (isClosed) return;
       const wsUrl = process.env.NEXT_PUBLIC_SIGNAL_URL || "wss://signal.openordo.com";
@@ -96,13 +107,39 @@ export function useCall({
       
       ws.onmessage = async (e) => {
         const msg = JSON.parse(e.data);
+        // pcRef.current is guaranteed to be set now since we created it above.
         const pc = pcRef.current;
         if (!pc) return;
         
         if (msg.t === "joined") {
           setRemoteJoined(msg.peerPresent);
+          // If peer is already in the room when we join, and we're the doctor
+          // (impolite side), kick off the offer immediately.
+          if (msg.peerPresent && !isPolite) {
+            try {
+              makingOfferRef.current = true;
+              await pc.setLocalDescription();
+              ws.send(JSON.stringify({ t: "sdp", description: pc.localDescription }));
+            } catch (err) {
+              console.error("Initial offer error:", err);
+            } finally {
+              makingOfferRef.current = false;
+            }
+          }
         } else if (msg.t === "peer-joined") {
           setRemoteJoined(true);
+          // Doctor (impolite/offerer) kicks off negotiation when patient joins
+          if (!isPolite) {
+            try {
+              makingOfferRef.current = true;
+              await pc.setLocalDescription();
+              ws.send(JSON.stringify({ t: "sdp", description: pc.localDescription }));
+            } catch (err) {
+              console.error("peer-joined offer error:", err);
+            } finally {
+              makingOfferRef.current = false;
+            }
+          }
         } else if (msg.t === "peer-left") {
           setRemoteJoined(false);
           setRemoteVideoTrack(null);
@@ -149,23 +186,14 @@ export function useCall({
       };
     };
 
-    connectWs();
-    
-    // Initialize WebRTC
-    const pc = new RTCPeerConnection({
-      iceServers,
-      iceTransportPolicy: turnPolicy,
-      bundlePolicy: "max-bundle",
-      rtcpMuxPolicy: "require",
-      iceCandidatePoolSize: 2,
-    });
-    pcRef.current = pc;
-    
     // ctl channel
     if (isHost) { // Doctor creates channel
       const dc = pc.createDataChannel("ctl", { ordered: true });
       setupDataChannel(dc);
     }
+
+    // Connect WebSocket AFTER pcRef.current is set
+    connectWs();
     
     pc.ondatachannel = (e) => {
       if (e.channel.label === "ctl") {
