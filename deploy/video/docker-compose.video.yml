@@ -15,6 +15,7 @@ services:
     networks:
       - proxy
       - default
+      - openordo_net
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
@@ -39,3 +40,6 @@ services:
 networks:
   proxy:
     external: true
+  openordo_net:
+    external: true
+    name: openordo_internal_net

@@ -96,7 +96,7 @@ export function useCall({
 
     const connectWs = () => {
       if (isClosed) return;
-      const wsUrl = process.env.NEXT_PUBLIC_SIGNAL_URL || "wss://signal.openordo.com";
+      const wsUrl = process.env.NEXT_PUBLIC_SIGNAL_URL || "wss://openordo.com/ws/signal";
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
       
