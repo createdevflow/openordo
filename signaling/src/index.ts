@@ -26,7 +26,8 @@ interface Room {
 
 const rooms = new Map<string, Room>();
 
-// IP rate limiting: max 10 connections per minute
+// IP rate limiting: max 60 connections per minute
+// Use X-Forwarded-For so Traefik proxy doesn't cause all clients to share one bucket
 const ipConnections = new Map<string, number[]>();
 
 function checkIpRateLimit(ip: string): boolean {
@@ -34,7 +35,7 @@ function checkIpRateLimit(ip: string): boolean {
   let connTimes = ipConnections.get(ip) || [];
   // Keep connections from last 60s
   connTimes = connTimes.filter((t) => now - t < 60000);
-  if (connTimes.length >= 10) {
+  if (connTimes.length >= 60) {
     ipConnections.set(ip, connTimes);
     return false;
   }
@@ -106,7 +107,11 @@ const server = http.createServer((req, res) => {
 const wss = new WebSocketServer({ noServer: true });
 
 server.on("upgrade", (request, socket, head) => {
-  const ip = request.socket.remoteAddress || "";
+  // Use X-Forwarded-For to get real client IP when behind Traefik.
+  // Without this, ALL connections appear to come from Traefik's internal IP
+  // and hit the rate limit after just 10 attempts.
+  const forwarded = request.headers['x-forwarded-for'] as string | undefined;
+  const ip = (forwarded ? forwarded.split(',')[0].trim() : request.socket.remoteAddress) || "";
   
   if (!checkIpRateLimit(ip)) {
     socket.destroy();
