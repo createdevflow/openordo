@@ -3,7 +3,8 @@ version: "3.8"
 services:
   signaling:
     build: 
-      context: ../../signaling
+      context: ../../
+      dockerfile: signaling/Dockerfile
     container_name: chartwell-signaling
     ports:
       - "4001:4001"

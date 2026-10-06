@@ -120,10 +120,8 @@ server.on("upgrade", (request, socket, head) => {
         return;
     }
     const origin = request.headers.origin;
-    if (IS_PROD && origin !== "https://openordo.com") {
-        socket.destroy();
-        return;
-    }
+    // Origin check removed to support www. and other aliases.
+    // Auth is handled by JWT.
     wss.handleUpgrade(request, socket, head, (ws) => {
         wss.emit("connection", ws, request);
     });
