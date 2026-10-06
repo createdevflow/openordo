@@ -223,10 +223,14 @@ export function useCall({
     }
 
     pc.onnegotiationneeded = async () => {
+      // Only send if WebSocket is actually open - it may fire before WS connects
+      // since we now create the PC first. The offer is also sent from peer-joined.
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
       try {
         makingOfferRef.current = true;
         await pc.setLocalDescription();
-        wsRef.current?.send(JSON.stringify({ t: "sdp", description: pc.localDescription }));
+        ws.send(JSON.stringify({ t: "sdp", description: pc.localDescription }));
       } catch (err) {
         console.error(err);
       } finally {
@@ -235,7 +239,10 @@ export function useCall({
     };
 
     pc.onicecandidate = (e) => {
-      wsRef.current?.send(JSON.stringify({ t: "ice", candidate: e.candidate }));
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ t: "ice", candidate: e.candidate }));
+      }
     };
 
     pc.oniceconnectionstatechange = () => {
