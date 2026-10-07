@@ -29,7 +29,7 @@ async function run() {
   console.log('Starting baseline generation...');
   const browser = await chromium.launch();
   const context = await browser.newContext({
-    viewport: { width: 1440, height: 900 }
+    viewport: { width: 320, height: 844 }
   });
   
   const page = await context.newPage();
@@ -51,7 +51,16 @@ async function run() {
     // small wait for animations
     await page.waitForTimeout(1000);
     
-    const screenshotPath = path.join(outDir, `${p.name}.png`);
+    const hasOverflow = await page.evaluate(() => {
+      return document.documentElement.scrollWidth > window.innerWidth;
+    });
+    if (hasOverflow) {
+      console.log(`❌ OVERFLOW DETECTED at ${p.name}`);
+    } else {
+      console.log(`✅ No overflow at ${p.name}`);
+    }
+    
+    const screenshotPath = path.join(outDir, `${p.name}_390.png`);
     await page.screenshot({ path: screenshotPath, fullPage: true });
     console.log(`Saved ${screenshotPath}`);
   }

@@ -282,7 +282,7 @@ export function PrescriptionsClient({
           </button>
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 360px), 1fr))", gap: 16 }}>
           {filtered.map(rx => {
             const rxItems = parseItems(rx.items)
             return (
