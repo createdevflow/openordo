@@ -2,13 +2,15 @@
 services:
   signaling:
     build: 
-      context: ../../signaling
+      context: ../../
+      dockerfile: signaling/Dockerfile
     container_name: chartwell-signaling
     ports:
       - "4001:4001"
+    env_file:
+      - ../../.env
     environment:
       - NODE_ENV=production
-      - SIGNAL_JWT_SECRET=${SIGNAL_JWT_SECRET}
       - API_URL=https://openordo.com
     restart: unless-stopped
     networks:
@@ -33,8 +35,8 @@ services:
     volumes:
       - ./turnserver.conf:/etc/turnserver.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
-    environment:
-      - TURN_SECRET=${TURN_SECRET}
+    env_file:
+      - ../../.env
     restart: unless-stopped
     # Use network_mode: host because TURN requires large UDP port ranges which are inefficient to map in docker proxy
 

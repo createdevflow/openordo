@@ -37,10 +37,11 @@ certbot --nginx -d signal.openordo.com
 ## 5. Deployment
 ### Using Docker Compose (Recommended)
 Edit `turnserver.conf` and replace `YOUR_VPS_PUBLIC_IP` with your actual VPS IP address.
-Create a `.env` in this folder containing:
+`docker-compose.video.yml` is now configured to automatically load the `.env` file from the repository root `../../.env`.
+Ensure your root `.env` file contains:
 ```
-SIGNAL_JWT_SECRET=your_secret
-TURN_SECRET=your_secret
+SIGNAL_JWT_SECRET=your_video_jwt_secret_here
+TURN_SECRET=your_turn_secret_here
 ```
 Run:
 ```bash

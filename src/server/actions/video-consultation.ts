@@ -4,7 +4,7 @@ import { db } from "@/lib/db"
 import { auth } from "@/lib/auth"
 import { hasActivePlugin } from "@/lib/plugins"
 import crypto, { randomBytes } from "crypto"
-import jwt from "jsonwebtoken"
+import { mintSignalToken } from "../../../shared/video-token"
 import { redirect } from "next/navigation"
 
 // ── Token helpers ─────────────────────────────────────────────────────────────
@@ -389,6 +389,7 @@ export async function getCallCredentials(
 
     appointment = await db.appointment.findFirst({
       where: { OR: [{ id: identifier }, { roomId: identifier }] },
+      include: { clinic: true },
     });
     if (!appointment) return { ok: false, error: "Invalid appointment" };
 
@@ -433,20 +434,24 @@ export async function getCallCredentials(
     event: "JOINED",
   });
 
-  const { expiresAt } = computeTokenWindow(appointment as any);
+  const timezone = appointment.clinic?.timezone || "UTC";
+  const { expiresAt } = computeTokenWindow(appointment as any, timezone);
   const exp = Math.floor(expiresAt.getTime() / 1000);
 
-  // Mint Signal JWT
-  const secret = process.env.SIGNAL_JWT_SECRET || "fallback_secret_for_dev";
-  const signalToken = jwt.sign(
-    {
-      room: appointment.id,
-      role: isHost ? "doctor" : "patient",
-      sub,
-    },
-    secret,
-    { expiresIn: exp - Math.floor(Date.now() / 1000) }
-  );
+  // Mint Signal JWT using shared logic
+  let signalToken: string;
+  try {
+    signalToken = await mintSignalToken(
+      {
+        room: appointment.id,
+        role: isHost ? "doctor" : "patient",
+        sub,
+      },
+      expiresAt
+    );
+  } catch (err: any) {
+    return { ok: false, error: "Video service not configured" };
+  }
 
   // Mint TURN credentials
   const turnSecret = process.env.TURN_SECRET || "fallback_turn_secret";

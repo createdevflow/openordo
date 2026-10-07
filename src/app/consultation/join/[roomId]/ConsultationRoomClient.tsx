@@ -431,22 +431,22 @@ export default function ConsultationRoomClient({
 
   const [creds, setCreds] = useState<any>(null);
   
-  useEffect(() => {
-    async function initCreds() {
-      if (!appointment) return;
-      // Doctor: identifier = appointment.id, isHost=true
-      // Patient: identifier = patientLinkToken (stored on appointment passed from the /p/[token] page), isHost=false
-      const identifier = isHost ? appointment.id : (appointment.patientLinkToken || appointment.roomId);
-      const res = await getCallCredentials(identifier, isHost);
-      if (res.ok) {
-        setCreds(res);
-      } else {
-        if (res.error === "ROOM_FULL") alert("Room is full");
-        else alert("Failed to join: " + res.error);
-      }
+  const refetchCredentials = useCallback(async () => {
+    if (!appointment) return false;
+    const identifier = isHost ? appointment.id : (appointment.patientLinkToken || appointment.roomId);
+    const res = await getCallCredentials(identifier, !!isHost);
+    if (res.ok) {
+      setCreds(res);
+      return true;
     }
-    initCreds();
+    return false;
   }, [appointment, isHost]);
+
+  useEffect(() => {
+    refetchCredentials().then(ok => {
+      if (!ok) alert("Failed to fetch initial credentials");
+    });
+  }, [refetchCredentials]);
 
   const {
     connectionState,
@@ -476,7 +476,8 @@ export default function ConsultationRoomClient({
     isHost,
     videoTrack: videoTrackRef.current,
     audioTrack: streamRef.current?.getAudioTracks()[0] || null,
-    appointmentId: appointment?.id
+    appointmentId: appointment?.id,
+    refetchCredentials,
   });
 
   const remoteName  = isHost ? patientName  : doctorName

@@ -1,11 +1,15 @@
 import { WebSocketServer, WebSocket } from "ws";
 import * as http from "http";
-import jwt from "jsonwebtoken";
+import { verifySignalToken } from "../../shared/video-token";
 import crypto from "crypto";
 import { ClientMessageSchema, ServerMessage } from "./video-protocol";
 
+import { getSecretBytes } from "../../shared/video-token";
+
+// Fail fast on startup if secret is missing or too short
+const SECRET_BYTES = getSecretBytes();
+
 const PORT = process.env.PORT || 4001;
-const SIGNAL_JWT_SECRET = process.env.SIGNAL_JWT_SECRET || "fallback_secret_for_dev";
 const API_URL = process.env.API_URL || "http://localhost:3000";
 const IS_PROD = process.env.NODE_ENV === "production";
 
@@ -59,7 +63,7 @@ async function flushEvents() {
   if (batchedEvents.length === 0) return;
   const batch = batchedEvents.splice(0, batchedEvents.length);
   const payload = JSON.stringify(batch);
-  const hmac = crypto.createHmac("sha256", SIGNAL_JWT_SECRET).update(payload).digest("hex");
+  const hmac = crypto.createHmac("sha256", SECRET_BYTES).update(payload).digest("hex");
 
   try {
     const req = http.request(
@@ -164,7 +168,7 @@ wss.on("connection", (ws, req) => {
     }
   }, 5000);
 
-  ws.on("message", (data: any, isBinary) => {
+  ws.on("message", async (data: any, isBinary) => {
     if (isBinary || data.toString().length > 65536) { // 64KB
       ws.close(4009, "Message too large");
       return;
@@ -176,8 +180,16 @@ wss.on("connection", (ws, req) => {
 
       if (msg.t === "join") {
         if (authTimeout) clearTimeout(authTimeout);
+        
+        if (!msg.token) {
+          console.log(`reject reason=AUTH detail=NO_TOKEN`);
+          sendTo(ws, { t: "error", code: "AUTH" });
+          ws.close(4001, "AUTH");
+          return;
+        }
+
         try {
-          const decoded = jwt.verify(msg.token, SIGNAL_JWT_SECRET) as any;
+          const decoded = await verifySignalToken(msg.token);
           const roomId = decoded.room;
           const role = decoded.role as "doctor" | "patient";
           const sub = decoded.sub;
@@ -239,8 +251,21 @@ wss.on("connection", (ws, req) => {
               pairedAt: room.pairedAt,
             });
           }
-        } catch (e) {
-          console.log(`reject reason=AUTH`);
+        } catch (e: any) {
+          let detail = "UNKNOWN";
+          if (e.code === "ERR_JWT_EXPIRED") {
+            // jose uses code ERR_JWT_EXPIRED
+            detail = "EXPIRED";
+          } else if (e.code === "ERR_JWS_SIGNATURE_VERIFICATION_FAILED") {
+            detail = "BAD_SIGNATURE";
+          } else if (e.code === "ERR_JWS_INVALID" || e.code === "ERR_JWT_INVALID") {
+            detail = "MALFORMED";
+          } else if (e.code === "ERR_JOSES_ALG_NOT_ALLOWED") {
+            detail = "ALG_MISMATCH";
+          } else {
+            detail = "CLAIMS_INVALID_" + e.code;
+          }
+          console.log(`reject reason=AUTH detail=${detail}`);
           sendTo(ws, { t: "error", code: "AUTH" });
           ws.close(4001, "AUTH");
         }

@@ -28,6 +28,7 @@ interface UseCallProps {
   audioTrack: MediaStreamTrack | null;
   appointmentId: string;
   onCallEnded?: () => void;
+  refetchCredentials?: () => Promise<boolean>;
 }
 
 export function useCall({
@@ -39,6 +40,7 @@ export function useCall({
   audioTrack,
   appointmentId,
   onCallEnded,
+  refetchCredentials,
 }: UseCallProps) {
   const [connectionState, setConnectionState] = useState<RTCIceConnectionState>("new");
   const [remoteJoined, setRemoteJoined] = useState(false);
@@ -61,6 +63,7 @@ export function useCall({
   const [wsReadyState, setWsReadyState] = useState<number>(WebSocket.CLOSED);
   const [lastCloseCode, setLastCloseCode] = useState<number | null>(null);
   const [lastServerError, setLastServerError] = useState<string | null>(null);
+  const lastServerErrorRef = useRef<string | null>(null);
   
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -362,6 +365,7 @@ export function useCall({
             if (pc) pc.restartIce();
             } else if (msg.t === "error") {
               setLastServerError(msg.code);
+              lastServerErrorRef.current = msg.code;
               if (msg.code === "ROOM_FULL") {
                 setCallError("Room full");
               } else if (msg.code === "EXPIRED") {
@@ -379,24 +383,63 @@ export function useCall({
           setCallError("Can't reach the call server — retrying…");
         };
   
-        ws.onclose = (e) => {
+        ws.onclose = async (e) => {
           setWsReadyState(WebSocket.CLOSED);
           setLastCloseCode(e.code);
           if (isClosed || e.code === 1000) return; // intentional close
-          if (e.code === 4003) {
-            setCallError("Room full");
+          
+          let errCode = lastServerErrorRef.current;
+          if (e.code === 4001) errCode = "AUTH";
+          if (e.code === 4002) errCode = "EXPIRED";
+          if (e.code === 4003) errCode = "ROOM_FULL";
+
+          if (errCode === "ROOM_FULL") {
+            setCallError("This call already has two participants.");
             return;
           }
-          if (e.code === 4002) {
-            setCallError("Link expired");
+          if (errCode === "EXPIRED") {
+            setCallError("This consultation link has expired.");
             return;
           }
+          if (errCode === "AUTH") {
+            if (wsReconnectAttempts.current < 1 && refetchCredentials) {
+              setCallError("Reconnecting…");
+              wsReconnectAttempts.current++;
+              const ok = await refetchCredentials();
+              if (ok) {
+                // If refetch succeeds, reconnect immediately (signalToken will update and trigger useEffect, but we'll manually retry if needed, wait, useEffect triggers on signalToken change, so we don't need to call connectWs here if token changes. Actually, let's just let the effect handle it, BUT we need to clear the current timer.)
+                // Actually it's safer to just let the retry logic run and it will use the new token when connectWs is called. But `connectWs` captures `signalToken` from the closure. We should ensure the new token is used.
+                // The easiest way is to let the token change re-trigger the useEffect.
+                // For now we'll just set a short timeout and `connectWs` will use the old token unless the component re-renders.
+                // To avoid closure staleness, we can't just call connectWs. We let the effect re-run.
+              }
+              // We'll return early, the effect cleanup will run and re-run connectWs if token changed.
+              // If token didn't change, we still want to retry.
+              wsReconnectTimer.current = setTimeout(connectWs, 1000);
+              return;
+            } else {
+              setCallError("We couldn't verify your access to this call. Please refresh the page or ask the clinic for a new link.");
+              return;
+            }
+          }
+
+          if (wsReconnectAttempts.current >= 20) {
+            setCallError("Can't reach the call server"); // A generic retry button can be added to the UI
+            return;
+          }
+
           setCallError("Reconnecting…");
           qualityStatsRef.current.wsReconnects++;
           const backoff = Math.min(8000, 500 * Math.pow(2, wsReconnectAttempts.current));
           const jitter = backoff * 0.2 * Math.random();
           wsReconnectAttempts.current++;
-          wsReconnectTimer.current = setTimeout(connectWs, backoff + jitter);
+          wsReconnectTimer.current = setTimeout(async () => {
+            if (refetchCredentials && wsReconnectAttempts.current % 3 === 0) {
+              // Optionally refetch every 3rd retry
+              await refetchCredentials();
+            }
+            connectWs();
+          }, backoff + jitter);
         };
       };
 
