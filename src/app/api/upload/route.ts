@@ -5,7 +5,7 @@ import { getPatientAccountSession } from "@/lib/patient-auth";
 import { db } from "@/lib/db";
 import { FileCategory } from "@/lib/storage/categories";
 
-import { verifySignalToken } from "../../../../../shared/video-token";
+import { verifySignalToken } from "../../../../shared/video-token";
 
 export async function POST(req: NextRequest) {
   const adminSession = await auth();

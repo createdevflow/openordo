@@ -194,7 +194,7 @@ export function DashboardShell({
               <button 
                 className="cw-mobile-menu" 
                 onClick={() => setSidebarOpen(true)}
-                style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", padding: 0 }}
+                style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
               >
                 <Menu size={22} color="var(--ink-soft)" />
               </button>
