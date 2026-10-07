@@ -106,6 +106,13 @@ export function DashboardShell({
 
   return (
     <div className={`cw ${isCollapsed ? "collapsed-ui" : ""}`}>
+      {sidebarOpen && (
+        <div 
+          onClick={() => setSidebarOpen(false)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 50 }} 
+          className="cw-mobile-menu"
+        />
+      )}
       <div className={`cw-app ${isCollapsed ? "collapsed" : ""}`}>
         <aside className={`cw-sidebar ${sidebarOpen ? "open" : ""}`}>
           <div className="cw-sidebar-brand" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "22px 20px" }}>
@@ -184,7 +191,13 @@ export function DashboardShell({
           )}
           <div className="cw-topbar">
             <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-              {/* Hamburger menu removed as per request */}
+              <button 
+                className="cw-mobile-menu" 
+                onClick={() => setSidebarOpen(true)}
+                style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", padding: 0 }}
+              >
+                <Menu size={22} color="var(--ink-soft)" />
+              </button>
               <h1>{viewTitle}</h1>
             </div>
             <div className="cw-topbar-actions">

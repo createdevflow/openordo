@@ -103,4 +103,18 @@ Per TRAI DLT regulations:
 3. **Doctor vs Patient View**: Verify the UI layout for Doctor (Consultation panel) vs Patient (only Chat and Files).
 4. **TURN Relay test**: Connect one peer on corporate/restrictive firewall. Verify that \stats\ report shows TURN relay IP usage.
 5. **Quality API**: End the call. Verify \CallQualityLog\ row is inserted in database.
+5. **Quality API**: End the call. Verify \CallQualityLog\ row is inserted in database.
 
+## Video Polish & Responsiveness (2026-10-08)
+
+### 1. WebRTC & Chat/Files
+- **Root cause:** `isHost` was used as a determiner for `negotiated` DataChannel ID, which failed when signaling arrived out of order, leading to broken chat and files. Large files failed to upload because they were sent via DataChannels as base64 URLs which hit the message size limits or memory limits.
+- **Fix:** Switched DataChannel to `negotiated: true, id: 0` for both sides. Migrated file uploads to use standard HTTP multipart form upload via `/api/upload` (authorized by ephemeral `verifySignalToken`) instead of `FileReader`/base64 over WebRTC. Files are now downloaded directly via `/api/files/:id?token=...`.
+
+### 2. Full Mobile Responsiveness
+- **Root cause:** The dashboard UI used absolute widths and hidden elements without considering touch interfaces and smaller screens (<768px). The consultation room UI hid the side panel on mobile, making chat and files inaccessible without clicking a "Details" button that spawned a bottom sheet.
+- **Fix:** Modified `ConsultationRoomClient.tsx` to stack the video stage and side panel in a scrollable column on mobile. In the Clinic Dashboard (`DashboardShell.tsx` and `dashboard.css`), reinstated the mobile hamburger menu to toggle the sidebar, and made `cw-tabs`, `cw-toolbar`, and modals scrollable/responsive to prevent squishing on small screens.
+
+### 3. Persistent Volume
+- **Root cause:** Uploaded files were stored in `.storage/` inside the container, which is ephemeral and wiped on restart.
+- **Fix:** Added `- /var/www/openordo/storage:/app/.storage` mapping to `openordo-app` in `docker-compose.yml`.

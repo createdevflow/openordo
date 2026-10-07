@@ -320,8 +320,9 @@
 .cw-table tr.clickable:hover { background: var(--paper); cursor: pointer; }
 .cw-table .num { font-family: 'JetBrains Mono', monospace; font-size: 13px; }
 
-.cw-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
+.cw-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; width: 100%; }
 .cw-toolbar-left { display: flex; align-items: center; gap: 10px; flex: 1; }
+.cw-mobile-menu { display: none; }
 .cw-search-box { display: flex; align-items: center; gap: 8px; background: var(--paper-raised); border: 1px solid var(--line); border-radius: 7px; padding: 9px 12px; max-width: 280px; flex: 1; }
 .cw-search-box input { border: none; background: transparent; outline: none; font-size: 13.5px; width: 100%; }
 .cw-chip-filter { display: flex; gap: 6px; }
@@ -370,8 +371,9 @@
 .cw-daychip { font-size: 10.5px; font-weight: 700; padding: 3px 7px; border-radius: 5px; background: var(--paper); color: var(--ink-soft); }
 .cw-daychip.on { background: var(--forest); color: var(--white); }
 
-.cw-tabs { display: flex; gap: 4px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 3px; width: fit-content; }
-.cw-tab { padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--ink-soft); background: transparent; border: none; display: flex; align-items: center; gap: 6px; }
+.cw-tabs { display: flex; gap: 4px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 3px; width: fit-content; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.cw-tabs::-webkit-scrollbar { display: none; } /* Hide scrollbar for cleaner look on mobile */
+.cw-tab { padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--ink-soft); background: transparent; border: none; display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .cw-tab.active { background: var(--paper-raised); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
 
 .cw-record-card { border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 12px; background: var(--paper-raised); }
@@ -390,6 +392,7 @@
   .cw-app { grid-template-columns: 1fr; }
   .cw-sidebar { position: fixed; z-index: 60; left: -240px; transition: left .18s ease; }
   .cw-sidebar.open { left: 0; }
+  .cw-mobile-menu { display: flex !important; }
 }
 @media (max-width: 640px) {
   .cw-feature-list, .cw-flow, .cw-pricing, .cw-doctor-grid, .cw-stat-grid { grid-template-columns: 1fr; }
@@ -397,6 +400,11 @@
   .cw-row2 { grid-template-columns: 1fr; }
   .cw-cal-grid { gap: 3px; }
   .cw-cal-cell { min-height: 52px; padding: 4px; }
+  .cw-modal-body { padding: 16px; max-height: 75vh; }
+  .cw-modal-head, .cw-modal-foot { padding: 16px; }
+  .cw-toolbar { flex-direction: column; align-items: stretch; }
+  .cw-toolbar-left { flex-direction: column; align-items: stretch; }
+  .cw-search-box { max-width: 100%; }
 }
 
 /* ─── Plugin Cards ──────────────────────────────────────────────────────────── */
