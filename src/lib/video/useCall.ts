@@ -6,16 +6,19 @@ type Role = "doctor" | "patient";
 
 interface ChatMessage {
   id: string;
-  sender: string;
+  sender: "doctor" | "patient";
   text: string;
-  time: string;
+  timestamp: number;
 }
 
 interface SharedFile {
+  id: string;
   fileId: string;
   name: string;
-  size: string;
-  sender: string;
+  size: number;
+  mime: string;
+  sender: "doctor" | "patient";
+  timestamp: number;
   url?: string;
 }
 
@@ -117,19 +120,21 @@ export function useCall({
             setRemoteCameraOn(msg.cam);
             setRemoteMicOn(msg.mic);
           } else if (msg.t === "chat") {
-            setChatMessages(prev => [...prev, { id: msg.id, sender: msg.sender, text: msg.text, time: msg.time }]);
+            setChatMessages(prev => [...prev, { id: msg.id, sender: msg.sender, text: msg.text, timestamp: msg.timestamp }]);
           } else if (msg.t === "file") {
-            setSharedFiles(prev => [...prev, { fileId: msg.fileId, name: msg.name, size: msg.size, sender: msg.sender }]);
+            setSharedFiles(prev => [...prev, { id: msg.id, fileId: msg.fileId, name: msg.name, size: msg.size, mime: msg.mime, sender: msg.sender, timestamp: msg.timestamp }]);
           } else if (msg.t === "quality") {
             setRemoteQualityBars(msg.bars);
           }
         } catch(err) {}
       };
-      dc.onopen = () => {
+      const sendInitialState = () => {
         try {
           dc.send(JSON.stringify({ t: "state", cam: !!videoTrack, mic: !!audioTrack }));
         } catch(err) {}
       };
+      dc.onopen = sendInitialState;
+      if (dc.readyState === "open") sendInitialState();
     }
 
     function initPC() {
@@ -143,16 +148,8 @@ export function useCall({
       });
       pcRef.current = pc;
 
-      if (isHost) {
-        const dc = pc.createDataChannel("ctl", { ordered: true });
-        setupDataChannel(dc);
-      }
-
-      pc.ondatachannel = (e) => {
-        if (e.channel.label === "ctl") {
-          setupDataChannel(e.channel);
-        }
-      };
+      const dc = pc.createDataChannel("ctl", { ordered: true, negotiated: true, id: 0 });
+      setupDataChannel(dc);
 
       pc.onnegotiationneeded = async () => {
         if (!remoteJoined) return;
@@ -637,22 +634,22 @@ export function useCall({
   }, []);
 
   const sendChat = useCallback((text: string) => {
-    const id = Math.random().toString(36).substr(2, 9);
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const msg = { t: "chat", id, sender: isHost ? "Doctor" : "Patient", text, time };
-    setChatMessages(prev => [...prev, msg]);
+    const id = Math.random().toString(36).substring(2, 11);
+    const msg = { t: "chat", id, sender: localRole, text, timestamp: Date.now() };
+    setChatMessages(prev => [...prev, msg as ChatMessage]);
     if (dcRef.current?.readyState === "open") {
       dcRef.current.send(JSON.stringify(msg));
     }
-  }, [isHost]);
+  }, [localRole]);
 
-  const shareFile = useCallback((fileId: string, name: string, size: string) => {
-    const msg = { t: "file", fileId, name, size, sender: isHost ? "Doctor" : "Patient" };
-    setSharedFiles(prev => [...prev, msg]);
+  const shareFile = useCallback((fileId: string, name: string, size: number, mime: string) => {
+    const id = Math.random().toString(36).substring(2, 11);
+    const msg = { t: "file", id, fileId, name, size, mime, sender: localRole, timestamp: Date.now() };
+    setSharedFiles(prev => [...prev, msg as SharedFile]);
     if (dcRef.current?.readyState === "open") {
       dcRef.current.send(JSON.stringify(msg));
     }
-  }, [isHost]);
+  }, [localRole]);
 
   return {
     connectionState,

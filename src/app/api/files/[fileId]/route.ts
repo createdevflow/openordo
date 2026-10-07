@@ -3,9 +3,25 @@ import { getFileForRequest } from "@/lib/storage";
 import { auth } from "@/lib/auth";
 import { getPatientAccountSession } from "@/lib/patient-auth";
 import { db } from "@/lib/db";
+import { verifySignalToken } from "../../../../../shared/video-token";
 
 // Helper to build session context for authorizeFileAccess
-async function buildSessionContext() {
+async function buildSessionContext(req: NextRequest) {
+  const token = req.nextUrl.searchParams.get("token");
+  if (token) {
+    try {
+      const claims = await verifySignalToken(token);
+      return {
+        isSignalToken: true,
+        role: claims.role,
+        patientAccountId: claims.role === "patient" ? claims.sub : null,
+        userId: claims.role === "doctor" ? claims.sub : null,
+        hasPatientAccess: true,
+        // We set a marker so authorizeFileAccess knows it's a call participant
+      };
+    } catch (err) {}
+  }
+
   const adminSession = await auth();
   const patSession = await getPatientAccountSession();
 
@@ -87,7 +103,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ file
   
   const ifNoneMatch = req.headers.get("if-none-match");
   
-  const sessionContext = await buildSessionContext();
+  const sessionContext = await buildSessionContext(req);
   
   // We need to fetch the file to know its clinicId, then patch context if patient
   // getFileForRequest will fetch and authorize. 

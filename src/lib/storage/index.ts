@@ -185,6 +185,11 @@ export function authorizeFileAccess(file: any, sessionContext: any): boolean {
 
   // Clinic scope
   if (cat.scope === "CLINIC" || cat.scope === "PATIENT") {
+    // If it's a signal token accessing a consultation file, we bypass clinicId check
+    if (sessionContext.isSignalToken && file.category === "CONSULTATION_FILE") {
+      return true;
+    }
+    
     if (file.clinicId !== clinicId) return false;
     
     // Staff access

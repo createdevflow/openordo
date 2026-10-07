@@ -33,6 +33,7 @@ services:
       - openordo-db
     volumes:
       - openordo_uploads:/app/public/uploads
+      - /var/www/openordo/storage:/app/.storage
     networks:
       - openordo_net
 

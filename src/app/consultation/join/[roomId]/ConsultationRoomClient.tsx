@@ -134,12 +134,12 @@ interface SidePanelProps {
   setPatientExpanded: (fn: (v: boolean) => boolean) => void
   notes: string
   setNotes: (v: string) => void
-  chatMessages: { sender: string; text: string; time: string }[]
+  chatMessages: { sender: string; text: string; timestamp: number }[]
   chatEndRef: React.RefObject<HTMLDivElement | null>
   newMessage: string
   setNewMessage: (v: string) => void
   sendChat: (e: React.FormEvent) => void
-  sharedFiles: { name: string; size: string; sender: string; url?: string }[]
+  sharedFiles: { id: string; fileId: string; name: string; size: number; mime: string; sender: string; timestamp: number; url?: string }[]
   uploadFile: (e: React.ChangeEvent<HTMLInputElement>) => void
 }
 
@@ -282,8 +282,10 @@ function ConsultationSidePanel({
                     <div style={{ fontSize: 10, color: T.textSecondary, marginBottom: 2 }}>{msg.sender}</div>
                   )}
                   <div>{msg.text}</div>
-                  {msg.sender !== "System" && msg.time && (
-                    <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", textAlign: "right", marginTop: 4 }}>{msg.time}</div>
+                  {msg.sender !== "System" && msg.timestamp && (
+                    <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", textAlign: "right", marginTop: 4 }}>
+                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </div>
                   )}
                 </div>
               ))}
@@ -332,43 +334,13 @@ function ConsultationSidePanel({
                   </div>
                   <div style={{ flex: 1, overflow: "hidden" }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: T.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{f.name}</div>
-                    <div style={{ fontSize: 11, color: T.textSecondary }}>{f.size} · Shared by {f.sender}</div>
+                    <div style={{ fontSize: 11, color: T.textSecondary }}>{(f.size / 1024 / 1024).toFixed(2)} MB · Shared by {f.sender}</div>
                   </div>
-                  {f.url && (
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button onClick={() => {
-                        if (!f.url) return
-                        const w = window.open("", "_blank")
-                        if (!w) return
-                        if (f.url.startsWith("data:text/html")) {
-                          w.document.title = f.name
-                          const b64 = f.url.split(",")[1]
-                          const html = decodeURIComponent(escape(atob(b64)))
-                          const escapedHtml = html.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
-                          w.document.write(`<html><body style="margin:0;"><iframe srcdoc="${escapedHtml}" sandbox="allow-scripts allow-same-origin" style="width:100vw;height:100vh;border:none;"></iframe></body></html>`)
-                        } else {
-                          try {
-                            const [header, b64] = f.url.split(",")
-                            const mime = header.match(/:(.*?);/)?.[1] || ""
-                            const byteStr = atob(b64)
-                            const u8 = new Uint8Array(byteStr.length)
-                            for (let i = 0; i < byteStr.length; i++) u8[i] = byteStr.charCodeAt(i)
-                            const blob = new Blob([u8], { type: mime })
-                            const blobUrl = URL.createObjectURL(blob)
-                            w.location.href = blobUrl
-                            setTimeout(() => URL.revokeObjectURL(blobUrl), 10000)
-                          } catch (e) {
-                            w.document.write(`<html><body><h2>Error opening file</h2></body></html>`)
-                          }
-                        }
-                      }} title="View" style={{ padding: 6, background: "rgba(255,255,255,0.1)", borderRadius: 6, color: T.textPrimary, display: "flex", alignItems: "center", justifyContent: "center", border: "none", cursor: "pointer" }}>
-                        <Eye size={14} />
-                      </button>
-                      <a href={f.url} download={f.name} title="Download" style={{ padding: 6, background: "rgba(255,255,255,0.1)", borderRadius: 6, color: T.textPrimary, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <Download size={14} />
-                      </a>
-                    </div>
-                  )}
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <a href={`/api/files/${f.fileId}${creds?.signalToken ? `?token=${creds.signalToken}` : ''}`} target="_blank" rel="noreferrer" title="Download" style={{ padding: 6, background: "rgba(255,255,255,0.1)", borderRadius: 6, color: T.textPrimary, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Download size={14} />
+                    </a>
+                  </div>
                 </div>
               ))}
             </div>
@@ -816,25 +788,40 @@ export default function ConsultationRoomClient({
     setNewMessage("");
   }
 
-  const uploadFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const uploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 2 * 1024 * 1024) {
-      alert("For this demo, files must be under 2MB.")
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Files must be under 10MB.")
       return
     }
 
-    const reader = new FileReader()
-    reader.onload = () => {
-      const dataUrl = reader.result as string
-      const size = (file.size / 1024 / 1024).toFixed(2) + " MB"
-      const newFile = { name: file.name, size, sender: isHost ? "Doctor" : "Patient", url: dataUrl }
-      const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-      const msg = { sender: "System", text: `📎 Shared: ${file.name}`, time: now }
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("category", "CONSULTATION_FILE");
+      if (creds?.signalToken) {
+        formData.append("token", creds.signalToken);
+      }
+      if (appointment?.id) {
+        formData.append("appointmentId", appointment.id);
+      }
+      if (appointment?.patientId) {
+        formData.append("patientId", appointment.patientId);
+      }
 
-      shareFile(Math.random().toString(36), file.name, size)
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      
+      shareFile(data.id, file.name, file.size, file.type || "application/octet-stream");
+    } catch (err) {
+      alert("Failed to upload file");
     }
-    reader.readAsDataURL(file)
   }
 
   const sidePanelProps: SidePanelProps = {
@@ -997,17 +984,6 @@ export default function ConsultationRoomClient({
             <span className="hide-on-mobile">Exit to Dashboard</span>
             <span className="show-on-mobile-inline">Exit</span>
           </Link>
-          <button
-            className="show-on-mobile-inline"
-            onClick={() => setSheetOpen(s => !s)}
-            style={{
-              background: "rgba(255,255,255,0.08)", border: `1px solid ${T.panelBorder}`,
-              color: "#fff", padding: "5px 10px", borderRadius: 7,
-              fontSize: 12, fontWeight: 600, cursor: "pointer",
-            }}
-          >
-            Details
-          </button>
         </div>
       </div>
 
@@ -1124,21 +1100,7 @@ export default function ConsultationRoomClient({
         </div>
       </div>
 
-      {/* ── Mobile bottom sheet ──────────────────────────────────────────────── */}
-      {sheetOpen && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-          <div style={{ flex: 1, background: "rgba(0,0,0,0.5)" }} onClick={() => setSheetOpen(false)} />
-          <div style={{
-            background: "#123025", borderRadius: "20px 20px 0 0",
-            padding: 20, maxHeight: "70dvh", overflowY: "auto",
-            border: `1px solid ${T.panelBorder}`, borderBottom: "none",
-            display: "flex", flexDirection: "column",
-          }}>
-            <div style={{ width: 40, height: 4, background: "rgba(255,255,255,0.2)", borderRadius: 2, margin: "0 auto 20px" }} />
-            <ConsultationSidePanel {...sidePanelProps} />
-          </div>
-        </div>
-      )}
+      {/* Mobile bottom sheet removed - side panel stacks instead */}
       {isDebug && (
         <div style={{
           position: "fixed", bottom: 0, left: 0, right: 0,
