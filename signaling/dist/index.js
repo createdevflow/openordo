@@ -40,21 +40,21 @@ const ws_1 = require("ws");
 const http = __importStar(require("http"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const crypto_1 = __importDefault(require("crypto"));
-// Need relative path since tsconfig includes ../shared
-const video_protocol_1 = require("../../shared/video-protocol");
+const video_protocol_1 = require("./video-protocol");
 const PORT = process.env.PORT || 4001;
 const SIGNAL_JWT_SECRET = process.env.SIGNAL_JWT_SECRET || "fallback_secret_for_dev";
 const API_URL = process.env.API_URL || "http://localhost:3000";
 const IS_PROD = process.env.NODE_ENV === "production";
 const rooms = new Map();
-// IP rate limiting: max 10 connections per minute
+// IP rate limiting: max 60 connections per minute
+// Use X-Forwarded-For so Traefik proxy doesn't cause all clients to share one bucket
 const ipConnections = new Map();
 function checkIpRateLimit(ip) {
     const now = Date.now();
     let connTimes = ipConnections.get(ip) || [];
     // Keep connections from last 60s
     connTimes = connTimes.filter((t) => now - t < 60000);
-    if (connTimes.length >= 10) {
+    if (connTimes.length >= 60) {
         ipConnections.set(ip, connTimes);
         return false;
     }
@@ -114,13 +114,24 @@ const server = http.createServer((req, res) => {
 });
 const wss = new ws_1.WebSocketServer({ noServer: true });
 server.on("upgrade", (request, socket, head) => {
-    const ip = request.socket.remoteAddress || "";
-    if (!checkIpRateLimit(ip)) {
+    // 1. Path check: only allow / or /ws/signal
+    const parsedUrl = new URL(request.url || "", `http://${request.headers.host || "localhost"}`);
+    if (parsedUrl.pathname !== "/" && parsedUrl.pathname !== "/ws/signal") {
+        socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
         socket.destroy();
         return;
     }
+    // 2. Origin check: require correct origins
     const origin = request.headers.origin;
-    if (IS_PROD && origin !== "https://openordo.com") {
+    if (origin && origin !== "https://openordo.com" && origin !== "https://www.openordo.com") {
+        socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+        socket.destroy();
+        return;
+    }
+    // Use X-Forwarded-For to get real client IP when behind Traefik.
+    const forwarded = request.headers['x-forwarded-for'];
+    const ip = (forwarded ? forwarded.split(',')[0].trim() : request.socket.remoteAddress) || "";
+    if (!checkIpRateLimit(ip)) {
         socket.destroy();
         return;
     }
@@ -150,7 +161,7 @@ wss.on("connection", (ws, req) => {
         }
     }, 5000);
     ws.on("message", (data, isBinary) => {
-        if (isBinary || data.length > 65536) { // 64KB
+        if (isBinary || data.toString().length > 65536) { // 64KB
             ws.close(4009, "Message too large");
             return;
         }
@@ -191,9 +202,12 @@ wss.on("connection", (ws, req) => {
                         messageCount: 0,
                     };
                     const peerPresent = role === "doctor" ? !!room.patient : !!room.doctor;
-                    sendTo(ws, { t: "joined", role, peerPresent });
+                    if (peerPresent && !room.pairedAt) {
+                        room.pairedAt = Date.now();
+                    }
+                    sendTo(ws, { t: "joined", role, peerPresent, pairedAt: room.pairedAt });
                     if (peerPresent) {
-                        broadcastToPeer(room, role, { t: "peer-joined", role });
+                        broadcastToPeer(room, role, { t: "peer-joined", role, pairedAt: room.pairedAt });
                     }
                 }
                 catch (e) {
