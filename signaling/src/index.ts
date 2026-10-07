@@ -2,7 +2,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import * as http from "http";
 import { verifySignalToken } from "../../shared/video-token";
 import crypto from "crypto";
-import { ClientMessageSchema, ServerMessage } from "./video-protocol";
+import { ClientMessageSchema, ServerMessage } from "../../shared/video-protocol";
 
 import { getSecretBytes } from "../../shared/video-token";
 
@@ -14,11 +14,12 @@ const API_URL = process.env.API_URL || "http://localhost:3000";
 const IS_PROD = process.env.NODE_ENV === "production";
 
 interface RoomClient {
-  ws: WebSocket;
+  ws: any; // using any to easily attach isAlive
   sub: string;
   role: "doctor" | "patient";
   lastPing: number;
   messageCount: number; // for rate limiting
+  disconnectTimeout?: NodeJS.Timeout;
 }
 
 interface Room {
@@ -138,12 +139,13 @@ server.on("upgrade", (request, socket, head) => {
     return;
   }
 
-  wss.handleUpgrade(request, socket, head, (ws) => {
+  wss.handleUpgrade(request, socket, head, (ws: any) => {
+    ws.isAlive = true;
     wss.emit("connection", ws, request);
   });
 });
 
-function sendTo(ws: WebSocket, msg: ServerMessage) {
+function sendTo(ws: any, msg: ServerMessage) {
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(msg));
   }
@@ -156,8 +158,7 @@ function broadcastToPeer(room: Room, senderRole: "doctor" | "patient", msg: Serv
   }
 }
 
-wss.on("connection", (ws, req) => {
-  let isAlive = true;
+wss.on("connection", (ws: any, req) => {
   let attachedRoomId: string | null = null;
   let attachedRole: "doctor" | "patient" | null = null;
   let authTimeout: NodeJS.Timeout | null = null;
@@ -168,7 +169,7 @@ wss.on("connection", (ws, req) => {
     }
   }, 5000);
 
-  ws.on("message", async (data: any, isBinary) => {
+  ws.on("message", async (data: any, isBinary: boolean) => {
     if (isBinary || data.toString().length > 65536) { // 64KB
       ws.close(4009, "Message too large");
       return;
@@ -210,8 +211,11 @@ wss.on("connection", (ws, req) => {
             return;
           }
 
+          let isReconnect = false;
           if (existing) {
+            if (existing.disconnectTimeout) clearTimeout(existing.disconnectTimeout);
             existing.ws.close(4000, "Replaced"); // Replaced by new socket
+            isReconnect = true;
           }
 
           attachedRoomId = roomId;
@@ -237,7 +241,7 @@ wss.on("connection", (ws, req) => {
           const serverNow = Date.now();
           sendTo(ws, { t: "joined", role, peerPresent, pairedAt: room.pairedAt || null, serverNow });
 
-          if (peerPresent) {
+          if (peerPresent && !isReconnect) {
             broadcastToPeer(room, role, { t: "peer-joined", role, pairedAt: room.pairedAt || null, serverNow });
           }
 
@@ -289,7 +293,7 @@ wss.on("connection", (ws, req) => {
         return;
       }
 
-      if (msg.t === "sdp" || msg.t === "ice" || msg.t === "restart") {
+      if (msg.t === "sdp" || msg.t === "ice" || msg.t === "restart" || msg.t === "state" || msg.t === "chat" || msg.t === "file") {
         broadcastToPeer(room, attachedRole, msg as any);
       } else if (msg.t === "bye") {
         // Handled below on close or right now
@@ -307,32 +311,40 @@ wss.on("connection", (ws, req) => {
     }
   });
 
-  ws.on("close", (code) => {
+  ws.on("close", (code: number) => {
     if (attachedRoomId && attachedRole) {
       console.log(`close code=${code} role=${attachedRole}`);
       const room = rooms.get(attachedRoomId);
-      if (room && room[attachedRole] && room[attachedRole]!.ws === ws) {
-        const client = room[attachedRole]!;
-        room[attachedRole] = undefined;
-        broadcastToPeer(room, attachedRole, { t: "peer-left", role: attachedRole });
+      const role = attachedRole;
+      const roomId = attachedRoomId;
+      
+      if (room && room[role] && room[role]!.ws === ws) {
+        const client = room[role]!;
+        
+        client.disconnectTimeout = setTimeout(() => {
+          if (room[role] === client) {
+            room[role] = undefined;
+            broadcastToPeer(room, role, { t: "peer-left", role: role });
 
-        batchedEvents.push({
-          roomId: attachedRoomId,
-          role: attachedRole,
-          identifier: client.sub,
-          event: "DISCONNECTED",
-          timestamp: new Date().toISOString(),
-        });
+            batchedEvents.push({
+              roomId: roomId,
+              role: role,
+              identifier: client.sub,
+              event: "DISCONNECTED",
+              timestamp: new Date().toISOString(),
+            });
 
-        if (!room.doctor && !room.patient) {
-          rooms.delete(attachedRoomId);
-        }
+            if (!room.doctor && !room.patient) {
+              rooms.delete(roomId);
+            }
+          }
+        }, 5000);
       }
     }
   });
 
   ws.on("pong", () => {
-    isAlive = true;
+    ws.isAlive = true;
     if (attachedRoomId && attachedRole) {
       const room = rooms.get(attachedRoomId);
       if (room && room[attachedRole]) {
