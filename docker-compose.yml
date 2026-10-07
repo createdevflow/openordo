@@ -19,6 +19,8 @@ services:
       dockerfile: Dockerfile
     container_name: openordo-app
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       - NODE_ENV=production
       - PORT=3000
