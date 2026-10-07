@@ -1,4 +1,3 @@
-version: "3.8"
 
 services:
   signaling:
@@ -19,11 +18,12 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
-      - "traefik.http.routers.videosignal.rule=Host(`openordo.com`, `www.openordo.com`) && (PathPrefix(`/ws/signal`) || Path(`/stats`))"
-      - "traefik.http.routers.videosignal.priority=100"
+      - "traefik.http.routers.videosignal.rule=(Host(`openordo.com`) || Host(`www.openordo.com`)) && PathPrefix(`/ws/signal`)"
       - "traefik.http.routers.videosignal.entrypoints=websecure"
       - "traefik.http.routers.videosignal.tls=true"
       - "traefik.http.routers.videosignal.tls.certresolver=le"
+      - "traefik.http.routers.videosignal.priority=1000"
+      - "traefik.http.routers.videosignal.service=videosignal"
       - "traefik.http.services.videosignal.loadbalancer.server.port=4001"
 
   coturn:
