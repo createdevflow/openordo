@@ -36,13 +36,15 @@ export const ServerJoinedMessageSchema = z.object({
   t: z.literal("joined"),
   role: z.enum(["doctor", "patient"]),
   peerPresent: z.boolean(),
-  pairedAt: z.number().optional(),
+  pairedAt: z.number().nullable().optional(),
+  serverNow: z.number(),
 });
 
 export const ServerPeerJoinedMessageSchema = z.object({
   t: z.literal("peer-joined"),
   role: z.enum(["doctor", "patient"]),
-  pairedAt: z.number().optional(),
+  pairedAt: z.number().nullable().optional(),
+  serverNow: z.number(),
 });
 
 export const ServerPeerLeftMessageSchema = z.object({

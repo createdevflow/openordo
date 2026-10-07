@@ -50,8 +50,9 @@ const batchedEvents: Array<{
   roomId: string;
   role: string;
   identifier: string;
-  event: "DISCONNECTED" | "ENDED";
+  event: "DISCONNECTED" | "ENDED" | "PAIRED";
   timestamp: string;
+  pairedAt?: number;
 }> = [];
 
 async function flushEvents() {
@@ -90,15 +91,10 @@ const server = http.createServer((req, res) => {
     res.end("OK");
     return;
   }
-  if (req.url === "/stats") {
-    // Secret header check could be added here if passed from admin panel
-    let sockets = 0;
-    rooms.forEach((r) => {
-      if (r.doctor) sockets++;
-      if (r.patient) sockets++;
-    });
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ rooms: rooms.size, sockets }));
+  const parsedUrl = new URL(req.url || "", `http://${req.headers.host || "localhost"}`);
+  if (parsedUrl.pathname === "/ws/signal") {
+    res.writeHead(426, { "Content-Type": "text/plain" });
+    res.end("Upgrade Required");
     return;
   }
   res.writeHead(404);
@@ -108,27 +104,32 @@ const server = http.createServer((req, res) => {
 const wss = new WebSocketServer({ noServer: true });
 
 server.on("upgrade", (request, socket, head) => {
-  // 1. Path check: only allow / or /ws/signal
   const parsedUrl = new URL(request.url || "", `http://${request.headers.host || "localhost"}`);
+  const origin = request.headers.origin || "";
+  const forwarded = request.headers['x-forwarded-for'] as string | undefined;
+  const ip = (forwarded ? forwarded.split(',')[0].trim() : request.socket.remoteAddress) || "";
+
+  console.log(`upgrade path=${parsedUrl.pathname} origin=${origin} ip=${ip}`);
+
   if (parsedUrl.pathname !== "/" && parsedUrl.pathname !== "/ws/signal") {
+    console.log(`reject reason=PATH`);
     socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
     socket.destroy();
     return;
   }
 
-  // 2. Origin check: require correct origins
-  const origin = request.headers.origin;
-  if (origin && origin !== "https://openordo.com" && origin !== "https://www.openordo.com") {
+  let allowedOrigins = ["https://openordo.com", "https://www.openordo.com"];
+  if (!IS_PROD) allowedOrigins.push("http://localhost:3000");
+
+  if (!allowedOrigins.includes(origin)) {
+    console.log(`reject reason=ORIGIN`);
     socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
     socket.destroy();
     return;
   }
-
-  // Use X-Forwarded-For to get real client IP when behind Traefik.
-  const forwarded = request.headers['x-forwarded-for'] as string | undefined;
-  const ip = (forwarded ? forwarded.split(',')[0].trim() : request.socket.remoteAddress) || "";
   
   if (!checkIpRateLimit(ip)) {
+    console.log(`reject reason=RATE_LIMIT`);
     socket.destroy();
     return;
   }
@@ -191,6 +192,7 @@ wss.on("connection", (ws, req) => {
           // Check if replacing same sub or rejecting different sub
           const existing = room[role];
           if (existing && existing.sub !== sub) {
+            console.log(`reject reason=ROOM_FULL`);
             sendTo(ws, { t: "error", code: "ROOM_FULL" });
             ws.close(4003, "ROOM_FULL");
             return;
@@ -211,18 +213,34 @@ wss.on("connection", (ws, req) => {
             messageCount: 0,
           };
 
+          console.log(`join room=${roomId} role=${role}`);
+
+          let newlyPaired = false;
           const peerPresent = role === "doctor" ? !!room.patient : !!room.doctor;
           if (peerPresent && !room.pairedAt) {
             room.pairedAt = Date.now();
+            newlyPaired = true;
           }
 
-          sendTo(ws, { t: "joined", role, peerPresent, pairedAt: room.pairedAt });
+          const serverNow = Date.now();
+          sendTo(ws, { t: "joined", role, peerPresent, pairedAt: room.pairedAt || null, serverNow });
 
           if (peerPresent) {
-            broadcastToPeer(room, role, { t: "peer-joined", role, pairedAt: room.pairedAt });
+            broadcastToPeer(room, role, { t: "peer-joined", role, pairedAt: room.pairedAt || null, serverNow });
           }
 
+          if (newlyPaired && room.pairedAt) {
+            batchedEvents.push({
+              roomId: roomId,
+              role: role,
+              identifier: sub,
+              event: "PAIRED",
+              timestamp: new Date(room.pairedAt).toISOString(),
+              pairedAt: room.pairedAt,
+            });
+          }
         } catch (e) {
+          console.log(`reject reason=AUTH`);
           sendTo(ws, { t: "error", code: "AUTH" });
           ws.close(4001, "AUTH");
         }
@@ -240,6 +258,7 @@ wss.on("connection", (ws, req) => {
       // Rate limiting logic
       client.messageCount++;
       if (client.messageCount > 50) {
+        console.log(`reject reason=RATE_LIMIT`);
         sendTo(ws, { t: "error", code: "RATE_LIMIT" });
         ws.close(4008, "RATE_LIMIT");
         return;
@@ -263,8 +282,9 @@ wss.on("connection", (ws, req) => {
     }
   });
 
-  ws.on("close", () => {
+  ws.on("close", (code) => {
     if (attachedRoomId && attachedRole) {
+      console.log(`close code=${code} role=${attachedRole}`);
       const room = rooms.get(attachedRoomId);
       if (room && room[attachedRole] && room[attachedRole]!.ws === ws) {
         const client = room[attachedRole]!;
@@ -309,10 +329,12 @@ setInterval(() => {
   for (const [roomId, room] of rooms.entries()) {
     if (now > room.exp) {
       if (room.doctor) {
+        console.log(`reject reason=EXPIRED`);
         sendTo(room.doctor.ws, { t: "error", code: "EXPIRED" });
         room.doctor.ws.close(4002, "EXPIRED");
       }
       if (room.patient) {
+        console.log(`reject reason=EXPIRED`);
         sendTo(room.patient.ws, { t: "error", code: "EXPIRED" });
         room.patient.ws.close(4002, "EXPIRED");
       }
