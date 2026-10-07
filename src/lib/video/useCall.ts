@@ -344,12 +344,12 @@ export function useCall({
       };
       
       ws.onerror = () => {
-        setCallError("Can't reach the call server — retrying…");
+        setCallError("Can't reach the call server â€” retryingâ€¦");
       };
 
       ws.onclose = (e) => {
         if (isClosed || e.code === 1000) return; // intentional close
-        setCallError("Can't reach the call server — retrying…");
+        setCallError("Can't reach the call server â€” retryingâ€¦");
         qualityStatsRef.current.wsReconnects++;
         const backoff = Math.min(8000, 500 * Math.pow(2, wsReconnectAttempts.current));
         const jitter = backoff * 0.2 * Math.random();
