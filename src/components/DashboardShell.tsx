@@ -61,6 +61,35 @@ export function DashboardShell({
   }, [clinicStatus, pathname, router])
 
   useEffect(() => {
+    setSidebarOpen(false)
+  }, [pathname])
+
+  useEffect(() => {
+    if (sidebarOpen) {
+      document.body.style.overflow = "hidden"
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === "Escape") setSidebarOpen(false)
+      }
+      let touchStartX = 0
+      const handleTouchStart = (e: TouchEvent) => { touchStartX = e.touches[0].clientX }
+      const handleTouchMove = (e: TouchEvent) => {
+        if (touchStartX - e.touches[0].clientX > 50) setSidebarOpen(false)
+      }
+      window.addEventListener("keydown", handleKeyDown)
+      window.addEventListener("touchstart", handleTouchStart)
+      window.addEventListener("touchmove", handleTouchMove)
+      return () => {
+        document.body.style.overflow = ""
+        window.removeEventListener("keydown", handleKeyDown)
+        window.removeEventListener("touchstart", handleTouchStart)
+        window.removeEventListener("touchmove", handleTouchMove)
+      }
+    } else {
+      document.body.style.overflow = ""
+    }
+  }, [sidebarOpen])
+
+  useEffect(() => {
     if (!promoExpiresAt) return
 
     const target = new Date(promoExpiresAt).getTime()
@@ -152,7 +181,7 @@ export function DashboardShell({
           </div>
         </aside>
 
-        <div>
+        <div style={{ minWidth: 0, flex: 1, display: "flex", flexDirection: "column", overflowX: "clip" }}>
           {promoExpiresAt && timeLeft && (!isBannerDismissed || timeLeft.d === 0) && (
             <div style={{ 
               background: timeLeft.d === 0 ? "var(--coral-soft)" : "var(--amber-soft)", 
@@ -190,17 +219,17 @@ export function DashboardShell({
             </div>
           )}
           <div className="cw-topbar">
-            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0, flex: 1, paddingRight: 12 }}>
               <button 
                 className="cw-mobile-menu" 
                 onClick={() => setSidebarOpen(true)}
-                style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
+                style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0, flexShrink: 0 }}
               >
                 <Menu size={22} color="var(--ink-soft)" />
               </button>
-              <h1>{viewTitle}</h1>
+              <h1 style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, margin: 0 }}>{viewTitle}</h1>
             </div>
-            <div className="cw-topbar-actions">
+            <div className="cw-topbar-actions" style={{ flexShrink: 0 }}>
               {/* Notification Dropdown */}
               <div style={{ position: "relative" }}>
                 <button 
