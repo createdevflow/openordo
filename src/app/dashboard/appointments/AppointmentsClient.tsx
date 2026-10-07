@@ -6,6 +6,7 @@ import { initials, fmtDate, fmtDateShort, fmtTime12, toISO, pad, StatusBadge } f
 import { createAppointmentAction, updateAppointmentAction, updateAppointmentStatusAction } from "@/server/actions/appointments"
 import { generatePatientLinkToken } from "@/server/actions/video-consultation"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
+import { ResponsiveTable, Pagination, CardKebab } from "@/components/ResponsiveTable"
 import Link from "next/link"
 
 export function AppointmentsClient({ 
@@ -101,11 +102,11 @@ export function AppointmentsClient({
 
   return (
     <div>
-      <div className="cw-toolbar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div className="cw-toolbar">
+        <div className="cw-toolbar-left flex-wrap">
           <div className="cw-tabs">
-            <button className={`cw-tab ${mode === "calendar" ? "active" : ""}`} onClick={() => setMode("calendar")}><LayoutGrid size={14} />Calendar</button>
-            <button className={`cw-tab ${mode === "list" ? "active" : ""}`} onClick={() => setMode("list")}><ListIcon size={14} />List</button>
+            <button className={`cw-tab ${mode === "calendar" ? "active" : ""}`} onClick={() => setMode("calendar")}><LayoutGrid size={14} /><span className="hidden sm:inline">Calendar</span></button>
+            <button className={`cw-tab ${mode === "list" ? "active" : ""}`} onClick={() => setMode("list")}><ListIcon size={14} /><span className="hidden sm:inline">List</span></button>
           </div>
 
           {hasMultiDoctor ? (
@@ -126,19 +127,19 @@ export function AppointmentsClient({
               style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--ink-soft)", textDecoration: "none", background: "var(--paper-raised)", padding: "4px 8px", borderRadius: 6, border: "1px solid var(--line)" }}
               title="Multi-doctor schedule management is available on Clinic Group"
             >
-              <Lock size={12} /> Multi-doctor (Clinic Group)
+              <Lock size={12} /> <span className="hidden sm:inline">Multi-doctor (Clinic Group)</span>
             </Link>
           ) : null}
         </div>
 
-        <button className="cw-btn cw-btn-primary cw-btn-sm" onClick={() => { setEditing(null); setModalOpen(true); }} disabled={isPending}>
+        <button className="cw-btn cw-btn-primary cw-btn-sm w-full sm:w-auto mt-2 sm:mt-0 justify-center" onClick={() => { setEditing(null); setModalOpen(true); }} disabled={isPending}>
           <Plus size={15} />New appointment
         </button>
       </div>
 
       {mode === "calendar" ? (
-        <div className="cw-grid-2">
-          <div className="cw-panel">
+        <div className="cw-grid-2 flex-col md:grid">
+          <div className="cw-panel hidden md:block">
             <div className="cw-panel-head">
               <h3>{monthCursor.toLocaleDateString("en-IN", { month: "long", year: "numeric" })}</h3>
               <div style={{ display: "flex", gap: 6 }}>
@@ -167,7 +168,21 @@ export function AppointmentsClient({
           </div>
 
           <div className="cw-panel">
-            <div className="cw-panel-head"><h3>{fmtDate(selectedDate)}</h3></div>
+            <div className="cw-panel-head">
+              <h3>{fmtDate(selectedDate)}</h3>
+              <div className="md:hidden flex gap-2">
+                <button className="cw-btn cw-btn-ghost cw-btn-icon" onClick={() => {
+                  const d = new Date(selectedDate);
+                  d.setDate(d.getDate() - 1);
+                  setSelectedDate(toISO(d.getFullYear(), d.getMonth(), d.getDate()));
+                }}><ChevronLeft size={15} /></button>
+                <button className="cw-btn cw-btn-ghost cw-btn-icon" onClick={() => {
+                  const d = new Date(selectedDate);
+                  d.setDate(d.getDate() + 1);
+                  setSelectedDate(toISO(d.getFullYear(), d.getMonth(), d.getDate()));
+                }}><ChevronRight size={15} /></button>
+              </div>
+            </div>
             <div className="cw-panel-body">
               {dayAppointments.length === 0 ? (
                 <div className="cw-empty" style={{ padding: "20px 0" }}><p>Nothing scheduled this day.</p></div>
@@ -254,14 +269,79 @@ export function AppointmentsClient({
               </div>
             </div>
           </div>
-          <div className="cw-table-wrap">
-            <table className="cw-table">
-              <thead><tr><th>Patient</th><th>Doctor</th><th>Date & time</th><th>Reason</th><th>Status</th><th></th></tr></thead>
-              <tbody>
-                {paginatedList.map((a: any) => (
-                  <tr key={a.id}>
-                    <td style={{ fontWeight: 600 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <ResponsiveTable
+            table={
+              <table className="cw-table cw-table-sticky-col">
+                <thead><tr><th>Patient</th><th>Doctor</th><th>Date & time</th><th>Reason</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                  {paginatedList.map((a: any) => (
+                    <tr key={a.id}>
+                      <td style={{ fontWeight: 600 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          {patientName(a.patientId)}
+                          {a.visitType === "VIDEO" && (
+                            <span style={{ fontSize: 10, background: "rgba(124, 58, 237, 0.12)", color: "#7C3AED", fontWeight: 700, padding: "1px 5px", borderRadius: 4 }}>
+                              Video
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td>{doctorName(a.doctorId)}</td>
+                      <td className="num">{fmtDateShort(a.dateString)}, {fmtTime12(a.time)}</td>
+                      <td>{a.reason}</td>
+                      <td><StatusBadge status={a.status} /></td>
+                      <td>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          {a.visitType === "VIDEO" && a.status?.toLowerCase() === "scheduled" && (
+                            <>
+                              <Link
+                                href={"/consultation/join/" + (a.roomId || a.id)}
+                                target="_blank"
+                                className="cw-btn cw-btn-primary cw-btn-sm"
+                                style={{ padding: "3px 8px", fontSize: 11, background: "#7C3AED", borderColor: "#7C3AED", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 3 }}
+                              >
+                                <Video size={11} /> Join
+                              </Link>
+                              <button
+                                className="cw-btn cw-btn-ghost cw-btn-icon"
+                                style={{ padding: "3px 6px", fontSize: 11 }}
+                                onClick={async () => {
+                                  const result = await generatePatientLinkToken(a.id);
+                                  if ('error' in result) {
+                                    showAlert({ title: "Error", body: result.error, tone: "danger" });
+                                    return;
+                                  }
+                                  navigator.clipboard.writeText(result.url);
+                                  showAlert({ title: "Copied", body: "Patient video link copied!", tone: "primary" });
+                                }}
+                                title="Copy Patient Invite Link"
+                              >
+                                📋
+                              </button>
+                            </>
+                          )}
+                          {a.status.toLowerCase() === "completed" && (
+                            <Link href={`/dashboard/billing?action=new&patientId=${a.patientId}`} className="cw-btn cw-btn-primary cw-btn-sm" style={{ padding: "3px 8px", fontSize: 11, textDecoration: "none" }}>Invoice</Link>
+                          )}
+                          <Link href={`/dashboard/patients?search=${patientName(a.patientId)}`} className="cw-btn cw-btn-ghost cw-btn-sm" style={{ padding: "3px 8px", fontSize: 11, textDecoration: "none" }}>Patient</Link>
+                          <button className="cw-btn cw-btn-ghost cw-btn-icon" onClick={() => { 
+                            setEditing({ ...a, date: a.dateString }); 
+                            setModalOpen(true); 
+                          }} disabled={isPending}><Pencil size={13} /></button>
+                          {a.status.toLowerCase() === "scheduled" && <button className="cw-btn cw-btn-ghost cw-btn-icon" onClick={() => setStatus(a.id, "cancelled")} disabled={isPending}><X size={13} /></button>}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            }
+            cards={
+              paginatedList.map((a: any) => (
+                <div key={a.id} className="cw-stat-card flex flex-col gap-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="font-semibold flex items-center gap-2">
                         {patientName(a.patientId)}
                         {a.visitType === "VIDEO" && (
                           <span style={{ fontSize: 10, background: "rgba(124, 58, 237, 0.12)", color: "#7C3AED", fontWeight: 700, padding: "1px 5px", borderRadius: 4 }}>
@@ -269,66 +349,52 @@ export function AppointmentsClient({
                           </span>
                         )}
                       </div>
-                    </td>
-                    <td>{doctorName(a.doctorId)}</td>
-                    <td className="num">{fmtDateShort(a.dateString)}, {fmtTime12(a.time)}</td>
-                    <td>{a.reason}</td>
-                    <td><StatusBadge status={a.status} /></td>
-                    <td>
-                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <div className="text-xs text-ink-soft">{doctorName(a.doctorId)}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <StatusBadge status={a.status} />
+                      <CardKebab>
                         {a.visitType === "VIDEO" && a.status?.toLowerCase() === "scheduled" && (
-                          <>
-                            <Link
-                              href={"/consultation/join/" + (a.roomId || a.id)}
-                              target="_blank"
-                              className="cw-btn cw-btn-primary cw-btn-sm"
-                              style={{ padding: "3px 8px", fontSize: 11, background: "#7C3AED", borderColor: "#7C3AED", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 3 }}
-                            >
-                              <Video size={11} /> Join
-                            </Link>
-                            <button
-                              className="cw-btn cw-btn-ghost cw-btn-icon"
-                              style={{ padding: "3px 6px", fontSize: 11 }}
-                              onClick={async () => {
-                                const result = await generatePatientLinkToken(a.id);
-                                if ('error' in result) {
-                                  showAlert({ title: "Error", body: result.error, tone: "danger" });
-                                  return;
-                                }
-                                navigator.clipboard.writeText(result.url);
-                                showAlert({ title: "Copied", body: "Patient video link copied!", tone: "primary" });
-                              }}
-                              title="Copy Patient Invite Link"
-                            >
-                              📋
-                            </button>
-                          </>
+                          <Link href={"/consultation/join/" + (a.roomId || a.id)} target="_blank" className="cw-dropdown-item flex items-center gap-2 text-[#7C3AED]">
+                            <Video size={13} /> Join Call
+                          </Link>
                         )}
                         {a.status.toLowerCase() === "completed" && (
-                          <Link href={`/dashboard/billing?action=new&patientId=${a.patientId}`} className="cw-btn cw-btn-primary cw-btn-sm" style={{ padding: "3px 8px", fontSize: 11, textDecoration: "none" }}>Invoice</Link>
+                          <Link href={`/dashboard/billing?action=new&patientId=${a.patientId}`} className="cw-dropdown-item flex items-center gap-2">
+                            Generate Invoice
+                          </Link>
                         )}
-                        <Link href={`/dashboard/patients?search=${patientName(a.patientId)}`} className="cw-btn cw-btn-ghost cw-btn-sm" style={{ padding: "3px 8px", fontSize: 11, textDecoration: "none" }}>Patient</Link>
-                        <button className="cw-btn cw-btn-ghost cw-btn-icon" onClick={() => { 
-                          setEditing({ ...a, date: a.dateString }); 
-                          setModalOpen(true); 
-                        }} disabled={isPending}><Pencil size={13} /></button>
-                        {a.status.toLowerCase() === "scheduled" && <button className="cw-btn cw-btn-ghost cw-btn-icon" onClick={() => setStatus(a.id, "cancelled")} disabled={isPending}><X size={13} /></button>}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {listFiltered.length > 0 && (
-              <div className="flex flex-col sm:flex-row justify-between items-center mt-4 text-[13.5px] text-ink-soft gap-4 p-4 border-t border-line">
-                <div>Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, listFiltered.length)} of {listFiltered.length} entries</div>
-                <div className="flex items-center gap-2">
-                  <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1.5 border border-line rounded bg-white hover:bg-paper-raised disabled:opacity-50 text-ink transition-colors font-medium">Previous</button>
-                  <button disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1.5 border border-line rounded bg-white hover:bg-paper-raised disabled:opacity-50 text-ink transition-colors font-medium">Next</button>
+                        <Link href={`/dashboard/patients?search=${patientName(a.patientId)}`} className="cw-dropdown-item flex items-center gap-2">
+                          View Patient
+                        </Link>
+                        <button className="cw-dropdown-item flex items-center gap-2" onClick={() => { setEditing({ ...a, date: a.dateString }); setModalOpen(true); }}>
+                          <Pencil size={13} /> Edit
+                        </button>
+                        {a.status.toLowerCase() === "scheduled" && (
+                          <button className="cw-dropdown-item flex items-center gap-2 text-coral" onClick={() => setStatus(a.id, "cancelled")}>
+                            <X size={13} /> Cancel
+                          </button>
+                        )}
+                      </CardKebab>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm mt-1">
+                    <div className="text-ink-soft">Date & time</div>
+                    <div className="text-right num font-medium">{fmtDateShort(a.dateString)}, {fmtTime12(a.time)}</div>
+                    <div className="text-ink-soft">Reason</div>
+                    <div className="text-right truncate">{a.reason}</div>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              ))
+            }
+          />
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={listFiltered.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+          />
         </div>
       )}
 

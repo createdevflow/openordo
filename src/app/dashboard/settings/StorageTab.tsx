@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { getFileUrl } from "@/lib/file-utils"
 import { getStorageStats, getVaultDocuments } from "@/server/actions/documents"
 import { HardDrive, FileText, Download, FolderOpen, Archive, Image as ImageIcon, Search } from "lucide-react"
+import { ResponsiveTable } from "@/components/ResponsiveTable"
 
 export function StorageTab() {
   const [stats, setStats] = useState<any>(null)
@@ -140,33 +141,60 @@ export function StorageTab() {
             <div className="text-[13px] text-ink-soft mt-1">Try adjusting your search or filters.</div>
           </div>
         ) : (
-          <table className="w-full text-left text-[13.5px]">
-            <thead>
-              <tr className="border-b border-line bg-paper/50">
-                <th className="font-semibold text-ink-soft px-4 py-3">Document Name</th>
-                <th className="font-semibold text-ink-soft px-4 py-3">Patient</th>
-                <th className="font-semibold text-ink-soft px-4 py-3">Size</th>
-                <th className="font-semibold text-ink-soft px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {paginatedDocs.map(doc => (
-                <tr key={doc.id} className="hover:bg-paper/30 transition-colors">
-                  <td className="px-4 py-3 font-medium text-ink flex items-center gap-2">
-                    <FileText size={14} className="text-moss" />
-                    {doc.name}
-                  </td>
-                  <td className="px-4 py-3 text-ink-soft">{doc.patient?.name}</td>
-                  <td className="px-4 py-3 text-ink-soft">{(doc.sizeBytes / 1024 / 1024).toFixed(2)} MB</td>
-                  <td className="px-4 py-3 text-right space-x-2">
-                    <a href={getFileUrl(doc.url)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[7px] text-[12.5px] font-medium bg-paper border border-line text-ink hover:bg-paper-raised transition-colors">
+          <ResponsiveTable
+            table={
+              <table className="w-full text-left text-[13.5px]">
+                <thead>
+                  <tr className="border-b border-line bg-paper/50">
+                    <th className="font-semibold text-ink-soft px-4 py-3">Document Name</th>
+                    <th className="font-semibold text-ink-soft px-4 py-3">Patient</th>
+                    <th className="font-semibold text-ink-soft px-4 py-3">Size</th>
+                    <th className="font-semibold text-ink-soft px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {paginatedDocs.map(doc => (
+                    <tr key={doc.id} className="hover:bg-paper/30 transition-colors">
+                      <td className="px-4 py-3 font-medium text-ink flex items-center gap-2">
+                        <FileText size={14} className="text-moss" />
+                        {doc.name}
+                      </td>
+                      <td className="px-4 py-3 text-ink-soft">{doc.patient?.name}</td>
+                      <td className="px-4 py-3 text-ink-soft">{(doc.sizeBytes / 1024 / 1024).toFixed(2)} MB</td>
+                      <td className="px-4 py-3 text-right space-x-2">
+                        <a href={getFileUrl(doc.url)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[7px] text-[12.5px] font-medium bg-paper border border-line text-ink hover:bg-paper-raised transition-colors">
+                          View
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            }
+            cards={
+              paginatedDocs.map(doc => (
+                <div key={doc.id} className="cw-stat-card flex flex-col gap-3">
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-2">
+                      <FileText size={16} className="text-moss flex-shrink-0" />
+                      <div className="font-semibold truncate">{doc.name}</div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm mt-1">
+                    <div className="text-ink-soft">Patient</div>
+                    <div className="text-right font-medium truncate">{doc.patient?.name}</div>
+                    <div className="text-ink-soft">Size</div>
+                    <div className="text-right font-medium">{(doc.sizeBytes / 1024 / 1024).toFixed(2)} MB</div>
+                  </div>
+                  <div className="border-t border-line mt-1 pt-3 flex justify-end">
+                    <a href={getFileUrl(doc.url)} target="_blank" rel="noreferrer" className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-[7px] text-[12.5px] font-medium bg-paper border border-line text-ink hover:bg-paper-raised transition-colors w-full sm:w-auto">
                       View
                     </a>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                </div>
+              ))
+            }
+          />
         )}
       </div>
 

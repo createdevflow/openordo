@@ -6,6 +6,7 @@ import { createInventoryItem, logInventoryTransaction, deleteInventoryItem } fro
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
+import { ResponsiveTable, Pagination, CardKebab } from "@/components/ResponsiveTable"
 
 type InventoryItem = {
   id: string
@@ -217,70 +218,109 @@ export function InventoryClient({ items }: { items: InventoryItem[] }) {
           </button>
         </div>
       ) : (
-        <div style={{ background: "var(--paper-raised)", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ background: "var(--paper)", borderBottom: "1px solid var(--line)" }}>
-                {["Name / SKU", "Unit", "In Stock", "Reorder At", "Unit Cost", "Transactions", ""].map(h => (
-                  <th key={h} style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "var(--ink-soft)", textAlign: "left", letterSpacing: ".03em" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {paginated.map(item => {
+        <div className="cw-panel">
+          <ResponsiveTable
+            table={
+              <table className="cw-table cw-table-sticky-col">
+                <thead>
+                  <tr>
+                    <th>Name / SKU</th>
+                    <th>Unit</th>
+                    <th>In Stock</th>
+                    <th>Reorder At</th>
+                    <th>Unit Cost</th>
+                    <th>Transactions</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginated.map(item => {
+                    const isLow = item.quantityOnHand <= item.reorderThreshold
+                    return (
+                      <tr key={item.id} style={{ background: isLow ? "#fffbeb" : undefined }}>
+                        <td>
+                          <div style={{ fontWeight: 700, fontSize: 13.5 }}>{item.name}</div>
+                          {item.sku && <div style={{ fontSize: 11.5, color: "var(--ink-soft)", fontFamily: "monospace" }}>{item.sku}</div>}
+                        </td>
+                        <td style={{ fontSize: 13, color: "var(--ink-soft)" }}>{item.unit}</td>
+                        <td>
+                          <span style={{ fontWeight: 800, fontSize: 16, color: isLow ? "#b45309" : "var(--forest)" }}>
+                            {item.quantityOnHand}
+                          </span>
+                          {isLow && <AlertTriangle size={13} style={{ color: "#d97706", marginLeft: 6, display: "inline" }} />}
+                        </td>
+                        <td style={{ fontSize: 13, color: "var(--ink-soft)" }}>{item.reorderThreshold}</td>
+                        <td style={{ fontSize: 13, color: "var(--ink-soft)" }}>
+                          {item.unitCost ? `₹${(item.unitCost / 100).toFixed(2)}` : "—"}
+                        </td>
+                        <td style={{ fontSize: 13, color: "var(--ink-soft)" }}>
+                          {item._count.transactions}
+                        </td>
+                        <td>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button
+                              title="Adjust stock"
+                              onClick={() => setAdjustItem(item)}
+                              className="cw-btn cw-btn-ghost cw-btn-sm"
+                            >
+                              <RefreshCw size={13} /> Adjust
+                            </button>
+                            <button
+                              title="Delete"
+                              onClick={() => handleDelete(item)}
+                              className="cw-btn cw-btn-danger cw-btn-icon"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            }
+            cards={
+              paginated.map(item => {
                 const isLow = item.quantityOnHand <= item.reorderThreshold
                 return (
-                  <tr key={item.id} style={{ borderBottom: "1px solid var(--line)", background: isLow ? "#fffbeb" : undefined }}>
-                    <td style={{ padding: "12px 14px" }}>
-                      <div style={{ fontWeight: 700, fontSize: 13.5 }}>{item.name}</div>
-                      {item.sku && <div style={{ fontSize: 11.5, color: "var(--ink-soft)", fontFamily: "monospace" }}>{item.sku}</div>}
-                    </td>
-                    <td style={{ padding: "12px 14px", fontSize: 13, color: "var(--ink-soft)" }}>{item.unit}</td>
-                    <td style={{ padding: "12px 14px" }}>
-                      <span style={{ fontWeight: 800, fontSize: 16, color: isLow ? "#b45309" : "var(--forest)" }}>
-                        {item.quantityOnHand}
-                      </span>
-                      {isLow && <AlertTriangle size={13} style={{ color: "#d97706", marginLeft: 6, display: "inline" }} />}
-                    </td>
-                    <td style={{ padding: "12px 14px", fontSize: 13, color: "var(--ink-soft)" }}>{item.reorderThreshold}</td>
-                    <td style={{ padding: "12px 14px", fontSize: 13, color: "var(--ink-soft)" }}>
-                      {item.unitCost ? `₹${(item.unitCost / 100).toFixed(2)}` : "—"}
-                    </td>
-                    <td style={{ padding: "12px 14px", fontSize: 13, color: "var(--ink-soft)", textAlign: "center" }}>
-                      {item._count.transactions}
-                    </td>
-                    <td style={{ padding: "12px 14px" }}>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <button
-                          title="Adjust stock"
-                          onClick={() => setAdjustItem(item)}
-                          style={{ padding: "6px 10px", borderRadius: 7, border: "1px solid var(--line)", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 12.5, fontWeight: 600 }}
-                        >
-                          <RefreshCw size={13} /> Adjust
-                        </button>
-                        <button
-                          title="Delete"
-                          onClick={() => handleDelete(item)}
-                          style={{ padding: "6px", borderRadius: 7, border: "1px solid var(--line)", background: "transparent", cursor: "pointer", color: "var(--coral)" }}
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                  <div key={item.id} className="cw-stat-card flex flex-col gap-3" style={{ background: isLow ? "#fffbeb" : undefined, borderColor: isLow ? "#fcd34d" : undefined }}>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="font-semibold">{item.name}</div>
+                        {item.sku && <div className="text-xs text-ink-soft font-mono mt-0.5">{item.sku}</div>}
                       </div>
-                    </td>
-                  </tr>
+                      <div className="flex items-center gap-2">
+                        <span style={{ fontWeight: 800, fontSize: 16, color: isLow ? "#b45309" : "var(--forest)" }}>
+                          {item.quantityOnHand} {item.unit}
+                        </span>
+                        {isLow && <AlertTriangle size={15} style={{ color: "#d97706" }} />}
+                        <CardKebab>
+                          <button className="cw-dropdown-item flex items-center gap-2" onClick={() => setAdjustItem(item)}><RefreshCw size={13} /> Adjust stock</button>
+                          <button className="cw-dropdown-item flex items-center gap-2 text-coral" onClick={() => handleDelete(item)}><Trash2 size={13} /> Delete</button>
+                        </CardKebab>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm mt-1">
+                      <div className="text-ink-soft">Reorder At</div>
+                      <div className="text-right font-medium">{item.reorderThreshold}</div>
+                      <div className="text-ink-soft">Unit Cost</div>
+                      <div className="text-right font-medium">{item.unitCost ? `₹${(item.unitCost / 100).toFixed(2)}` : "—"}</div>
+                      <div className="text-ink-soft">Transactions</div>
+                      <div className="text-right font-medium">{item._count.transactions}</div>
+                    </div>
+                  </div>
                 )
-              })}
-            </tbody>
-          </table>
-          {filtered.length > 0 && (
-            <div className="flex flex-col sm:flex-row justify-between items-center text-[13.5px] text-ink-soft gap-4 p-4 border-t border-line bg-white">
-              <div>Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length} entries</div>
-              <div className="flex items-center gap-2">
-                <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1.5 border border-line rounded bg-white hover:bg-paper-raised disabled:opacity-50 text-ink transition-colors font-medium">Previous</button>
-                <button disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1.5 border border-line rounded bg-white hover:bg-paper-raised disabled:opacity-50 text-ink transition-colors font-medium">Next</button>
-              </div>
-            </div>
-          )}
+              })
+            }
+          />
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filtered.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+          />
         </div>
       )}
 
