@@ -310,8 +310,7 @@ export function AddonsClient({ availablePlugins, ownedPlugins, currency, country
   }
 
   return (
-    <div className="cw">
-      <div style={{ padding: "32px 24px" }}>
+    <div className="cw-main">
         <div style={{ marginBottom: 32 }}>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--ink)", marginBottom: 6 }}>Add-ons</h1>
           <p style={{ fontSize: 14, color: "var(--ink-soft)" }}>
@@ -544,7 +543,6 @@ export function AddonsClient({ availablePlugins, ownedPlugins, currency, country
             <p>No plugins available yet. Check back soon.</p>
           </div>
         )}
-      </div>
 
       {/* Purchase Modal */}
       {purchasePlugin && (

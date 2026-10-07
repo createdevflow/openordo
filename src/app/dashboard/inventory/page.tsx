@@ -11,7 +11,7 @@ export default async function InventoryPage() {
 
   if (!hasPlugin) {
     return (
-      <div className="cw" style={{ padding: "32px 24px" }}>
+      <div className="cw-main">
         <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 20 }}>Inventory</h1>
         <PluginUpsellCard
           slug="inventory-management"

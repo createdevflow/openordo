@@ -229,7 +229,7 @@ export function PrescriptionsClient({
   }
 
   return (
-    <div className="cw" style={{ padding: "24px 28px", maxWidth: 1200, margin: "0 auto" }}>
+    <div className="cw-main">
       {/* Top Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
         <div>

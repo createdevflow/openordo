@@ -13,7 +13,7 @@ export default async function PrescriptionsPage({ searchParams }: { searchParams
 
   if (!hasPlugin) {
     return (
-      <div className="cw" style={{ padding: "32px 24px" }}>
+      <div className="cw-main">
         <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 20 }}>Prescriptions</h1>
         <PluginUpsellCard
           slug="e-prescriptions"

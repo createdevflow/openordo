@@ -173,7 +173,7 @@ export function InventoryClient({ items }: { items: InventoryItem[] }) {
   }
 
   return (
-    <div className="cw" style={{ padding: "24px 28px", maxWidth: 1200, margin: "0 auto" }}>
+    <div className="cw-main">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, flexWrap: "wrap", gap: 16 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", marginBottom: 4 }}>Inventory</h1>
