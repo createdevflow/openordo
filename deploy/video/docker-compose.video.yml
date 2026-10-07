@@ -19,7 +19,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
-      - "traefik.http.routers.videosignal.rule=Host(`signal.openordo.com`)"
+      - "traefik.http.routers.videosignal.rule=Host(`openordo.com`, `www.openordo.com`) && (PathPrefix(`/ws/signal`) || Path(`/stats`))"
       - "traefik.http.routers.videosignal.entrypoints=websecure"
       - "traefik.http.routers.videosignal.tls=true"
       - "traefik.http.routers.videosignal.tls.certresolver=le"
