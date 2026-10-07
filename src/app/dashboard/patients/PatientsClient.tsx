@@ -5,6 +5,7 @@ import { Search, Plus, Users, Pencil, Trash2, X, Phone, Mail, MapPin, Droplet, L
 import { initials, fmtDate, fmtDateShort, fmtTime12, currency, StatusBadge } from "@/components/DashboardHelpers"
 import { createPatientAction, updatePatientAction, deletePatientAction } from "@/server/actions/patients"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
+import { ResponsiveTable, Pagination, CardKebab } from "@/components/ResponsiveTable"
 import Link from "next/link"
 
 export function PatientsClient({ 
@@ -83,7 +84,7 @@ export function PatientsClient({
   return (
     <div>
       <div className="cw-toolbar">
-        <div className="cw-toolbar-left" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div className="cw-toolbar-left">
           <div className="cw-search-box">
             <Search size={15} color="#8B8A7E" />
             <input placeholder="Search by name, ID or phone…" value={search} onChange={e => {setSearch(e.target.value); setCurrentPage(1)}} />
@@ -104,10 +105,10 @@ export function PatientsClient({
           </span>
         </div>
         <button 
-          className="cw-btn cw-btn-primary cw-btn-sm" 
+          className="cw-btn cw-btn-primary cw-btn-sm w-full sm:w-auto mt-2 sm:mt-0" 
           onClick={handleAddClick} 
           disabled={isPending}
-          style={{ display: "flex", alignItems: "center", gap: 6 }}
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
         >
           {isLimitReached ? <Lock size={14} /> : <Plus size={15} />}
           Add patient
@@ -151,15 +152,51 @@ export function PatientsClient({
             </button>
           </div>
         ) : (
-          <div className="cw-table-wrap">
-            <table className="cw-table">
-              <thead>
-                <tr><th>Patient</th><th>Age / Gender</th><th>Contact</th><th>Condition</th><th>Joined</th><th></th></tr>
-              </thead>
-              <tbody>
-                {paginated.map((p: any) => (
-                  <tr key={p.id} className="clickable" onClick={() => setSelectedPatientId(p.id)}>
-                    <td>
+          <>
+            <ResponsiveTable 
+              table={
+                <table className="cw-table cw-table-sticky-col">
+                  <thead>
+                    <tr><th>Patient</th><th>Age / Gender</th><th>Contact</th><th>Condition</th><th>Joined</th><th></th></tr>
+                  </thead>
+                  <tbody>
+                    {paginated.map((p: any) => (
+                      <tr key={p.id} className="clickable" onClick={() => setSelectedPatientId(p.id)}>
+                        <td>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <div className="cw-avatar" style={{ background: p.colorTag, width: 32, height: 32, fontSize: 11.5 }}>{initials(p.name)}</div>
+                            <div>
+                              <div style={{ fontWeight: 600 }}>{p.name}</div>
+                              <div className="mono" style={{ fontSize: 11.5, color: "var(--moss)" }}>{p.displayId}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td>{p.age} yrs · {p.gender}</td>
+                        <td>
+                          <div>{p.phone}</div>
+                          {p.email && <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>{p.email}</div>}
+                        </td>
+                        <td>{p.condition || <span style={{ color: "var(--ink-soft)" }}>—</span>}</td>
+                        <td className="num">{fmtDateShort(p.createdAt)}</td>
+                        <td onClick={e => e.stopPropagation()}>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button className="cw-btn cw-btn-ghost cw-btn-icon" onClick={() => { setEditing(p); setModalOpen(true); }} disabled={isPending}><Pencil size={13} /></button>
+                            <button className="cw-btn cw-btn-danger cw-btn-icon" onClick={async (e) => { 
+                              e.stopPropagation(); 
+                              const ok = await confirm({ title: "Delete patient?", body: `Are you sure you want to delete ${p.name}? All their appointments and records will also be permanently deleted.`, tone: "danger" }); 
+                              if (ok) deletePatient(p.id); 
+                            }} disabled={isPending}><Trash2 size={13} /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              }
+              cards={
+                paginated.map((p: any) => (
+                  <div key={p.id} className="cw-stat-card clickable flex flex-col gap-3" onClick={() => setSelectedPatientId(p.id)}>
+                    <div className="flex justify-between items-start">
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <div className="cw-avatar" style={{ background: p.colorTag, width: 32, height: 32, fontSize: 11.5 }}>{initials(p.name)}</div>
                         <div>
@@ -167,38 +204,39 @@ export function PatientsClient({
                           <div className="mono" style={{ fontSize: 11.5, color: "var(--moss)" }}>{p.displayId}</div>
                         </div>
                       </div>
-                    </td>
-                    <td>{p.age} yrs · {p.gender}</td>
-                    <td>
-                      <div>{p.phone}</div>
-                      {p.email && <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>{p.email}</div>}
-                    </td>
-                    <td>{p.condition || <span style={{ color: "var(--ink-soft)" }}>—</span>}</td>
-                    <td className="num">{fmtDateShort(p.createdAt)}</td>
-                    <td onClick={e => e.stopPropagation()}>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <button className="cw-btn cw-btn-ghost cw-btn-icon" onClick={() => { setEditing(p); setModalOpen(true); }} disabled={isPending}><Pencil size={13} /></button>
-                        <button className="cw-btn cw-btn-danger cw-btn-icon" onClick={async (e) => { 
+                      <CardKebab>
+                        <button className="cw-dropdown-item flex items-center gap-2" onClick={(e) => { e.stopPropagation(); setEditing(p); setModalOpen(true); }}><Pencil size={13} /> Edit</button>
+                        <button className="cw-dropdown-item text-red-600 flex items-center gap-2" onClick={async (e) => { 
                           e.stopPropagation(); 
                           const ok = await confirm({ title: "Delete patient?", body: `Are you sure you want to delete ${p.name}? All their appointments and records will also be permanently deleted.`, tone: "danger" }); 
                           if (ok) deletePatient(p.id); 
-                        }} disabled={isPending}><Trash2 size={13} /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {filtered.length > 0 && (
-              <div className="flex flex-col sm:flex-row justify-between items-center mt-4 text-[13.5px] text-ink-soft gap-4 p-4 border-t border-line">
-                <div>Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length} entries</div>
-                <div className="flex items-center gap-2">
-                  <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1.5 border border-line rounded bg-white hover:bg-paper-raised disabled:opacity-50 text-ink transition-colors font-medium">Previous</button>
-                  <button disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1.5 border border-line rounded bg-white hover:bg-paper-raised disabled:opacity-50 text-ink transition-colors font-medium">Next</button>
-                </div>
-              </div>
-            )}
-          </div>
+                        }}><Trash2 size={13} /> Delete</button>
+                      </CardKebab>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm mt-1">
+                      <div className="text-ink-soft">Age / Gender</div>
+                      <div className="text-right font-medium">{p.age} yrs · {p.gender}</div>
+                      <div className="text-ink-soft">Phone</div>
+                      <div className="text-right font-medium">{p.phone}</div>
+                      {p.email && (
+                        <>
+                          <div className="text-ink-soft">Email</div>
+                          <div className="text-right truncate font-medium">{p.email}</div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))
+              }
+            />
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={filtered.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={setCurrentPage}
+            />
+          </>
         )}
       </div>
 

@@ -5,6 +5,7 @@ import { Plus, X, Download, Lock, Search } from "lucide-react"
 import { currency, fmtDateShort, StatusBadge, toISO } from "@/components/DashboardHelpers"
 import { createInvoiceAction, markInvoicePaidAction } from "@/server/actions/billing"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
+import { ResponsiveTable, Pagination, CardKebab } from "@/components/ResponsiveTable"
 import Link from "next/link"
 import { PrescriptionPrintTemplate } from "../records/RecordsClient"
 
@@ -114,8 +115,8 @@ export function BillingClient({
         </div>
       </div>
 
-      <div className="cw-toolbar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
-        <div className="flex flex-wrap gap-4 items-center">
+      <div className="cw-toolbar">
+        <div className="cw-toolbar-left flex-wrap">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft w-4 h-4" />
             <input 
@@ -132,43 +133,94 @@ export function BillingClient({
             ))}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div className="flex items-center gap-2 mt-2 sm:mt-0 w-full sm:w-auto">
           {hasRevenueReports ? (
-            <button className="cw-btn cw-btn-ghost cw-btn-sm" onClick={exportRevenueCSV} title="Export revenue report as CSV">
+            <button className="cw-btn cw-btn-ghost cw-btn-sm hidden sm:flex" onClick={exportRevenueCSV} title="Export revenue report as CSV">
               <Download size={13} style={{ marginRight: 4 }} /> Revenue Report
             </button>
           ) : (
-            <Link href="/dashboard/settings?tab=subscription" className="cw-btn cw-btn-ghost cw-btn-sm" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 4, color: "var(--ink-soft)" }}>
+            <Link href="/dashboard/settings?tab=subscription" className="cw-btn cw-btn-ghost cw-btn-sm hidden sm:flex" style={{ textDecoration: "none", alignItems: "center", gap: 4, color: "var(--ink-soft)" }}>
               <Lock size={12} /> Revenue Reports (Clinic Group)
             </Link>
           )}
-          <button className="cw-btn cw-btn-primary cw-btn-sm" onClick={() => setModalOpen(true)} disabled={isPending}>
+          <div className="sm:hidden flex items-center">
+            <CardKebab>
+              {hasRevenueReports ? (
+                <button className="cw-dropdown-item flex items-center gap-2" onClick={exportRevenueCSV}><Download size={13} /> Revenue Report</button>
+              ) : (
+                <Link href="/dashboard/settings?tab=subscription" className="cw-dropdown-item flex items-center gap-2"><Lock size={12} /> Revenue Reports</Link>
+              )}
+            </CardKebab>
+          </div>
+          <button className="cw-btn cw-btn-primary cw-btn-sm w-full sm:w-auto justify-center" onClick={() => setModalOpen(true)} disabled={isPending}>
             <Plus size={15} /> New invoice
           </button>
         </div>
       </div>
 
       <div className="cw-panel">
-        <div className="cw-table-wrap">
-          <table className="cw-table">
-            <thead><tr><th>Invoice</th><th>Patient</th><th>Date</th><th>Items</th><th>Amount</th><th>Status</th><th></th></tr></thead>
-            <tbody>
-              {paginated.map((inv: any) => {
-                const total = inv.items.reduce((s: number, it: any) => s + Number(it.amount), 0);
-                return (
-                  <tr key={inv.id}>
-                    <td className="mono">{inv.displayId}</td>
-                    <td style={{ fontWeight: 600 }}>{patientName(inv.patientId)}</td>
-                    <td className="num">{fmtDateShort(inv.date)}</td>
-                    <td style={{ fontSize: 13, color: "var(--ink-soft)" }}>{inv.items.map((it: any) => it.desc).join(", ")}</td>
-                    <td className="num" style={{ fontWeight: 700 }}>{currency(total)}</td>
-                    <td><StatusBadge status={inv.status} /></td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <ResponsiveTable
+          table={
+            <table className="cw-table cw-table-sticky-col">
+              <thead><tr><th>Invoice</th><th>Patient</th><th>Date</th><th>Items</th><th>Amount</th><th>Status</th><th></th></tr></thead>
+              <tbody>
+                {paginated.map((inv: any) => {
+                  const total = inv.items.reduce((s: number, it: any) => s + Number(it.amount), 0);
+                  return (
+                    <tr key={inv.id}>
+                      <td className="mono">{inv.displayId}</td>
+                      <td style={{ fontWeight: 600 }}>{patientName(inv.patientId)}</td>
+                      <td className="num">{fmtDateShort(inv.date)}</td>
+                      <td style={{ fontSize: 13, color: "var(--ink-soft)" }}>{inv.items.map((it: any) => it.desc).join(", ")}</td>
+                      <td className="num" style={{ fontWeight: 700 }}>{currency(total)}</td>
+                      <td><StatusBadge status={inv.status} /></td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          {inv.status.toLowerCase() === "unpaid" && (
+                            <button className="cw-btn cw-btn-ghost cw-btn-sm" onClick={() => markPaid(inv.id)} disabled={isPending}>Mark paid</button>
+                          )}
+                          <button className="cw-btn cw-btn-ghost cw-btn-icon" onClick={() => {
+                            startTransition(async () => {
+                              try {
+                                const { getInvoicePdfUrlAction } = await import("@/server/actions/billing")
+                                const url = await getInvoicePdfUrlAction(inv.displayId, inv.patientId)
+                                if (url) {
+                                  window.open(url, '_blank')
+                                } else {
+                                  setPrintingInvoice(inv)
+                                  setTimeout(() => window.print(), 100)
+                                }
+                              } catch(e) {
+                                setPrintingInvoice(inv)
+                                setTimeout(() => window.print(), 100)
+                              }
+                            })
+                          }} title="Download / Print Invoice"><Download size={14} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          }
+          cards={
+            paginated.map((inv: any) => {
+              const total = inv.items.reduce((s: number, it: any) => s + Number(it.amount), 0);
+              return (
+                <div key={inv.id} className="cw-stat-card flex flex-col gap-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="mono text-xs text-moss">{inv.displayId}</div>
+                      <div className="font-semibold">{patientName(inv.patientId)}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <StatusBadge status={inv.status} />
+                      <CardKebab>
                         {inv.status.toLowerCase() === "unpaid" && (
-                          <button className="cw-btn cw-btn-ghost cw-btn-sm" onClick={() => markPaid(inv.id)} disabled={isPending}>Mark paid</button>
+                          <button className="cw-dropdown-item flex items-center gap-2" onClick={() => markPaid(inv.id)}>Mark paid</button>
                         )}
-                        <button className="cw-btn cw-btn-ghost cw-btn-icon" onClick={() => {
+                        <button className="cw-dropdown-item flex items-center gap-2" onClick={() => {
                           startTransition(async () => {
                             try {
                               const { getInvoicePdfUrlAction } = await import("@/server/actions/billing")
@@ -184,24 +236,30 @@ export function BillingClient({
                               setTimeout(() => window.print(), 100)
                             }
                           })
-                        }} title="Download / Print Invoice"><Download size={14} /></button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {filtered.length > 0 && (
-            <div className="flex flex-col sm:flex-row justify-between items-center mt-4 text-[13.5px] text-ink-soft gap-4 p-4 border-t border-line">
-              <div>Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length} entries</div>
-              <div className="flex items-center gap-2">
-                <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1.5 border border-line rounded bg-white hover:bg-paper-raised disabled:opacity-50 text-ink transition-colors font-medium">Previous</button>
-                <button disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1.5 border border-line rounded bg-white hover:bg-paper-raised disabled:opacity-50 text-ink transition-colors font-medium">Next</button>
-              </div>
-            </div>
-          )}
-        </div>
+                        }}><Download size={13} /> Print/Download</button>
+                      </CardKebab>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm mt-1">
+                    <div className="text-ink-soft">Date</div>
+                    <div className="text-right num">{fmtDateShort(inv.date)}</div>
+                    <div className="text-ink-soft">Amount</div>
+                    <div className="text-right font-bold num">{currency(total)}</div>
+                    <div className="text-ink-soft">Items</div>
+                    <div className="text-right truncate">{inv.items.map((it: any) => it.desc).join(", ")}</div>
+                  </div>
+                </div>
+              );
+            })
+          }
+        />
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={filtered.length}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+        />
       </div>
 
       {modalOpen && <InvoiceModal patients={patients} prescriptions={prescriptions} initialPatientId={initialPatientId} onClose={() => setModalOpen(false)} onSave={createInvoice} isPending={isPending} />}
@@ -348,10 +406,12 @@ function InvoiceModal({ patients, prescriptions, onClose, onSave, isPending, ini
             </div>
             <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--ink-soft)", marginBottom: 8 }}>Line items</label>
             {items.map((it, i) => (
-              <div key={i} style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                <input className="cw-input" placeholder="Description" value={it.desc} onChange={e => updateItem(i, "desc", e.target.value)} style={{ flex: 2 }} disabled={isPending} />
-                <input className="cw-input" type="number" placeholder="Amount" value={it.amount} onChange={e => updateItem(i, "amount", e.target.value)} style={{ flex: 1 }} disabled={isPending} />
-                {items.length > 1 && <button type="button" className="cw-btn cw-btn-ghost cw-btn-icon" onClick={() => setItems(items.filter((_, idx) => idx !== i))} disabled={isPending}><X size={14} /></button>}
+              <div key={i} className="flex flex-col sm:flex-row gap-2 mb-3 bg-paper-raised sm:bg-transparent p-3 sm:p-0 rounded border sm:border-0 border-line">
+                <input className="cw-input w-full" placeholder="Description" value={it.desc} onChange={e => updateItem(i, "desc", e.target.value)} style={{ flex: 2 }} disabled={isPending} />
+                <div className="flex gap-2 w-full" style={{ flex: 1 }}>
+                  <input className="cw-input flex-1" type="number" placeholder="Amount" value={it.amount} onChange={e => updateItem(i, "amount", e.target.value)} disabled={isPending} />
+                  {items.length > 1 && <button type="button" className="cw-btn cw-btn-ghost cw-btn-icon flex-shrink-0" onClick={() => setItems(items.filter((_, idx) => idx !== i))} disabled={isPending}><X size={14} /></button>}
+                </div>
               </div>
             ))}
             <button type="button" className="cw-btn cw-btn-ghost cw-btn-sm" onClick={() => setItems([...items, { desc: "", amount: "" }])} disabled={isPending}><Plus size={13} />Add line item</button>
@@ -372,9 +432,9 @@ function InvoiceModal({ patients, prescriptions, onClose, onSave, isPending, ini
               </label>
             </div>
           </div>
-          <div className="cw-modal-foot">
-            <button type="button" className="cw-btn cw-btn-ghost cw-btn-sm" onClick={onClose} disabled={isPending}>Cancel</button>
-            <button type="submit" className="cw-btn cw-btn-primary cw-btn-sm" disabled={isPending}>Create invoice</button>
+          <div className="cw-modal-foot flex flex-col sm:flex-row gap-2">
+            <button type="button" className="cw-btn cw-btn-ghost cw-btn-sm w-full sm:w-auto justify-center" onClick={onClose} disabled={isPending}>Cancel</button>
+            <button type="submit" className="cw-btn cw-btn-primary cw-btn-sm w-full sm:w-auto justify-center" disabled={isPending}>Create invoice</button>
           </div>
         </form>
       </div>

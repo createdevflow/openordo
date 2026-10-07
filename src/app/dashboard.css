@@ -318,6 +318,13 @@
 .cw-table { width: 100%; border-collapse: collapse; font-size: 13.8px; }
 .cw-table th { text-align: left; font-size: 12.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--moss); font-weight: 700; padding: 12px 16px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 .cw-table td { padding: 13px 16px; border-bottom: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
+.cw-table-sticky-col th:first-child, .cw-table-sticky-col td:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--paper);
+  z-index: 10;
+}
+.cw-table-sticky-col th:first-child { z-index: 11; }
 .cw-table tr:last-child td { border-bottom: none; }
 .cw-table tr.clickable:hover { background: var(--paper); cursor: pointer; }
 .cw-table .num { font-family: 'JetBrains Mono', monospace; font-size: 13px; }
