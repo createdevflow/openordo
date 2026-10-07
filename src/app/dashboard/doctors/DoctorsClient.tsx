@@ -84,8 +84,8 @@ export function DoctorsClient({ doctors, appointments, doctorLimit = null, planL
 
   return (
     <div>
-      <div className="cw-toolbar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div className="cw-toolbar">
+        <div className="cw-toolbar-left flex-wrap">
           <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>
             {doctors.length}{doctorLimit !== null ? ` / ${doctorLimit}` : ""} staff members
           {extraSeats > 0 && (
@@ -107,10 +107,9 @@ export function DoctorsClient({ doctors, appointments, doctorLimit = null, planL
           </span>
         </div>
         <button 
-          className="cw-btn cw-btn-primary cw-btn-sm" 
+          className="cw-btn cw-btn-primary cw-btn-sm w-full sm:w-auto mt-2 sm:mt-0 justify-center" 
           onClick={handleAddClick} 
           disabled={isPending}
-          style={{ display: "flex", alignItems: "center", gap: 6 }}
         >
           {isLimitReached ? <Lock size={14} /> : <Plus size={15} />}
           Add doctor / staff

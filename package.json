@@ -58,6 +58,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/archiver": "^8.0.0",
     "@types/bcrypt": "^6.0.0",
@@ -74,6 +75,7 @@
     "node-fetch": "^3.3.2",
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }

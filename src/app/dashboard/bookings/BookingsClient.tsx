@@ -4,6 +4,7 @@ import React, { useState, useTransition } from "react"
 import { CheckCircle, XCircle, Clock, Users, Search, AlertTriangle, TrendingUp, ExternalLink } from "lucide-react"
 import { confirmBookingAction, rejectBookingAction } from "@/server/actions/bookings"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
+import { ResponsiveTable, Pagination, CardKebab } from "@/components/ResponsiveTable"
 import Link from "next/link"
 
 function fmtDate(d: string) {
@@ -174,8 +175,8 @@ export function BookingsClient({ bookings, doctors, bookingUsage }: { bookings: 
         </div>
       </div>
 
-      <div className="cw-toolbar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
-        <div className="relative">
+      <div className="cw-toolbar">
+        <div className="relative w-full sm:w-auto flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft w-4 h-4" />
           <input 
             type="text" 
@@ -208,40 +209,91 @@ export function BookingsClient({ bookings, doctors, bookingUsage }: { bookings: 
         </div></div>
       ) : (
         <div className="cw-panel">
-          <div className="cw-table-wrap">
-            <table className="cw-table">
-              <thead>
-                <tr>
-                  <th>Patient</th>
-                  <th>Contact</th>
-                  <th>Doctor</th>
-                  <th>Date & Time</th>
-                  <th>Reason</th>
-                  <th>Status</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginated.map((b: any) => {
-                  const sc = STATUS_COLORS[b.status] || STATUS_COLORS.PENDING
-                  return (
-                    <tr key={b.id}>
-                      <td style={{ fontWeight: 600 }}>{b.name}</td>
-                      <td style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>
-                        {b.email}<br />{b.phone}
-                      </td>
-                      <td style={{ fontSize: 13 }}>{doctorName(b.doctorId)}</td>
-                      <td className="num" style={{ fontSize: 13 }}>
-                        {fmtDate(b.date)}<br />
-                        <span style={{ color: "var(--ink-soft)" }}>{fmtTime(b.time)}</span>
-                      </td>
-                      <td style={{ fontSize: 13, maxWidth: 180 }}>
-                        <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {b.reason}
-                        </span>
-                        {b.notes && <span style={{ fontSize: 11.5, color: "var(--ink-soft)" }}>{b.notes}</span>}
-                      </td>
-                      <td>
+          <ResponsiveTable
+            table={
+              <table className="cw-table cw-table-sticky-col">
+                <thead>
+                  <tr>
+                    <th>Patient</th>
+                    <th>Contact</th>
+                    <th>Doctor</th>
+                    <th>Date & Time</th>
+                    <th>Reason</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginated.map((b: any) => {
+                    const sc = STATUS_COLORS[b.status] || STATUS_COLORS.PENDING
+                    return (
+                      <tr key={b.id}>
+                        <td style={{ fontWeight: 600 }}>{b.name}</td>
+                        <td style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>
+                          {b.email}<br />{b.phone}
+                        </td>
+                        <td style={{ fontSize: 13 }}>{doctorName(b.doctorId)}</td>
+                        <td className="num" style={{ fontSize: 13 }}>
+                          {fmtDate(b.date)}<br />
+                          <span style={{ color: "var(--ink-soft)" }}>{fmtTime(b.time)}</span>
+                        </td>
+                        <td style={{ fontSize: 13, maxWidth: 180 }}>
+                          <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {b.reason}
+                          </span>
+                          {b.notes && <span style={{ fontSize: 11.5, color: "var(--ink-soft)" }}>{b.notes}</span>}
+                        </td>
+                        <td>
+                          <span style={{
+                            display: "inline-flex", alignItems: "center", gap: 4,
+                            background: sc.bg, color: sc.color,
+                            padding: "3px 9px", borderRadius: 20, fontSize: 12, fontWeight: 600
+                          }}>
+                            {b.status === "PENDING" && <Clock size={11} />}
+                            {b.status === "CONFIRMED" && <CheckCircle size={11} />}
+                            {b.status === "REJECTED" && <XCircle size={11} />}
+                            {b.status[0] + b.status.slice(1).toLowerCase()}
+                          </span>
+                        </td>
+                        <td>
+                          {b.status === "PENDING" && (
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <button 
+                                className="cw-btn cw-btn-ghost cw-btn-sm" 
+                                style={{ padding: "6px 12px", background: "#FFFFFF", border: "1px solid #DAD6C9", color: "var(--success)" }}
+                                disabled={isPending}
+                                onClick={() => handleConfirmBooking(b.id)}
+                              >
+                                <CheckCircle size={15} /> Confirm
+                              </button>
+                              <button 
+                                className="cw-btn cw-btn-ghost cw-btn-sm" 
+                                style={{ padding: "6px 12px", background: "#FFFFFF", border: "1px solid #DAD6C9", color: "var(--coral)" }}
+                                disabled={isPending}
+                                onClick={() => handleRejectBooking(b.id)}
+                              >
+                                <XCircle size={15} /> Reject
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            }
+            cards={
+              paginated.map((b: any) => {
+                const sc = STATUS_COLORS[b.status] || STATUS_COLORS.PENDING
+                return (
+                  <div key={b.id} className="cw-stat-card flex flex-col gap-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="font-semibold">{b.name}</div>
+                        <div className="text-xs text-ink-soft">{b.phone}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
                         <span style={{
                           display: "inline-flex", alignItems: "center", gap: 4,
                           background: sc.bg, color: sc.color,
@@ -252,44 +304,34 @@ export function BookingsClient({ bookings, doctors, bookingUsage }: { bookings: 
                           {b.status === "REJECTED" && <XCircle size={11} />}
                           {b.status[0] + b.status.slice(1).toLowerCase()}
                         </span>
-                      </td>
-                      <td>
                         {b.status === "PENDING" && (
-                          <div style={{ display: "flex", gap: 6 }}>
-                            <button 
-                              className="cw-btn cw-btn-ghost cw-btn-sm" 
-                              style={{ padding: "6px 12px", background: "#FFFFFF", border: "1px solid #DAD6C9", color: "var(--success)" }}
-                              disabled={isPending}
-                              onClick={() => handleConfirmBooking(b.id)}
-                            >
-                              <CheckCircle size={15} /> Confirm
-                            </button>
-                            <button 
-                              className="cw-btn cw-btn-ghost cw-btn-sm" 
-                              style={{ padding: "6px 12px", background: "#FFFFFF", border: "1px solid #DAD6C9", color: "var(--coral)" }}
-                              disabled={isPending}
-                              onClick={() => handleRejectBooking(b.id)}
-                            >
-                              <XCircle size={15} /> Reject
-                            </button>
-                          </div>
+                          <CardKebab>
+                            <button className="cw-dropdown-item flex items-center gap-2 text-success" onClick={() => handleConfirmBooking(b.id)}><CheckCircle size={13} /> Confirm</button>
+                            <button className="cw-dropdown-item flex items-center gap-2 text-coral" onClick={() => handleRejectBooking(b.id)}><XCircle size={13} /> Reject</button>
+                          </CardKebab>
                         )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-            {filtered.length > 0 && (
-              <div className="flex flex-col sm:flex-row justify-between items-center mt-4 text-[13.5px] text-ink-soft gap-4 p-4 border-t border-line bg-white">
-                <div>Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length} entries</div>
-                <div className="flex items-center gap-2">
-                  <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1.5 border border-line rounded bg-white hover:bg-paper-raised disabled:opacity-50 text-ink transition-colors font-medium">Previous</button>
-                  <button disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1.5 border border-line rounded bg-white hover:bg-paper-raised disabled:opacity-50 text-ink transition-colors font-medium">Next</button>
-                </div>
-              </div>
-            )}
-          </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm mt-1">
+                      <div className="text-ink-soft">Date & Time</div>
+                      <div className="text-right num font-medium">{fmtDate(b.date)} {fmtTime(b.time)}</div>
+                      <div className="text-ink-soft">Doctor</div>
+                      <div className="text-right font-medium">{doctorName(b.doctorId)}</div>
+                      <div className="text-ink-soft">Reason</div>
+                      <div className="text-right truncate">{b.reason}</div>
+                    </div>
+                  </div>
+                )
+              })
+            }
+          />
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filtered.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+          />
         </div>
       )}
     </div>
