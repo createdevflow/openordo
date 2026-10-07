@@ -54,6 +54,8 @@ export function useCall({
   const [qualityBars, setQualityBars] = useState(4);
   const [remoteQualityBars, setRemoteQualityBars] = useState(4);
   const [audioFirst, setAudioFirst] = useState(false);
+  const [callError, setCallError] = useState<string | null>(null);
+  const [pairedAt, setPairedAt] = useState<number | null>(null);
   
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -82,17 +84,157 @@ export function useCall({
     if (!signalToken) return;
 
     let isClosed = false;
+    let queuedIceCandidates: any[] = [];
+    const wsOutboundQueue: any[] = [];
 
-    // IMPORTANT: Create RTCPeerConnection FIRST so pcRef.current is set
-    // before the WebSocket connects and receives messages.
-    const pc = new RTCPeerConnection({
-      iceServers,
-      iceTransportPolicy: turnPolicy,
-      bundlePolicy: "max-bundle",
-      rtcpMuxPolicy: "require",
-      iceCandidatePoolSize: 2,
-    });
-    pcRef.current = pc;
+    const signalSend = (msg: any) => {
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.send(JSON.stringify(msg));
+        } catch (err) {
+          console.error("WS send error", err);
+        }
+      } else {
+        wsOutboundQueue.push(msg);
+      }
+    };
+
+    function setupDataChannel(dc: RTCDataChannel) {
+      dcRef.current = dc;
+      dc.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.t === "state") {
+            setRemoteCameraOn(msg.cam);
+            setRemoteMicOn(msg.mic);
+          } else if (msg.t === "chat") {
+            setChatMessages(prev => [...prev, { id: msg.id, sender: msg.sender, text: msg.text, time: msg.time }]);
+          } else if (msg.t === "file") {
+            setSharedFiles(prev => [...prev, { fileId: msg.fileId, name: msg.name, size: msg.size, sender: msg.sender }]);
+          } else if (msg.t === "quality") {
+            setRemoteQualityBars(msg.bars);
+          }
+        } catch(err) {}
+      };
+      dc.onopen = () => {
+        try {
+          dc.send(JSON.stringify({ t: "state", cam: !!videoTrack, mic: !!audioTrack }));
+        } catch(err) {}
+      };
+    }
+
+    function initPC() {
+      if (pcRef.current) return;
+      const pc = new RTCPeerConnection({
+        iceServers,
+        iceTransportPolicy: turnPolicy,
+        bundlePolicy: "max-bundle",
+        rtcpMuxPolicy: "require",
+        iceCandidatePoolSize: 2,
+      });
+      pcRef.current = pc;
+
+      if (isHost) {
+        const dc = pc.createDataChannel("ctl", { ordered: true });
+        setupDataChannel(dc);
+      }
+
+      pc.ondatachannel = (e) => {
+        if (e.channel.label === "ctl") {
+          setupDataChannel(e.channel);
+        }
+      };
+
+      pc.onnegotiationneeded = async () => {
+        if (!remoteJoined) return;
+        try {
+          makingOfferRef.current = true;
+          await pc.setLocalDescription();
+          signalSend({ t: "sdp", description: pc.localDescription });
+        } catch (err) {
+          console.error(err);
+        } finally {
+          makingOfferRef.current = false;
+        }
+      };
+
+      pc.onicecandidate = (e) => {
+        try {
+          if (e.candidate) {
+            signalSend({ t: "ice", candidate: e.candidate });
+          }
+        } catch(err) {}
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        try {
+          setConnectionState(pc.iceConnectionState);
+          if (pc.iceConnectionState === "failed") {
+            qualityStatsRef.current.iceRestarts++;
+            pc.restartIce();
+          } else if (pc.iceConnectionState === "disconnected") {
+            setTimeout(() => {
+              if (pc.iceConnectionState === "disconnected") {
+                qualityStatsRef.current.iceRestarts++;
+                pc.restartIce();
+                signalSend({ t: "restart" });
+              }
+            }, 3000);
+          }
+        } catch(err) {}
+      };
+
+      pc.ontrack = (e) => {
+        try {
+          if (e.track.kind === "video") {
+            setRemoteVideoTrack(e.track);
+            e.track.onmute = () => setRemoteCameraOn(false);
+            e.track.onunmute = () => setRemoteCameraOn(true);
+          } else if (e.track.kind === "audio") {
+            setRemoteAudioTrack(e.track);
+            e.track.onmute = () => setRemoteMicOn(false);
+            e.track.onunmute = () => setRemoteMicOn(true);
+          }
+        } catch(err) {}
+      };
+      
+      if (videoTrack) {
+        videoTrack.contentHint = "motion";
+        videoSenderRef.current = pc.addTrack(videoTrack);
+        if (typeof RTCRtpTransceiver !== "undefined" && 'setCodecPreferences' in RTCRtpTransceiver.prototype) {
+          const transceivers = pc.getTransceivers();
+          const videoTransceiver = transceivers.find(t => t.sender.track?.kind === 'video');
+          if (videoTransceiver && 'setCodecPreferences' in videoTransceiver) {
+            const codecs = RTCRtpReceiver.getCapabilities('video')?.codecs || [];
+            const preferred = ["video/VP9", "video/H264", "video/VP8"];
+            const sorted = codecs.sort((a, b) => {
+              const aIdx = preferred.indexOf(a.mimeType);
+              const bIdx = preferred.indexOf(b.mimeType);
+              if (aIdx === -1 && bIdx === -1) return 0;
+              if (aIdx === -1) return 1;
+              if (bIdx === -1) return -1;
+              return aIdx - bIdx;
+            });
+            try { videoTransceiver.setCodecPreferences(sorted); } catch (e) {}
+          }
+        }
+        const params = videoSenderRef.current.getParameters();
+        if (!params.encodings) params.encodings = [{}];
+        params.encodings[0].maxBitrate = 1500000;
+        params.encodings[0].maxFramerate = 30;
+        params.encodings[0].networkPriority = "medium";
+        params.degradationPreference = "balanced";
+        videoSenderRef.current.setParameters(params).catch(()=>{});
+      }
+      if (audioTrack) {
+        audioSenderRef.current = pc.addTrack(audioTrack);
+        const params = audioSenderRef.current.getParameters();
+        if (!params.encodings) params.encodings = [{}];
+        params.encodings[0].networkPriority = "high";
+        audioSenderRef.current.setParameters(params).catch(()=>{});
+      }
+    }
 
     const connectWs = () => {
       if (isClosed) return;
@@ -101,83 +243,113 @@ export function useCall({
       wsRef.current = ws;
       
       ws.onopen = () => {
-        wsReconnectAttempts.current = 0;
-        ws.send(JSON.stringify({ t: "join", token: signalToken }));
+        try {
+          setCallError(null);
+          wsReconnectAttempts.current = 0;
+          ws.send(JSON.stringify({ t: "join", token: signalToken }));
+          
+          wsOutboundQueue.forEach(msg => {
+            try { ws.send(JSON.stringify(msg)); } catch(e){}
+          });
+          wsOutboundQueue.length = 0;
+        } catch(err) {}
       };
       
       ws.onmessage = async (e) => {
-        const msg = JSON.parse(e.data);
-        // pcRef.current is guaranteed to be set now since we created it above.
-        const pc = pcRef.current;
-        if (!pc) return;
-        
-        if (msg.t === "joined") {
-          setRemoteJoined(msg.peerPresent);
-          // If peer is already in the room when we join, and we're the doctor
-          // (impolite side), kick off the offer immediately.
-          if (msg.peerPresent && !isPolite) {
-            try {
-              makingOfferRef.current = true;
-              await pc.setLocalDescription();
-              ws.send(JSON.stringify({ t: "sdp", description: pc.localDescription }));
-            } catch (err) {
-              console.error("Initial offer error:", err);
-            } finally {
-              makingOfferRef.current = false;
-            }
-          }
-        } else if (msg.t === "peer-joined") {
-          setRemoteJoined(true);
-          // Doctor (impolite/offerer) kicks off negotiation when patient joins
-          if (!isPolite) {
-            try {
-              makingOfferRef.current = true;
-              await pc.setLocalDescription();
-              ws.send(JSON.stringify({ t: "sdp", description: pc.localDescription }));
-            } catch (err) {
-              console.error("peer-joined offer error:", err);
-            } finally {
-              makingOfferRef.current = false;
-            }
-          }
-        } else if (msg.t === "peer-left") {
-          setRemoteJoined(false);
-          setRemoteVideoTrack(null);
-          setRemoteAudioTrack(null);
-        } else if (msg.t === "sdp") {
-          const offerCollision = msg.description.type === "offer" && (makingOfferRef.current || pc.signalingState !== "stable");
-          ignoreOfferRef.current = !isPolite && offerCollision;
+        try {
+          const msg = JSON.parse(e.data);
           
-          if (ignoreOfferRef.current) {
-            return;
-          }
-          
-          await pc.setRemoteDescription(msg.description);
-          if (msg.description.type === "offer") {
-            await pc.setLocalDescription();
-            ws.send(JSON.stringify({ t: "sdp", description: pc.localDescription }));
-          }
-        } else if (msg.t === "ice") {
-          try {
-            if (msg.candidate) {
-              await pc.addIceCandidate(msg.candidate);
+          if (msg.t === "joined") {
+            setRemoteJoined(msg.peerPresent);
+            if (msg.pairedAt) setPairedAt(msg.pairedAt);
+            initPC();
+            
+            const pc = pcRef.current;
+            if (msg.peerPresent && !isPolite && pc) {
+              try {
+                makingOfferRef.current = true;
+                await pc.setLocalDescription();
+                signalSend({ t: "sdp", description: pc.localDescription });
+              } catch (err) {
+                console.error("Initial offer error:", err);
+              } finally {
+                makingOfferRef.current = false;
+              }
             }
-          } catch (err) {
-            if (!ignoreOfferRef.current) console.warn("ICE error", err);
+          } else if (msg.t === "peer-joined") {
+            setRemoteJoined(true);
+            if (msg.pairedAt) setPairedAt(msg.pairedAt);
+            
+            const pc = pcRef.current;
+            if (!isPolite && pc) {
+              try {
+                makingOfferRef.current = true;
+                await pc.setLocalDescription();
+                signalSend({ t: "sdp", description: pc.localDescription });
+              } catch (err) {
+                console.error("peer-joined offer error:", err);
+              } finally {
+                makingOfferRef.current = false;
+              }
+            }
+          } else if (msg.t === "peer-left") {
+            setRemoteJoined(false);
+            setRemoteVideoTrack(null);
+            setRemoteAudioTrack(null);
+          } else if (msg.t === "sdp") {
+            const pc = pcRef.current;
+            if (!pc) return;
+            const offerCollision = msg.description.type === "offer" && (makingOfferRef.current || pc.signalingState !== "stable");
+            ignoreOfferRef.current = !isPolite && offerCollision;
+            
+            if (ignoreOfferRef.current) return;
+            
+            await pc.setRemoteDescription(msg.description);
+            for (const c of queuedIceCandidates) {
+              try { await pc.addIceCandidate(c); } catch(err){}
+            }
+            queuedIceCandidates = [];
+            
+            if (msg.description.type === "offer") {
+              await pc.setLocalDescription();
+              signalSend({ t: "sdp", description: pc.localDescription });
+            }
+          } else if (msg.t === "ice") {
+            const pc = pcRef.current;
+            if (!pc) return;
+            try {
+              if (msg.candidate) {
+                if (pc.remoteDescription) {
+                  await pc.addIceCandidate(msg.candidate);
+                } else {
+                  queuedIceCandidates.push(msg.candidate);
+                }
+              }
+            } catch (err) {
+              if (!ignoreOfferRef.current) console.warn("ICE error", err);
+            }
+          } else if (msg.t === "restart") {
+            const pc = pcRef.current;
+            if (pc) pc.restartIce();
+          } else if (msg.t === "error") {
+            if (msg.code === "ROOM_FULL") {
+              alert("Room is full");
+            } else if (msg.code === "EXPIRED") {
+              alert("Call has expired");
+            }
           }
-        } else if (msg.t === "restart") {
-          pc.restartIce();
-        } else if (msg.t === "error") {
-          if (msg.code === "ROOM_FULL") {
-            alert("Room is full");
-          } else if (msg.code === "EXPIRED") {
-            alert("Call has expired");
-          }
+        } catch (err) {
+          console.error(err);
         }
       };
       
+      ws.onerror = () => {
+        setCallError("Can't reach the call server — retrying…");
+      };
+
       ws.onclose = (e) => {
         if (isClosed || e.code === 1000) return; // intentional close
+        setCallError("Can't reach the call server — retrying…");
         qualityStatsRef.current.wsReconnects++;
         const backoff = Math.min(8000, 500 * Math.pow(2, wsReconnectAttempts.current));
         const jitter = backoff * 0.2 * Math.random();
@@ -186,94 +358,8 @@ export function useCall({
       };
     };
 
-    // ctl channel
-    if (isHost) { // Doctor creates channel
-      const dc = pc.createDataChannel("ctl", { ordered: true });
-      setupDataChannel(dc);
-    }
-
-    // Connect WebSocket AFTER pcRef.current is set
     connectWs();
-    
-    pc.ondatachannel = (e) => {
-      if (e.channel.label === "ctl") {
-        setupDataChannel(e.channel);
-      }
-    };
-    
-    function setupDataChannel(dc: RTCDataChannel) {
-      dcRef.current = dc;
-      dc.onmessage = (e) => {
-        const msg = JSON.parse(e.data);
-        if (msg.t === "state") {
-          setRemoteCameraOn(msg.cam);
-          setRemoteMicOn(msg.mic);
-        } else if (msg.t === "chat") {
-          setChatMessages(prev => [...prev, { id: msg.id, sender: msg.sender, text: msg.text, time: msg.time }]);
-        } else if (msg.t === "file") {
-          setSharedFiles(prev => [...prev, { fileId: msg.fileId, name: msg.name, size: msg.size, sender: msg.sender }]);
-        } else if (msg.t === "quality") {
-          setRemoteQualityBars(msg.bars);
-        }
-      };
-      dc.onopen = () => {
-        // Send initial state
-        dc.send(JSON.stringify({ t: "state", cam: !!videoTrack, mic: !!audioTrack }));
-      };
-    }
 
-    pc.onnegotiationneeded = async () => {
-      // Only send if WebSocket is actually open - it may fire before WS connects
-      // since we now create the PC first. The offer is also sent from peer-joined.
-      const ws = wsRef.current;
-      if (!ws || ws.readyState !== WebSocket.OPEN) return;
-      try {
-        makingOfferRef.current = true;
-        await pc.setLocalDescription();
-        ws.send(JSON.stringify({ t: "sdp", description: pc.localDescription }));
-      } catch (err) {
-        console.error(err);
-      } finally {
-        makingOfferRef.current = false;
-      }
-    };
-
-    pc.onicecandidate = (e) => {
-      const ws = wsRef.current;
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ t: "ice", candidate: e.candidate }));
-      }
-    };
-
-    pc.oniceconnectionstatechange = () => {
-      setConnectionState(pc.iceConnectionState);
-      if (pc.iceConnectionState === "failed") {
-        qualityStatsRef.current.iceRestarts++;
-        pc.restartIce();
-      } else if (pc.iceConnectionState === "disconnected") {
-        setTimeout(() => {
-          if (pc.iceConnectionState === "disconnected") {
-            qualityStatsRef.current.iceRestarts++;
-            pc.restartIce();
-            wsRef.current?.send(JSON.stringify({ t: "restart" }));
-          }
-        }, 3000);
-      }
-    };
-
-    pc.ontrack = (e) => {
-      if (e.track.kind === "video") {
-        setRemoteVideoTrack(e.track);
-        e.track.onmute = () => setRemoteCameraOn(false);
-        e.track.onunmute = () => setRemoteCameraOn(true);
-      } else if (e.track.kind === "audio") {
-        setRemoteAudioTrack(e.track);
-        e.track.onmute = () => setRemoteMicOn(false);
-        e.track.onunmute = () => setRemoteMicOn(true);
-      }
-    };
-
-    // Wake lock
     let wakeLock: any = null;
     const requestWakeLock = async () => {
       try {
@@ -294,10 +380,10 @@ export function useCall({
       if (wakeLock) wakeLock.release().catch(()=>{});
       clearTimeout(wsReconnectTimer.current);
       if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ t: "bye" }));
+        try { wsRef.current.send(JSON.stringify({ t: "bye" })); } catch(e){}
       }
       wsRef.current?.close();
-      pc.close();
+      pcRef.current?.close();
     };
   }, [signalToken, iceServers, turnPolicy, isHost]);
 
@@ -496,6 +582,8 @@ export function useCall({
     shareFile,
     qualityBars,
     remoteQualityBars,
-    audioFirst
+    audioFirst,
+    callError,
+    pairedAt
   };
 }

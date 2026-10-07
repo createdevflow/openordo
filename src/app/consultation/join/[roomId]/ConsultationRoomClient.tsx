@@ -461,7 +461,9 @@ export default function ConsultationRoomClient({
     shareFile,
     qualityBars,
     remoteQualityBars,
-    audioFirst
+    audioFirst,
+    callError,
+    pairedAt,
   } = useCall({
     signalToken: creds?.signalToken,
     iceServers: creds?.iceServers || [],
@@ -475,11 +477,13 @@ export default function ConsultationRoomClient({
   const remoteName  = isHost ? patientName  : doctorName
   const remoteColor = isHost ? patientColor : doctorColor
 
-  const remoteStatusText = !remoteJoined
-    ? `Waiting for ${isHost ? (patientName || "patient") : doctorName} to join…`
-    : !remoteCameraOn
-    ? "Camera off"
-    : "Live feed active"
+  const remoteStatusText = callError 
+    ? callError
+    : !remoteJoined
+      ? `Waiting for ${isHost ? (patientName || "patient") : doctorName} to join…`
+      : !remoteCameraOn
+      ? "Camera off"
+      : "Live feed active"
 
   // ── Link generation state (doctor-only) ───────────────────────────────────
   const [linkCopied,      setLinkCopied]      = useState(false)
@@ -492,18 +496,21 @@ export default function ConsultationRoomClient({
   const [showJoinToast,    setShowJoinToast]    = useState(false)
   const prevRemoteJoinedRef = useRef(false)
 
-  // Start timer only when the peer joins
+  // Start timer only when the peer joins and we have pairedAt
   useEffect(() => {
     let timer: NodeJS.Timeout
-    if (remoteJoined) {
-      timer = setInterval(() => {
-        setCallDuration(prev => prev + 1)
-      }, 1000)
+    if (remoteJoined && pairedAt) {
+      const updateDuration = () => {
+        const diff = Math.floor((Date.now() - pairedAt) / 1000);
+        setCallDuration(diff > 0 ? diff : 0);
+      };
+      updateDuration();
+      timer = setInterval(updateDuration, 1000);
     }
     return () => {
       if (timer) clearInterval(timer)
     }
-  }, [remoteJoined])
+  }, [remoteJoined, pairedAt])
 
   // ── Chat state ────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<"patient" | "chat" | "files">(

@@ -22,6 +22,7 @@ interface Room {
   doctor?: RoomClient;
   patient?: RoomClient;
   exp: number;
+  pairedAt?: number;
 }
 
 const rooms = new Map<string, Room>();
@@ -107,9 +108,23 @@ const server = http.createServer((req, res) => {
 const wss = new WebSocketServer({ noServer: true });
 
 server.on("upgrade", (request, socket, head) => {
+  // 1. Path check: only allow / or /ws/signal
+  const parsedUrl = new URL(request.url || "", `http://${request.headers.host || "localhost"}`);
+  if (parsedUrl.pathname !== "/" && parsedUrl.pathname !== "/ws/signal") {
+    socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
+    socket.destroy();
+    return;
+  }
+
+  // 2. Origin check: require correct origins
+  const origin = request.headers.origin;
+  if (origin && origin !== "https://openordo.com" && origin !== "https://www.openordo.com") {
+    socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+    socket.destroy();
+    return;
+  }
+
   // Use X-Forwarded-For to get real client IP when behind Traefik.
-  // Without this, ALL connections appear to come from Traefik's internal IP
-  // and hit the rate limit after just 10 attempts.
   const forwarded = request.headers['x-forwarded-for'] as string | undefined;
   const ip = (forwarded ? forwarded.split(',')[0].trim() : request.socket.remoteAddress) || "";
   
@@ -117,10 +132,6 @@ server.on("upgrade", (request, socket, head) => {
     socket.destroy();
     return;
   }
-
-  const origin = request.headers.origin;
-  // Origin check removed to support www. and other aliases.
-  // Auth is handled by JWT.
 
   wss.handleUpgrade(request, socket, head, (ws) => {
     wss.emit("connection", ws, request);
@@ -201,10 +212,14 @@ wss.on("connection", (ws, req) => {
           };
 
           const peerPresent = role === "doctor" ? !!room.patient : !!room.doctor;
-          sendTo(ws, { t: "joined", role, peerPresent });
+          if (peerPresent && !room.pairedAt) {
+            room.pairedAt = Date.now();
+          }
+
+          sendTo(ws, { t: "joined", role, peerPresent, pairedAt: room.pairedAt });
 
           if (peerPresent) {
-            broadcastToPeer(room, role, { t: "peer-joined", role });
+            broadcastToPeer(room, role, { t: "peer-joined", role, pairedAt: room.pairedAt });
           }
 
         } catch (e) {
