@@ -54,8 +54,13 @@ export function useCall({
   const [qualityBars, setQualityBars] = useState(4);
   const [remoteQualityBars, setRemoteQualityBars] = useState(4);
   const [audioFirst, setAudioFirst] = useState(false);
-  const [callError, setCallError] = useState<string | null>(null);
+  const [callError, setCallError] = useState<string | null>("Connecting to call server…");
   const [pairedAt, setPairedAt] = useState<number | null>(null);
+  const [clockOffset, setClockOffset] = useState<number>(0);
+  
+  const [wsReadyState, setWsReadyState] = useState<number>(WebSocket.CLOSED);
+  const [lastCloseCode, setLastCloseCode] = useState<number | null>(null);
+  const [lastServerError, setLastServerError] = useState<string | null>(null);
   
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -185,6 +190,20 @@ export function useCall({
         } catch(err) {}
       };
 
+      const handleOnline = () => {
+        try {
+          if (pc.iceConnectionState === "disconnected" || pc.iceConnectionState === "failed") {
+            qualityStatsRef.current.iceRestarts++;
+            pc.restartIce();
+            signalSend({ t: "restart" });
+          }
+        } catch(err) {}
+      };
+      window.addEventListener("online", handleOnline);
+      pcRef.current.addEventListener("signalingstatechange", () => {
+         // handle signle state cleanup if needed
+      });
+
       pc.ontrack = (e) => {
         try {
           if (e.track.kind === "video") {
@@ -244,6 +263,7 @@ export function useCall({
       
       ws.onopen = () => {
         try {
+          setWsReadyState(WebSocket.OPEN);
           setCallError(null);
           wsReconnectAttempts.current = 0;
           ws.send(JSON.stringify({ t: "join", token: signalToken }));
@@ -260,8 +280,14 @@ export function useCall({
           const msg = JSON.parse(e.data);
           
           if (msg.t === "joined") {
+            if (msg.serverNow) setClockOffset(msg.serverNow - Date.now());
             setRemoteJoined(msg.peerPresent);
             if (msg.pairedAt) setPairedAt(msg.pairedAt);
+            if (msg.peerPresent === false) {
+               setCallError(`Waiting for ${isHost ? 'Patient' : 'Doctor'} to join…`);
+            } else {
+               setCallError(null);
+            }
             initPC();
             
             const pc = pcRef.current;
@@ -278,6 +304,8 @@ export function useCall({
             }
           } else if (msg.t === "peer-joined") {
             setRemoteJoined(true);
+            setCallError(null);
+            if (msg.serverNow) setClockOffset(msg.serverNow - Date.now());
             if (msg.pairedAt) setPairedAt(msg.pairedAt);
             
             const pc = pcRef.current;
@@ -294,6 +322,7 @@ export function useCall({
             }
           } else if (msg.t === "peer-left") {
             setRemoteJoined(false);
+            setCallError(`Waiting for ${isHost ? 'Patient' : 'Doctor'} to join…`);
             setRemoteVideoTrack(null);
             setRemoteAudioTrack(null);
           } else if (msg.t === "sdp") {
@@ -331,32 +360,45 @@ export function useCall({
           } else if (msg.t === "restart") {
             const pc = pcRef.current;
             if (pc) pc.restartIce();
-          } else if (msg.t === "error") {
-            if (msg.code === "ROOM_FULL") {
-              alert("Room is full");
-            } else if (msg.code === "EXPIRED") {
-              alert("Call has expired");
+            } else if (msg.t === "error") {
+              setLastServerError(msg.code);
+              if (msg.code === "ROOM_FULL") {
+                setCallError("Room full");
+              } else if (msg.code === "EXPIRED") {
+                setCallError("Link expired");
+              } else {
+                setCallError(`Error: ${msg.code}`);
+              }
             }
+          } catch (err) {
+            console.error(err);
           }
-        } catch (err) {
-          console.error(err);
-        }
+        };
+        
+        ws.onerror = () => {
+          setCallError("Can't reach the call server — retrying…");
+        };
+  
+        ws.onclose = (e) => {
+          setWsReadyState(WebSocket.CLOSED);
+          setLastCloseCode(e.code);
+          if (isClosed || e.code === 1000) return; // intentional close
+          if (e.code === 4003) {
+            setCallError("Room full");
+            return;
+          }
+          if (e.code === 4002) {
+            setCallError("Link expired");
+            return;
+          }
+          setCallError("Reconnecting…");
+          qualityStatsRef.current.wsReconnects++;
+          const backoff = Math.min(8000, 500 * Math.pow(2, wsReconnectAttempts.current));
+          const jitter = backoff * 0.2 * Math.random();
+          wsReconnectAttempts.current++;
+          wsReconnectTimer.current = setTimeout(connectWs, backoff + jitter);
+        };
       };
-      
-      ws.onerror = () => {
-        setCallError("Can't reach the call server — retrying…");
-      };
-
-      ws.onclose = (e) => {
-        if (isClosed || e.code === 1000) return; // intentional close
-        setCallError("Can't reach the call server — retrying…");
-        qualityStatsRef.current.wsReconnects++;
-        const backoff = Math.min(8000, 500 * Math.pow(2, wsReconnectAttempts.current));
-        const jitter = backoff * 0.2 * Math.random();
-        wsReconnectAttempts.current++;
-        wsReconnectTimer.current = setTimeout(connectWs, backoff + jitter);
-      };
-    };
 
     connectWs();
 
@@ -584,6 +626,11 @@ export function useCall({
     remoteQualityBars,
     audioFirst,
     callError,
-    pairedAt
+    pairedAt,
+    clockOffset,
+    wsReadyState,
+    lastCloseCode,
+    lastServerError,
+    localRole
   };
 }

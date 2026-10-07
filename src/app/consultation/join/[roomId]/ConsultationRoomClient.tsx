@@ -464,6 +464,11 @@ export default function ConsultationRoomClient({
     audioFirst,
     callError,
     pairedAt,
+    clockOffset,
+    wsReadyState,
+    lastCloseCode,
+    lastServerError,
+    localRole
   } = useCall({
     signalToken: creds?.signalToken,
     iceServers: creds?.iceServers || [],
@@ -479,9 +484,7 @@ export default function ConsultationRoomClient({
 
   const remoteStatusText = callError 
     ? callError
-    : !remoteJoined
-      ? `Waiting for ${isHost ? (patientName || "patient") : doctorName} to join…`
-      : !remoteCameraOn
+    : !remoteCameraOn
       ? "Camera off"
       : "Live feed active"
 
@@ -496,21 +499,30 @@ export default function ConsultationRoomClient({
   const [showJoinToast,    setShowJoinToast]    = useState(false)
   const prevRemoteJoinedRef = useRef(false)
 
-  // Start timer only when the peer joins and we have pairedAt
+  // Start timer only when we have pairedAt
   useEffect(() => {
     let timer: NodeJS.Timeout
-    if (remoteJoined && pairedAt) {
+    if (pairedAt) {
       const updateDuration = () => {
-        const diff = Math.floor((Date.now() - pairedAt) / 1000);
+        const diff = Math.floor((Date.now() + clockOffset - pairedAt) / 1000);
         setCallDuration(diff > 0 ? diff : 0);
       };
       updateDuration();
       timer = setInterval(updateDuration, 1000);
+    } else {
+      setCallDuration(0);
     }
     return () => {
       if (timer) clearInterval(timer)
     }
-  }, [remoteJoined, pairedAt])
+  }, [pairedAt, clockOffset])
+
+  const [isDebug, setIsDebug] = useState(false);
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsDebug(window.location.search.includes("debug=1"));
+    }
+  }, []);
 
   // ── Chat state ────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<"patient" | "chat" | "files">(
@@ -757,21 +769,7 @@ export default function ConsultationRoomClient({
     prevRemoteJoinedRef.current = remoteJoined
   }, [isHost, remoteJoined])
 
-  // Call timer (persisted across refresh via sessionStorage)
-  useEffect(() => {
-    const storageKey = `call_start_${roomId}`
-    let startStr = sessionStorage.getItem(storageKey)
-    if (!startStr) {
-      startStr = Date.now().toString()
-      sessionStorage.setItem(storageKey, startStr)
-    }
-    const startTime = parseInt(startStr, 10)
-
-    const t = setInterval(() => {
-      setCallDuration(Math.floor((Date.now() - startTime) / 1000))
-    }, 1000)
-    return () => clearInterval(t)
-  }, [roomId])
+  // Call timer removed from sessionStorage
 
   // Chat scroll
   useEffect(() => {
@@ -942,7 +940,7 @@ export default function ConsultationRoomClient({
           }}>
             <Clock size={13} color={T.amber} />
             <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "var(--font-jetbrains-mono, monospace)", color: T.amber }}>
-              {formatTime(callDuration)}
+              {pairedAt ? formatTime(callDuration) : "Not started"}
             </span>
           </div>
           <div className="hide-on-mobile" style={{
@@ -1138,6 +1136,17 @@ export default function ConsultationRoomClient({
             <div style={{ width: 40, height: 4, background: "rgba(255,255,255,0.2)", borderRadius: 2, margin: "0 auto 20px" }} />
             <ConsultationSidePanel {...sidePanelProps} />
           </div>
+        </div>
+      )}
+      {isDebug && (
+        <div style={{
+          position: "fixed", bottom: 0, left: 0, right: 0,
+          background: "rgba(0,0,0,0.8)", color: "#0f0",
+          fontSize: 10, padding: 4, zIndex: 9999, fontFamily: "monospace"
+        }}>
+          sig: {process.env.NEXT_PUBLIC_SIGNAL_URL || "wss://openordo.com/ws/signal"} | 
+          wsReady: {wsReadyState} | lastClose: {lastCloseCode || "-"} | lastErr: {lastServerError || "-"} |
+          room: {roomId} | role: {localRole} | peer: {remoteJoined ? "Y" : "N"} | conn: {connectionState}
         </div>
       )}
     </div>
