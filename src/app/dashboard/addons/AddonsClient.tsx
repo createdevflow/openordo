@@ -399,12 +399,12 @@ export function AddonsClient({ availablePlugins, ownedPlugins, currency, country
                       })()}
                     </div>
 
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 16, borderTop: "1px solid var(--line)" }}>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10, paddingTop: 16, marginTop: "auto", borderTop: "1px solid var(--line)" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: "fit-content" }}>
                         <button 
                           style={{ 
                             background: "transparent", border: "none", padding: 0, 
-                            fontSize: 13.5, fontWeight: 700, color: "var(--ink)", 
+                            fontSize: 13, fontWeight: 700, color: "var(--ink)", 
                             cursor: "pointer", textDecoration: "underline", textAlign: "left" 
                           }}
                           onMouseEnter={(e) => e.currentTarget.style.color = "var(--coral)"}
@@ -424,13 +424,13 @@ export function AddonsClient({ availablePlugins, ownedPlugins, currency, country
                         </div>
                       </div>
 
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                         {p.kind === "LIMIT_MODIFIER" && (
                           <button
                             style={{
-                              padding: "8px 16px", borderRadius: 8, fontSize: 13.5, fontWeight: 600,
+                              padding: "7px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600,
                               background: "transparent", color: "var(--forest)", border: "1.5px solid var(--forest)",
-                              cursor: "pointer", transition: "all .15s"
+                              cursor: "pointer", transition: "all .15s", whiteSpace: "nowrap"
                             }}
                             onMouseEnter={(e) => {
                               e.currentTarget.style.background = "var(--forest)";
@@ -447,9 +447,9 @@ export function AddonsClient({ availablePlugins, ownedPlugins, currency, country
                         )}
                         <button
                           style={{
-                            padding: "8px 24px", borderRadius: 8, fontSize: 13.5, fontWeight: 600,
+                            padding: "7px 18px", borderRadius: 8, fontSize: 13, fontWeight: 600,
                             background: "transparent", color: "var(--forest)", border: "1.5px solid var(--forest)",
-                            cursor: "pointer", transition: "all .15s"
+                            cursor: "pointer", transition: "all .15s", whiteSpace: "nowrap"
                           }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.background = "var(--forest)";

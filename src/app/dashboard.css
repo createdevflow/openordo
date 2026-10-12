@@ -279,8 +279,23 @@
 .cw-icon-btn:hover { color: var(--ink); }
 .cw-dot-badge { position: absolute; top: 6px; right: 7px; width: 7px; height: 7px; border-radius: 50%; background: var(--coral); }
 
-.cw-dropdown { position: absolute; top: calc(100% + 12px); right: 0; background: var(--paper-raised); border: 1px solid var(--line); border-radius: 11px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); z-index: 100; padding: 6px; }
-.cw-dropdown-item { display: block; padding: 8px 12px; font-size: 13.5px; color: var(--ink); text-decoration: none; border-radius: 6px; text-align: left; background: transparent; border: none; cursor: pointer; }
+.cw-dropdown-item {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  white-space: nowrap;
+  padding: 8px 12px;
+  font-size: 13.5px;
+  color: var(--ink);
+  text-decoration: none;
+  border-radius: 6px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  box-sizing: border-box;
+}
 .cw-dropdown-item:hover { background: var(--paper); }
 
 .cw-main { padding: 28px; max-width: 1280px; margin: 0 auto; width: 100%; }
@@ -303,7 +318,7 @@
 .cw-stat-card .lbl { font-size: 13px; color: var(--ink-soft); margin-top: 2px; }
 .cw-stat-card .delta { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 3px; }
 
-.cw-panel { background: var(--paper-raised); border: 1px solid var(--line); border-radius: 11px; }
+.cw-panel { background: var(--paper-raised); border: 1px solid var(--line); border-radius: 11px; overflow: hidden; }
 .cw-panel-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--line); }
 .cw-panel-head h3 { font-size: 15.5px; font-weight: 700; margin: 0; }
 .cw-panel-body { padding: 18px 20px; }
@@ -321,10 +336,13 @@
 .cw-table-sticky-col th:first-child, .cw-table-sticky-col td:first-child {
   position: sticky;
   left: 0;
-  background: var(--paper);
+  background: var(--paper-raised);
   z-index: 10;
 }
 .cw-table-sticky-col th:first-child { z-index: 11; }
+.cw-table tr:hover td:first-child, .cw-table tr.clickable:hover td:first-child {
+  background: var(--paper) !important;
+}
 .cw-table tr:last-child td { border-bottom: none; }
 .cw-table tr.clickable:hover { background: var(--paper); cursor: pointer; }
 .cw-table .num { font-family: 'JetBrains Mono', monospace; font-size: 13px; }
@@ -509,21 +527,10 @@
 }
 .plugin-upsell-btn:hover { background: #b45309; }
 
-/* Add-ons Page Grid */
 .cw-addons-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
   gap: 20px;
-}
-@media (max-width: 992px) {
-  .cw-addons-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-@media (max-width: 640px) {
-  .cw-addons-grid {
-    grid-template-columns: 1fr;
-  }
 }
 .cw-addons-section-title {
   font-size: 17px; font-weight: 700; color: var(--ink);
@@ -541,7 +548,9 @@
   padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  justify-content: space-between;
+  min-height: 270px;
+  box-sizing: border-box;
 }
 .cw-myaddon-header {
   display: flex; align-items: center; justify-content: space-between;

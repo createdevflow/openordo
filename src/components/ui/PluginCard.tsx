@@ -149,7 +149,7 @@ export function PluginCard({
           <ExpandableDescription text={plugin.description || plugin.tagline} />
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 16 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10, paddingTop: 16, marginTop: "auto", borderTop: "1px solid var(--line)" }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>
             {plugin.isComingSoon ? "TBD" : primaryPrice}
           </div>
@@ -157,11 +157,12 @@ export function PluginCard({
           {onPurchase && (
             <button
               style={{
-                padding: "8px 24px", borderRadius: 8, fontSize: 13.5, fontWeight: 600,
+                padding: "7px 18px", borderRadius: 8, fontSize: 13, fontWeight: 600,
                 background: "transparent", color: "var(--forest)", border: "1.5px solid var(--forest)",
                 cursor: plugin.isComingSoon ? "not-allowed" : "pointer",
                 opacity: plugin.isComingSoon ? 0.5 : 1,
-                transition: "all .15s"
+                transition: "all .15s",
+                whiteSpace: "nowrap"
               }}
               onMouseEnter={(e) => {
                 if (!plugin.isComingSoon) {
