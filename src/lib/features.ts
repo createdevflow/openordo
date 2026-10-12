@@ -6,6 +6,12 @@ export const DEFAULT_TIER_FEATURES: Record<string, string[]> = {
     "core.appointment_calendar",
     "core.doctor_profiles"
   ],
+  free: [
+    "core.patient_management",
+    "core.appointment_calendar",
+    "core.doctor_profiles",
+    "scheduling.online_booking"
+  ],
   practice: [
     "core.patient_management",
     "core.appointment_calendar",
@@ -16,6 +22,19 @@ export const DEFAULT_TIER_FEATURES: Record<string, string[]> = {
     "communication.reminders"
   ],
   "clinic-group": [
+    "core.patient_management",
+    "core.appointment_calendar",
+    "core.doctor_profiles",
+    "scheduling.online_booking",
+    "scheduling.multi_doctor",
+    "scheduling.waitlist",
+    "billing.invoices",
+    "billing.revenue_reports",
+    "billing.insurance",
+    "communication.reminders",
+    "support.data_export"
+  ],
+  clinic: [
     "core.patient_management",
     "core.appointment_calendar",
     "core.doctor_profiles",
@@ -44,6 +63,7 @@ export interface ClinicPlanDetails {
   promoId?: string | null
   promoExpiresAt?: Date | null
   trialEndsAt?: Date | null
+  isTrialExpired?: boolean
   cancelAtPeriodEnd?: boolean
   currentPeriodEnd?: Date | null
 }
@@ -95,7 +115,68 @@ export async function getClinicSubscriptionDetails(clinicId: string): Promise<Cl
       activeFeatures: features,
       isDefaultFree: true,
       promoId: null,
-      promoExpiresAt: null
+      promoExpiresAt: null,
+      isTrialExpired: false
+    }
+  }
+
+  const now = new Date()
+  const hasActivePaidPeriod = Boolean(
+    subscription.currentPeriodEnd && new Date(subscription.currentPeriodEnd).getTime() > now.getTime()
+  )
+  const isTrialExpired = Boolean(
+    subscription.trialEndsAt &&
+    new Date(subscription.trialEndsAt).getTime() <= now.getTime() &&
+    !hasActivePaidPeriod
+  )
+
+  // Expired Trial Enforcement:
+  // If the trial for a paid plan has ended and there is no active paid renewal period,
+  // the clinic automatically downgrades to the default free plan tier.
+  if (isTrialExpired && !subscription.plan.isDefaultFree) {
+    const defaultPlan = await db.plan.findFirst({
+      where: { isDefaultFree: true },
+      include: {
+        planFeatures: {
+          where: { included: true },
+          include: { feature: true }
+        }
+      }
+    })
+
+    if (defaultPlan) {
+      // Synchronize database to reflect the default free plan while keeping trialEndsAt for audit/UI
+      await db.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          planId: defaultPlan.id,
+          status: "ACTIVE"
+        }
+      }).catch(console.error)
+
+      const slug = defaultPlan.slug || "free"
+      const features = defaultPlan.planFeatures?.length
+        ? defaultPlan.planFeatures.map(pf => pf.feature).filter(f => f.isGloballyEnabled).map(f => f.key)
+        : (DEFAULT_TIER_FEATURES[slug] || DEFAULT_TIER_FEATURES.free || DEFAULT_TIER_FEATURES.starter)
+
+      return {
+        planId: defaultPlan.id,
+        planName: defaultPlan.name,
+        planSlug: slug,
+        status: "ACTIVE",
+        billingCycle: subscription.billingCycle || "monthly",
+        doctorLimit: defaultPlan.doctorLimit ?? 1,
+        patientLimit: defaultPlan.patientLimit ?? 200,
+        bookingPageLimit: defaultPlan.bookingPageLimit ?? null,
+        activeFeatures: features,
+        isDefaultFree: true,
+        promoId: null,
+        promoExpiresAt: null,
+        trialEndsAt: subscription.trialEndsAt,
+        isTrialExpired: true,
+        cancelAtPeriodEnd: false,
+        currentPeriodEnd: null
+      }
     }
   }
 
@@ -160,6 +241,7 @@ export async function getClinicSubscriptionDetails(clinicId: string): Promise<Cl
     promoId: subscription.promoId,
     promoExpiresAt: subscription.promoExpiresAt,
     trialEndsAt: subscription.trialEndsAt,
+    isTrialExpired,
     cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
     currentPeriodEnd: subscription.currentPeriodEnd,
   }

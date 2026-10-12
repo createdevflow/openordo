@@ -86,18 +86,25 @@ export async function POST(req: Request) {
         })
       }
     } else if (type === "PLAN") {
+      const nextMonth = new Date()
+      nextMonth.setDate(nextMonth.getDate() + 30)
+
       await db.subscription.upsert({
         where: { clinicId },
         update: { 
           planId: itemId, 
           status: "ACTIVE",
-          razorpaySubscriptionId: razorpay_subscription_id
+          razorpaySubscriptionId: razorpay_subscription_id,
+          trialEndsAt: null,
+          currentPeriodEnd: nextMonth,
         },
         create: {
           clinicId,
           planId: itemId,
           status: "ACTIVE",
-          razorpaySubscriptionId: razorpay_subscription_id
+          razorpaySubscriptionId: razorpay_subscription_id,
+          trialEndsAt: null,
+          currentPeriodEnd: nextMonth,
         }
       })
     }

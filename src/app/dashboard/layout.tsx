@@ -90,6 +90,8 @@ export default async function DashboardLayout({
       activePlugins={activePlugins}
       defaultCollapsed={isCollapsed}
       promoExpiresAt={planDetails.promoExpiresAt ? planDetails.promoExpiresAt.toISOString() : null}
+      trialEndsAt={planDetails.trialEndsAt ? planDetails.trialEndsAt.toISOString() : null}
+      isTrialExpired={planDetails.isTrialExpired ?? false}
       clinicStatus={clinic.status}
       clinicId={clinicId}
       showFeedbackWidget={feedbackFlag?.enabled ?? false}

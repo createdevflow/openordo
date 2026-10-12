@@ -40,33 +40,29 @@ export async function GET(request: Request) {
       downgraded++
     }
 
-    // 2. Downgrade expired trials that have no active Stripe subscription (no payment method was added)
+    // 2. Downgrade expired trials that have no active paid subscription to default free plan
     const expiredTrials = await db.subscription.findMany({
       where: {
-        status: "TRIALING",
         trialEndsAt: { lt: now },
-        razorpaySubscriptionId: null,  // No Razorpay subscription = no payment set up
+        plan: { isDefaultFree: false },
+        OR: [
+          { currentPeriodEnd: null },
+          { currentPeriodEnd: { lt: now } }
+        ]
       }
     })
-    console.log(`Found ${expiredTrials.length} expired trials without payment method`)
+    console.log(`Found ${expiredTrials.length} expired trials without payment`)
 
     let trialDowngraded = 0
     for (const sub of expiredTrials) {
-      await db.clinic.update({
-        where: { id: sub.clinicId },
-        data: {
-          status: "LOCKED_CANCELLED",
-          lockedAt: now,
-        }
-      })
       await db.subscription.update({
         where: { id: sub.id },
         data: {
-          status: "CANCELED",
-          trialEndsAt: null,
+          planId: defaultFreePlan.id,
+          status: "ACTIVE",
         }
       })
-      console.log(`Locked clinic ${sub.clinicId} (trial expired, no payment)`)
+      console.log(`Downgraded clinic ${sub.clinicId} (trial expired) to ${defaultFreePlan.name}`)
       trialDowngraded++
     }
 

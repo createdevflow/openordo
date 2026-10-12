@@ -198,11 +198,12 @@ export async function changeClinicPlanAction(targetPlanId: string) {
 
   await db.subscription.upsert({
     where: { clinicId },
-    update: { planId: targetPlan.id, status: "ACTIVE" },
+    update: { planId: targetPlan.id, status: "ACTIVE", trialEndsAt: null },
     create: {
       clinicId,
       planId: targetPlan.id,
-      status: "ACTIVE"
+      status: "ACTIVE",
+      trialEndsAt: null
     }
   })
 

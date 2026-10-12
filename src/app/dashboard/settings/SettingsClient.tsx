@@ -607,14 +607,59 @@ export function SettingsClient({
                         · Renews on {Intl.DateTimeFormat("en-GB").format(new Date(planDetails.currentPeriodEnd))}
                       </span>
                     )}
-                    {planDetails?.trialEndsAt && (
-                      <span className="text-amber ml-2">
-                        · Trial ends on {Intl.DateTimeFormat("en-GB").format(new Date(planDetails.trialEndsAt))}
-                      </span>
-                    )}
+                    {planDetails?.trialEndsAt && (() => {
+                      const isExpired = new Date(planDetails.trialEndsAt).getTime() <= Date.now()
+                      return (
+                        <span className={isExpired ? "text-coral ml-2 font-medium" : "text-amber ml-2 font-medium"}>
+                          · {isExpired ? "Trial expired on " : "Trial ends on "}
+                          {Intl.DateTimeFormat("en-GB").format(new Date(planDetails.trialEndsAt))}
+                        </span>
+                      )
+                    })()}
                   </p>
                 </div>
               </div>
+
+              {planDetails?.trialEndsAt && new Date(planDetails.trialEndsAt).getTime() <= Date.now() && (
+                <div style={{
+                  background: "var(--coral-soft)",
+                  border: "1px solid rgba(224,36,36,0.25)",
+                  borderRadius: 8,
+                  padding: "16px 20px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 16
+                }}>
+                  <div>
+                    <h5 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--coral)" }}>
+                      Free Trial Expired
+                    </h5>
+                    <p style={{ margin: "4px 0 0 0", fontSize: 13, color: "var(--coral)", opacity: 0.95, lineHeight: 1.5 }}>
+                      Your trial ended on {Intl.DateTimeFormat("en-GB").format(new Date(planDetails.trialEndsAt))}. Your clinic has transitioned to the {planDetails.planName} plan with standard free limits (1 doctor, 200 patients).
+                      <br/>Upgrade to a paid plan to unlock unlimited doctors, patient records, and premium clinical & billing features.
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      document.getElementById("available-plans")?.scrollIntoView({ behavior: "smooth" })
+                    }}
+                    style={{
+                      background: "var(--coral)",
+                      color: "#fff",
+                      border: "none",
+                      padding: "8px 16px",
+                      borderRadius: 6,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      fontSize: 13,
+                      whiteSpace: "nowrap"
+                    }}
+                  >
+                    Upgrade Plan
+                  </button>
+                </div>
+              )}
 
               {planDetails?.promoExpiresAt && promoTimeLeft && (
                 <div style={{

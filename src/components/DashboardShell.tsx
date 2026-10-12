@@ -20,6 +20,8 @@ export function DashboardShell({
   activePlugins = [],
   defaultCollapsed = false,
   promoExpiresAt = null,
+  trialEndsAt = null,
+  isTrialExpired = false,
   clinicStatus = "ACTIVE",
   pendingDataRequests = 0,
   recentDataRequests = [],
@@ -38,6 +40,8 @@ export function DashboardShell({
   activePlugins?: string[]
   defaultCollapsed?: boolean
   promoExpiresAt?: string | null
+  trialEndsAt?: string | null
+  isTrialExpired?: boolean
   clinicStatus?: string
   pendingDataRequests?: number
   recentDataRequests?: any[]
@@ -215,6 +219,28 @@ export function DashboardShell({
                 >
                   <X size={16} />
                 </button>
+              </div>
+            </div>
+          )}
+          {isTrialExpired && (
+            <div style={{ 
+              background: "var(--coral-soft)", 
+              color: "var(--coral)", 
+              padding: "10px 24px", 
+              fontSize: 13.5, 
+              fontWeight: 600,
+              display: "flex", 
+              alignItems: "center",
+              justifyContent: "space-between",
+              borderBottom: "1px solid rgba(224,36,36,0.18)"
+            }}>
+              <div>
+                <span>⚠️ Your free trial has expired and your account has transitioned to the {planName}. Upgrade to unlock all features.</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <a href="/dashboard/settings?tab=subscription" style={{ background: "var(--coral)", color: "#fff", padding: "4px 12px", borderRadius: 4, textDecoration: "none", fontSize: 12 }}>
+                  Upgrade Now
+                </a>
               </div>
             </div>
           )}
