@@ -141,6 +141,7 @@ interface SidePanelProps {
   sendChat: (e: React.FormEvent) => void
   sharedFiles: { id: string; fileId: string; name: string; size: number; mime: string; sender: string; timestamp: number; url?: string }[]
   uploadFile: (e: React.ChangeEvent<HTMLInputElement>) => void
+  creds?: any
 }
 
 function ConsultationSidePanel({
@@ -151,6 +152,7 @@ function ConsultationSidePanel({
   chatMessages, chatEndRef,
   newMessage, setNewMessage, sendChat,
   sharedFiles, uploadFile,
+  creds,
 }: SidePanelProps) {
   const tabStyle = (tab: string): React.CSSProperties => ({
     background: "transparent", border: "none", padding: "10px 14px",
@@ -832,6 +834,7 @@ export default function ConsultationRoomClient({
     chatMessages, chatEndRef,
     newMessage, setNewMessage, sendChat: onChatSubmit,
     sharedFiles, uploadFile,
+    creds,
   }
 
   // ── Control Bar ───────────────────────────────────────────────────────────

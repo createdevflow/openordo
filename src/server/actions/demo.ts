@@ -36,6 +36,41 @@ export async function createDemoRequestAction(data: any, baseUrl?: string) {
   }
 }
 
+async function resolveCountryCode(rawCountry?: string | null): Promise<string> {
+  if (!rawCountry) return "US"
+  const trimmed = rawCountry.trim()
+  if (trimmed.length === 2) {
+    return trimmed.toUpperCase()
+  }
+  const lower = trimmed.toLowerCase()
+  if (lower === "india" || lower.includes("india")) return "IN"
+  if (lower === "united states" || lower === "usa" || lower === "us" || lower.includes("america")) return "US"
+  if (lower === "united kingdom" || lower === "uk" || lower.includes("kingdom")) return "GB"
+  if (lower === "united arab emirates" || lower === "uae" || lower.includes("emirates")) return "AE"
+  if (lower === "canada") return "CA"
+  if (lower === "australia") return "AU"
+  if (lower === "germany") return "DE"
+  if (lower === "france") return "FR"
+  if (lower === "singapore") return "SG"
+
+  try {
+    const configs = await db.taxCountryConfig.findMany({
+      where: { isActive: true },
+      select: { countryCode: true, countryName: true }
+    })
+    const matched = configs.find(
+      (c) =>
+        c.countryCode.toLowerCase() === lower ||
+        c.countryName.toLowerCase() === lower
+    )
+    if (matched) return matched.countryCode
+  } catch {
+    // fallback
+  }
+
+  return "US"
+}
+
 async function _generateDemoCredentials(id: string) {
   const req = await db.demoRequest.findUnique({ where: { id } })
   if (!req) return { error: "Demo request not found" }
@@ -51,17 +86,24 @@ async function _generateDemoCredentials(id: string) {
   if (!tempUserId) {
     // Fetch demo default plan
     const demoPlanSetting = await db.globalSetting.findUnique({ where: { key: "demo_default_plan_id" } })
-    const planId = demoPlanSetting?.value
+    let planId = demoPlanSetting?.value
+    if (!planId) {
+      const defaultPlan = await db.plan.findFirst({ where: { isActive: true } })
+      planId = defaultPlan?.id
+    }
 
     // 1. Create a dummy clinic
     const clinicName = `${req.companyName || req.firstName + "'s"} Demo Clinic`
     const clinicSlug = `demo-${randomBytes(6).toString("hex")}`
+    const countryCode = await resolveCountryCode(req.country)
     
     const clinicData: any = {
       name: clinicName,
       slug: clinicSlug,
       type: "Demo",
-      country: req.country || "US",
+      countryCode,
+      detectedCountryAtSignup: req.country || countryCode,
+      phone: req.phone || null,
       status: "ACTIVE"
     }
     
