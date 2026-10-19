@@ -13,7 +13,8 @@ import {
   submitBaaRequestAction
 } from "@/server/actions/settings"
 import { saveBookingPageConfig } from "@/server/actions/bookingPageConfig"
-import { Copy, RefreshCw, Eye, EyeOff, ExternalLink, Lock, Check, ArrowUpRight, Sparkles, Download, Calendar, Receipt, Users, X, FileText, Palette, Globe, Plus, Trash2, ImagePlus, Upload } from "lucide-react"
+import { submitDeletionRequest } from "@/server/actions/deletion-request"
+import { Copy, RefreshCw, Eye, EyeOff, ExternalLink, Lock, Check, ArrowUpRight, Sparkles, Download, Calendar, Receipt, Users, X, FileText, Palette, Globe, Plus, Trash2, ImagePlus, Upload, Info, AlertTriangle } from "lucide-react"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { toast } from "sonner"
 import { StorageTab } from "./StorageTab"
@@ -127,6 +128,155 @@ export function SettingsClient({
     practiceLicenseFile: null as File | null,
     skipPracticeLicense: false,
   })
+
+  // Account Deletion State
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [retentionPinned, setRetentionPinned] = useState(false)
+  const [retentionHovered, setRetentionHovered] = useState(false)
+  const retentionRef = useRef<HTMLDivElement>(null)
+  const popoverRef = useRef<HTMLDivElement>(null)
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const [popoverPos, setPopoverPos] = useState<{
+    top?: number
+    bottom?: number
+    left: number
+    openUp: boolean
+  } | null>(null)
+  const showRetentionInfo = retentionPinned || retentionHovered
+  const [deleteEmail, setDeleteEmail] = useState(initialUser?.email || "")
+  const [deleteReason, setDeleteReason] = useState("")
+  const [deleteConsent, setDeleteConsent] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  const handleRetentionEnter = () => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current)
+      hoverTimeoutRef.current = null
+    }
+    setRetentionHovered(true)
+  }
+
+  const handleRetentionLeave = () => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current)
+    }
+    hoverTimeoutRef.current = setTimeout(() => {
+      setRetentionHovered(false)
+    }, 180)
+  }
+
+  useEffect(() => {
+    if (!showRetentionInfo) {
+      setPopoverPos(null)
+      return
+    }
+
+    const calcPosition = () => {
+      if (!retentionRef.current) return
+      const rect = retentionRef.current.getBoundingClientRect()
+      const popoverWidth = Math.min(340, window.innerWidth - 32)
+      const spaceBelow = window.innerHeight - rect.bottom
+      const spaceAbove = rect.top
+
+      // Automatically flip upwards if space below is limited or if it would cut off
+      const openUp = spaceBelow < 250 && spaceAbove > spaceBelow
+
+      // Horizontal alignment: clamp within viewport edges so it never bleeds off either side
+      let left = rect.left
+      if (left + popoverWidth > window.innerWidth - 16) {
+        left = window.innerWidth - popoverWidth - 16
+      }
+      if (left < 16) {
+        left = 16
+      }
+
+      if (openUp) {
+        setPopoverPos({
+          bottom: window.innerHeight - rect.top + 8,
+          left,
+          openUp: true
+        })
+      } else {
+        setPopoverPos({
+          top: rect.bottom + 8,
+          left,
+          openUp: false
+        })
+      }
+    }
+
+    calcPosition()
+    window.addEventListener("scroll", calcPosition, true)
+    window.addEventListener("resize", calcPosition)
+    return () => {
+      window.removeEventListener("scroll", calcPosition, true)
+      window.removeEventListener("resize", calcPosition)
+    }
+  }, [showRetentionInfo])
+
+  useEffect(() => {
+    if (!retentionPinned) return
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (
+        retentionRef.current && !retentionRef.current.contains(target) &&
+        popoverRef.current && !popoverRef.current.contains(target)
+      ) {
+        setRetentionPinned(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [retentionPinned])
+
+  const [highlightExport, setHighlightExport] = useState(false)
+
+  function handleDownloadBackup() {
+    setShowDeleteModal(false)
+    handleTabChange("account")
+    setHighlightExport(true)
+    setTimeout(() => {
+      const el = document.getElementById("export-clinic-data")
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" })
+      }
+    }, 80)
+    setTimeout(() => {
+      setHighlightExport(false)
+    }, 2500)
+  }
+
+  async function handleSubmitDeletion() {
+    if (!deleteEmail || !deleteReason) {
+      setDeleteError("Email and reason are required.")
+      return
+    }
+    if (!deleteConsent) {
+      setDeleteError("Please confirm your understanding of the deletion terms.")
+      return
+    }
+
+    setIsDeleting(true)
+    setDeleteError(null)
+    try {
+      const res = await submitDeletionRequest({ email: deleteEmail, reason: deleteReason })
+      if (res.error) {
+        setDeleteError(res.error)
+      } else {
+        setShowDeleteModal(false)
+        showAlert({
+          title: "Deletion Request Received",
+          body: res.message || "Your account deletion request has been submitted. Our team will review it, and a confirmation email has been scheduled. In accordance with healthcare data retention requirements, you retain a 30-day grace period.",
+          tone: "primary"
+        })
+      }
+    } catch (err: any) {
+      setDeleteError(err.message || "Failed to submit deletion request.")
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   const [origin, setOrigin] = useState("")
 
@@ -464,7 +614,7 @@ export function SettingsClient({
   }
 
   return (
-    <div className="flex flex-col gap-6 w-full">
+    <div className="flex flex-col gap-6 w-full pb-20">
       {initialClinic.status === "LOCKED_CANCELLED" && (
         <div className="bg-coral-soft border border-coral/30 rounded-xl p-5">
           <div className="flex items-start gap-3">
@@ -533,62 +683,188 @@ export function SettingsClient({
         </nav>
       </aside>
       
-      <main className="flex-1 w-full min-w-0 pt-1">
+      <main className="flex-1 w-full min-w-0 pt-1 pb-20">
       {tab === "clinic" && (
-        <div className="bg-white border border-line rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.02)] overflow-hidden">
-          <div className="px-6 py-5 border-b border-line bg-paper-raised">
-            <h3 className="text-[17px] font-bold m-0 text-ink">Clinic Profile</h3>
-            <p className="text-[13px] text-ink-soft mt-1 mb-0">Manage your clinic&apos;s public information and contact details.</p>
-          </div>
-          <div className="p-6 flex flex-col gap-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="cw-field !mb-0"><label>Clinic name</label><input className="cw-input" value={clinic.name} onChange={e => setClinic({ ...clinic, name: e.target.value })} disabled={isPending} /></div>
-              <div className="cw-field !mb-0"><label>Clinic type</label>
-                <select className="cw-select" value={clinic.type} onChange={e => setClinic({ ...clinic, type: e.target.value })} disabled={isPending}>
-                  <option>General practice</option><option>Dental</option><option>Pediatrics</option><option>Physiotherapy</option><option>Multi-specialty</option>
-                </select>
-              </div>
+        <div className="flex flex-col gap-6">
+          <div className="bg-white border border-line rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.02)] overflow-hidden">
+            <div className="px-6 py-5 border-b border-line bg-paper-raised">
+              <h3 className="text-[17px] font-bold m-0 text-ink">Clinic Profile</h3>
+              <p className="text-[13px] text-ink-soft mt-1 mb-0">Manage your clinic&apos;s public information and contact details.</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="cw-field !mb-0"><label>Phone</label><input className="cw-input" value={clinic.phone || ""} onChange={e => setClinic({ ...clinic, phone: e.target.value })} disabled={isPending} /></div>
-              <div className="cw-field !mb-0"><label>WhatsApp number</label><input className="cw-input" value={clinic.whatsappNumber || ""} onChange={e => setClinic({ ...clinic, whatsappNumber: e.target.value })} disabled={isPending} /></div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="cw-field !mb-0"><label>Address</label><input className="cw-input" value={clinic.address || ""} onChange={e => setClinic({ ...clinic, address: e.target.value })} disabled={isPending} /></div>
-              <div className="cw-field !mb-0">
-                <label>Country / Billing Region</label>
-                <select className="cw-select" value={clinic.countryCode || "IN"} onChange={e => setClinic({ ...clinic, countryCode: e.target.value })} disabled={isPending}>
-                  <option value="IN">India (₹ INR / GST)</option>
-                  <option value="US">United States ($ USD)</option>
-                  <option value="GB">United Kingdom ($ USD)</option>
-                  <option value="CA">Canada ($ USD)</option>
-                  <option value="AU">Australia ($ USD)</option>
-                  <option value="OTHER">Other ($ USD)</option>
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="cw-field !mb-0"><label>Opens at</label><input className="cw-input" type="time" value={clinic.openTime || "09:00"} onChange={e => setClinic({ ...clinic, openTime: e.target.value })} disabled={isPending} /></div>
-              <div className="cw-field !mb-0"><label>Closes at</label><input className="cw-input" type="time" value={clinic.closeTime || "18:00"} onChange={e => setClinic({ ...clinic, closeTime: e.target.value })} disabled={isPending} /></div>
-            </div>
-            <div className="border-t border-line pt-5 mt-2">
-              <label className="flex items-start gap-3 cursor-pointer group">
-                <input 
-                  type="checkbox" 
-                  className="mt-0.5 cw-checkbox" 
-                  checked={clinic.shareRecordsWithPatients} 
-                  onChange={e => setClinic({ ...clinic, shareRecordsWithPatients: e.target.checked })} 
-                  disabled={isPending} 
-                />
-                <div className="flex flex-col">
-                  <span className="font-semibold text-ink group-hover:text-forest transition-colors">Share Records with Patients</span>
-                  <span className="text-sm text-ink-soft mt-0.5">Allow patients to view their medical records, prescriptions, and invoices via the Patient Portal.</span>
+            <div className="p-6 flex flex-col gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="cw-field !mb-0"><label>Clinic name</label><input className="cw-input" value={clinic.name} onChange={e => setClinic({ ...clinic, name: e.target.value })} disabled={isPending} /></div>
+                <div className="cw-field !mb-0"><label>Clinic type</label>
+                  <select className="cw-select" value={clinic.type} onChange={e => setClinic({ ...clinic, type: e.target.value })} disabled={isPending}>
+                    <option>General practice</option><option>Dental</option><option>Pediatrics</option><option>Physiotherapy</option><option>Multi-specialty</option>
+                  </select>
                 </div>
-              </label>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="cw-field !mb-0"><label>Phone</label><input className="cw-input" value={clinic.phone || ""} onChange={e => setClinic({ ...clinic, phone: e.target.value })} disabled={isPending} /></div>
+                <div className="cw-field !mb-0"><label>WhatsApp number</label><input className="cw-input" value={clinic.whatsappNumber || ""} onChange={e => setClinic({ ...clinic, whatsappNumber: e.target.value })} disabled={isPending} /></div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="cw-field !mb-0"><label>Address</label><input className="cw-input" value={clinic.address || ""} onChange={e => setClinic({ ...clinic, address: e.target.value })} disabled={isPending} /></div>
+                <div className="cw-field !mb-0">
+                  <label>Country / Billing Region</label>
+                  <select className="cw-select" value={clinic.countryCode || "IN"} onChange={e => setClinic({ ...clinic, countryCode: e.target.value })} disabled={isPending}>
+                    <option value="IN">India (₹ INR / GST)</option>
+                    <option value="US">United States ($ USD)</option>
+                    <option value="GB">United Kingdom ($ USD)</option>
+                    <option value="CA">Canada ($ USD)</option>
+                    <option value="AU">Australia ($ USD)</option>
+                    <option value="OTHER">Other ($ USD)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="cw-field !mb-0"><label>Opens at</label><input className="cw-input" type="time" value={clinic.openTime || "09:00"} onChange={e => setClinic({ ...clinic, openTime: e.target.value })} disabled={isPending} /></div>
+                <div className="cw-field !mb-0"><label>Closes at</label><input className="cw-input" type="time" value={clinic.closeTime || "18:00"} onChange={e => setClinic({ ...clinic, closeTime: e.target.value })} disabled={isPending} /></div>
+              </div>
+              <div className="border-t border-line pt-5 mt-2">
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <input 
+                    type="checkbox" 
+                    className="mt-0.5 cw-checkbox" 
+                    checked={clinic.shareRecordsWithPatients} 
+                    onChange={e => setClinic({ ...clinic, shareRecordsWithPatients: e.target.checked })} 
+                    disabled={isPending} 
+                  />
+                  <div className="flex flex-col">
+                    <span className="font-semibold text-ink group-hover:text-forest transition-colors">Share Records with Patients</span>
+                    <span className="text-sm text-ink-soft mt-0.5">Allow patients to view their medical records, prescriptions, and invoices via the Patient Portal.</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+            <div className="px-6 py-4 bg-paper-raised border-t border-line flex justify-end">
+              <button className="cw-btn cw-btn-primary" onClick={handleClinicSave} disabled={isPending}>Save changes</button>
             </div>
           </div>
-          <div className="px-6 py-4 bg-paper-raised border-t border-line flex justify-end">
-            <button className="cw-btn cw-btn-primary" onClick={handleClinicSave} disabled={isPending}>Save changes</button>
+
+          {/* Account Deletion & Data Management Card */}
+          <div className="bg-white border border-line rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.02)] relative">
+            <div className="px-6 py-3.5 border-b border-line bg-paper-raised rounded-t-xl flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h3 className="text-[15px] font-bold m-0 text-ink">Account &amp; Data Deletion</h3>
+                <div 
+                  ref={retentionRef}
+                  className="relative inline-flex items-center"
+                  onMouseEnter={handleRetentionEnter}
+                  onMouseLeave={handleRetentionLeave}
+                >
+                  <button 
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setRetentionPinned(prev => !prev)
+                    }}
+                    className={`text-ink-soft hover:text-ink transition-colors p-1 rounded-full ${showRetentionInfo ? 'bg-paper text-ink' : 'hover:bg-paper'}`}
+                    title="Data retention policy information"
+                    aria-label="Data retention policy information"
+                    aria-expanded={showRetentionInfo}
+                  >
+                    <Info size={14} className="text-moss" />
+                  </button>
+                  {showRetentionInfo && popoverPos && (
+                    <div 
+                      ref={popoverRef}
+                      onMouseEnter={handleRetentionEnter}
+                      onMouseLeave={handleRetentionLeave}
+                      className="fixed z-[9999] w-[min(340px,calc(100vw-32px))] p-3.5 text-[12px] bg-paper-raised text-ink border border-line rounded-xl shadow-2xl animate-in fade-in zoom-in-95 duration-150"
+                      style={{ 
+                        lineHeight: 1.55,
+                        left: popoverPos.left,
+                        ...(popoverPos.openUp 
+                          ? { bottom: popoverPos.bottom } 
+                          : { top: popoverPos.top }
+                        )
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="font-semibold text-ink mb-1.5 flex items-center justify-between">
+                        <span>Data Retention &amp; Terms</span>
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            setRetentionPinned(false)
+                            setRetentionHovered(false)
+                          }} 
+                          className="text-ink-soft hover:text-ink p-0.5 rounded hover:bg-paper"
+                          aria-label="Close"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                      <p className="m-0 text-ink-soft text-[11.5px]">
+                        Upon requesting deletion, your account enters a 30-day grace period where data can still be exported. After 30 days, personal data is permanently deleted from active systems. Medical and tax compliance records are retained as required by healthcare laws.
+                      </p>
+                      <div className="mt-2.5 pt-2 border-t border-line flex items-center gap-2 text-[11px]">
+                        <a href="/legal/retention" target="_blank" rel="noopener noreferrer" className="text-forest hover:underline font-semibold flex items-center gap-0.5">
+                          Retention Policy <ExternalLink size={10} />
+                        </a>
+                        <span className="text-ink-soft">·</span>
+                        <a href="/legal/terms" target="_blank" rel="noopener noreferrer" className="text-forest hover:underline font-semibold flex items-center gap-0.5">
+                          Terms <ExternalLink size={10} />
+                        </a>
+                        <span className="text-ink-soft">·</span>
+                        <a href="/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-forest hover:underline font-semibold flex items-center gap-0.5">
+                          Privacy <ExternalLink size={10} />
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <span className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200/60 px-2 py-0.5 rounded-full">
+                Danger Zone
+              </span>
+            </div>
+
+            <div className="p-5 rounded-b-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <p className="text-[13.5px] font-semibold text-ink m-0">
+                  Delete Clinic Account
+                </p>
+                <p className="text-[12px] text-ink-soft mt-0.5 mb-0 max-w-xl">
+                  Permanently delete your clinic account and associated records. We recommend downloading a backup archive before submitting a request.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleDownloadBackup}
+                  className="cw-btn cw-btn-ghost cw-btn-sm"
+                  style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12.5 }}
+                  title="Go to Account & Export to download clinic data"
+                >
+                  <Download size={13} /> Backup Data
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteEmail(user.email || initialUser?.email || "")
+                    setDeleteError(null)
+                    setDeleteConsent(false)
+                    setShowDeleteModal(true)
+                  }}
+                  className="cw-btn cw-btn-sm"
+                  style={{ 
+                    display: "flex", 
+                    alignItems: "center", 
+                    gap: 5, 
+                    fontSize: 12.5,
+                    color: "var(--coral, #dc2626)",
+                    background: "rgba(220, 38, 38, 0.06)",
+                    border: "1px solid rgba(220, 38, 38, 0.25)"
+                  }}
+                >
+                  <Trash2 size={13} /> Delete Account
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1102,7 +1378,11 @@ export function SettingsClient({
             
             <hr className="cw-rule" style={{ margin: "22px 0" }} />
             
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div 
+              id="export-clinic-data" 
+              className={`transition-all duration-500 rounded-lg p-2.5 -m-2.5 ${highlightExport ? "bg-amber-soft/40 ring-2 ring-amber/50" : ""}`}
+              style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+            >
               <div style={{ flex: 1, paddingRight: 16 }}>
                 <div style={{ fontWeight: 600, fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
                   Export clinic data
@@ -2217,6 +2497,145 @@ export function SettingsClient({
                 <button type="submit" className="cw-btn cw-btn-primary" disabled={isPending}>{isPending ? "Submitting..." : "Submit Request"}</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Request Account Deletion ── */}
+      {showDeleteModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isDeleting) setShowDeleteModal(false)
+          }}
+        >
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col border border-line">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-line bg-paper-raised flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                  <AlertTriangle size={17} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-[16px] text-ink m-0">Request Account Deletion</h3>
+                  <p className="text-[12px] text-ink-soft m-0">{clinic.name || "Clinic"}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => !isDeleting && setShowDeleteModal(false)} 
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/5 text-ink-soft hover:text-ink transition-colors"
+                disabled={isDeleting}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 flex flex-col gap-4 text-ink">
+              {deleteError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-[13px]">
+                  {deleteError}
+                </div>
+              )}
+
+              {/* Backup Warning Callout */}
+              <div className="bg-amber-50/70 border border-amber-200/80 rounded-lg p-3.5 flex flex-col gap-2.5">
+                <div className="text-[12.5px] text-amber-900 leading-normal">
+                  <strong>Important:</strong> We strongly advise backing up your data before requesting deletion. Once processed, active clinic access and staff logins will be deactivated.
+                </div>
+                <div>
+                  <button
+                    type="button"
+                    onClick={handleDownloadBackup}
+                    className="cw-btn cw-btn-ghost cw-btn-sm"
+                    style={{ fontSize: 12, display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", background: "#ffffff", borderColor: "rgba(217, 119, 6, 0.3)" }}
+                  >
+                    <Download size={13} className="text-amber-800" /> Go to Export Clinic Data
+                  </button>
+                </div>
+              </div>
+
+              {/* Email Address */}
+              <div className="cw-field !mb-0">
+                <label className="text-[13px] font-semibold">Account Email Address</label>
+                <input
+                  type="email"
+                  className="cw-input text-[13.5px]"
+                  value={deleteEmail}
+                  onChange={e => setDeleteEmail(e.target.value)}
+                  placeholder="your-email@clinic.com"
+                  disabled={isDeleting}
+                  required
+                />
+              </div>
+
+              {/* Reason for Deletion */}
+              <div className="cw-field !mb-0">
+                <label className="text-[13px] font-semibold">Reason for Deletion</label>
+                <select
+                  className="cw-select text-[13.5px]"
+                  value={deleteReason}
+                  onChange={e => setDeleteReason(e.target.value)}
+                  disabled={isDeleting}
+                  required
+                >
+                  <option value="">Select a reason</option>
+                  <option value="No longer need the service">No longer need the service</option>
+                  <option value="Privacy concerns">Privacy concerns</option>
+                  <option value="Too expensive">Too expensive</option>
+                  <option value="Switching to a competitor">Switching to a competitor</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              {/* Retention Policy & Consent Checkbox */}
+              <div className="pt-2 border-t border-line">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={deleteConsent}
+                    onChange={e => setDeleteConsent(e.target.checked)}
+                    disabled={isDeleting}
+                    className="mt-0.5 cw-checkbox"
+                  />
+                  <span className="text-[12px] text-ink-soft leading-relaxed select-none">
+                    I understand that submitting this request initiates deletion of our clinic account under the{" "}
+                    <a href="/legal/retention" target="_blank" rel="noopener noreferrer" className="text-forest hover:underline font-semibold">Data Retention Policy</a>{" "}
+                    and{" "}
+                    <a href="/legal/terms" target="_blank" rel="noopener noreferrer" className="text-forest hover:underline font-semibold">Terms of Service</a>. 
+                    A 30-day grace period applies before active databases are permanently purged, subject to statutory healthcare record retention rules.
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 bg-paper-raised border-t border-line flex items-center justify-end gap-3 shrink-0">
+              <button
+                type="button"
+                className="cw-btn cw-btn-ghost cw-btn-sm"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="cw-btn cw-btn-sm"
+                onClick={handleSubmitDeletion}
+                disabled={isDeleting || !deleteEmail || !deleteReason || !deleteConsent}
+                style={{
+                  background: "var(--coral, #dc2626)",
+                  color: "#ffffff",
+                  opacity: (isDeleting || !deleteEmail || !deleteReason || !deleteConsent) ? 0.6 : 1,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5
+                }}
+              >
+                {isDeleting ? "Submitting..." : "Confirm Deletion Request"}
+              </button>
+            </div>
           </div>
         </div>
       )}

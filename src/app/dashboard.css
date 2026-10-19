@@ -187,9 +187,9 @@
 
 /* ---------- App shell ---------- */
 .cw-app { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; background: var(--paper); transition: grid-template-columns 0.2s ease; }
-.cw-sidebar { background: var(--forest-dark); color: #D9E4DE; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; z-index: 100; }
-.cw-sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 22px 20px; font-weight: 700; font-size: 16.5px; color: var(--white); }
-.cw-sidebar-nav { flex: 1; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.cw-sidebar { background: var(--forest-dark); color: #D9E4DE; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; height: 100dvh; max-height: 100vh; max-height: 100dvh; overflow: hidden; z-index: 100; }
+.cw-sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 22px 20px; font-weight: 700; font-size: 16.5px; color: var(--white); flex-shrink: 0; }
+.cw-sidebar-nav { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
 .cw-sidebar-nav::-webkit-scrollbar { display: none; }
 .cw-sidebar-nav { -ms-overflow-style: none; scrollbar-width: none; }
 .cw-nav-item {
@@ -198,8 +198,8 @@
 }
 .cw-nav-item:hover { background: rgba(255,255,255,0.06); color: var(--white); }
 .cw-nav-item.active { background: var(--forest); color: var(--white); }
-.cw-sidebar-foot { padding: 14px 12px; border-top: 1px solid rgba(255,255,255,0.08); }
-.cw-sidebar-clinic { padding: 14px 20px; border-top: 1px solid rgba(255,255,255,0.08); border-bottom: 1px solid rgba(255,255,255,0.08); }
+.cw-sidebar-foot { flex-shrink: 0; padding: 14px 12px; border-top: 1px solid rgba(255,255,255,0.08); }
+.cw-sidebar-clinic { padding: 14px 20px; border-top: 1px solid rgba(255,255,255,0.08); border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; }
 .cw-sidebar-clinic .name { font-size: 13.5px; font-weight: 600; color: var(--white); }
 .cw-sidebar-clinic .plan { font-size: 11.5px; color: #93A69C; margin-top: 2px; }
 
@@ -310,7 +310,7 @@
 }
 .cw-dropdown-item:hover { background: var(--paper); }
 
-.cw-main { padding: 28px; max-width: 1280px; margin: 0 auto; width: 100%; }
+.cw-main { padding: 28px 28px 80px; max-width: 1280px; margin: 0 auto; width: 100%; }
 
 @media (max-width: 1024px) {
   .cw-app { grid-template-columns: 1fr; }
@@ -318,7 +318,7 @@
   .cw-sidebar.open { transform: translateX(0); }
   .md\:hidden { display: flex !important; }
   .cw-mobile-menu { display: flex !important; }
-  .cw-main { padding: 24px; }
+  .cw-main { padding: 24px 24px 80px; }
 }
 
 /* ---------- Cards / stats ---------- */
