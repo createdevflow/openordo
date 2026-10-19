@@ -733,10 +733,67 @@ button[role="switch"][data-state="checked"] span { transform: translateX(20px); 
   }
   /* Plan Builder: 2-col stacks to 1-col */
   [data-plan-builder-grid] { grid-template-columns: 1fr !important; }
+
+  /* Filter row: wrap on tablet */
+  .adm-filter-row { gap: 6px; }
+  .adm-filter-row > div[style*="flex: 1"] { width: 100%; }
+
+  /* Page head: wrap title and actions */
+  .adm-page-head { flex-direction: column; align-items: flex-start; gap: 12px; }
+}
+
+.adm-filters-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 640px) {
+  .adm-filters-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .adm-filters-bar > div:first-child,
+  .adm-filters-bar select,
+  .adm-filters-bar input {
+    width: 100% !important;
+    min-width: 100% !important;
+  }
+  .adm-page-head .adm-btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 @media (max-width: 600px) {
   .adm-stat-grid { grid-template-columns: 1fr; }
   .adm-main { padding: 14px; }
   .adm-topbar { padding: 0 14px; }
+
+  /* Tables: hide less important cols with data attributes */
+  .adm-table th.adm-hide-sm,
+  .adm-table td.adm-hide-sm { display: none; }
+
+  /* Compact table cells */
+  .adm-table th { padding: 8px 10px; }
+  .adm-table td { padding: 10px 10px; }
+
+  /* Filter chips wrap */
+  .adm-filter-row { flex-wrap: wrap; row-gap: 6px; }
+  .adm-filter-chip { font-size: 11.5px; padding: 4px 9px; }
+
+  /* Search input full width on mobile */
+  .adm-filter-row .adm-search-input { width: 100% !important; }
+
+  /* Pagination responsive */
+  .adm-pagination-row { flex-direction: column; align-items: flex-start; gap: 10px; }
+
+  /* Tabs scroll */
+  .adm-tabs-list { padding: 0 14px; }
+  .adm-tab-content { padding: 16px 14px; }
 }
+
+

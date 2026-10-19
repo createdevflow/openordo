@@ -359,6 +359,7 @@ export function SettingsClient({
         }
         
         const plan_id = plan.razorpayPlanIdMonthly || plan.razorpayPlanIdYearly
+        const selectedCurrency = (clinic.countryCode || "IN") === "IN" ? "INR" : "USD"
         
         const res = await fetch("/api/razorpay/subscription", {
           method: "POST",
@@ -366,7 +367,9 @@ export function SettingsClient({
           body: JSON.stringify({
             type: "PLAN",
             itemId: plan.id,
-            planId: plan_id
+            planId: plan_id,
+            currency: selectedCurrency,
+            billingCycle: "MONTHLY"
           })
         })
         
@@ -405,6 +408,7 @@ export function SettingsClient({
           const options = {
             key: json.keyId,
             subscription_id: json.id,
+            currency: json.currency || selectedCurrency,
             name: "OpenORDO",
             description: `Subscription for ${plan.name} Plan`,
             handler: async function (response: any) {
@@ -549,7 +553,20 @@ export function SettingsClient({
               <div className="cw-field !mb-0"><label>Phone</label><input className="cw-input" value={clinic.phone || ""} onChange={e => setClinic({ ...clinic, phone: e.target.value })} disabled={isPending} /></div>
               <div className="cw-field !mb-0"><label>WhatsApp number</label><input className="cw-input" value={clinic.whatsappNumber || ""} onChange={e => setClinic({ ...clinic, whatsappNumber: e.target.value })} disabled={isPending} /></div>
             </div>
-            <div className="cw-field !mb-0"><label>Address</label><input className="cw-input" value={clinic.address || ""} onChange={e => setClinic({ ...clinic, address: e.target.value })} disabled={isPending} /></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="cw-field !mb-0"><label>Address</label><input className="cw-input" value={clinic.address || ""} onChange={e => setClinic({ ...clinic, address: e.target.value })} disabled={isPending} /></div>
+              <div className="cw-field !mb-0">
+                <label>Country / Billing Region</label>
+                <select className="cw-select" value={clinic.countryCode || "IN"} onChange={e => setClinic({ ...clinic, countryCode: e.target.value })} disabled={isPending}>
+                  <option value="IN">India (₹ INR / GST)</option>
+                  <option value="US">United States ($ USD)</option>
+                  <option value="GB">United Kingdom ($ USD)</option>
+                  <option value="CA">Canada ($ USD)</option>
+                  <option value="AU">Australia ($ USD)</option>
+                  <option value="OTHER">Other ($ USD)</option>
+                </select>
+              </div>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="cw-field !mb-0"><label>Opens at</label><input className="cw-input" type="time" value={clinic.openTime || "09:00"} onChange={e => setClinic({ ...clinic, openTime: e.target.value })} disabled={isPending} /></div>
               <div className="cw-field !mb-0"><label>Closes at</label><input className="cw-input" type="time" value={clinic.closeTime || "18:00"} onChange={e => setClinic({ ...clinic, closeTime: e.target.value })} disabled={isPending} /></div>

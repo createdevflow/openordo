@@ -11,9 +11,10 @@ interface Props {
   razorpayPlanId: string | null
   planName: string
   trialEndsAt: string
+  currency?: "INR" | "USD"
 }
 
-export function PaymentSetupForm({ clinicId, userId, razorpayKeyId, planId, razorpayPlanId, planName, trialEndsAt }: Props) {
+export function PaymentSetupForm({ clinicId, userId, razorpayKeyId, planId, razorpayPlanId, planName, trialEndsAt, currency = "INR" }: Props) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -48,7 +49,9 @@ export function PaymentSetupForm({ clinicId, userId, razorpayKeyId, planId, razo
         body: JSON.stringify({
           type: "PLAN",
           itemId: planId,
-          planId: razorpayPlanId
+          planId: razorpayPlanId,
+          currency,
+          billingCycle: "MONTHLY"
         })
       })
       
@@ -85,6 +88,7 @@ export function PaymentSetupForm({ clinicId, userId, razorpayKeyId, planId, razo
         const options: any = {
           key: json.keyId || razorpayKeyId,
           subscription_id: json.id,
+          currency: json.currency || currency,
           name: "OpenORDO",
           description: `Subscription for ${planName} Plan`,
           handler: async function (response: any) {

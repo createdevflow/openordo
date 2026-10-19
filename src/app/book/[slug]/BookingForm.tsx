@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState } from "react"
-import { ChevronDown, CheckCircle, Loader2 } from "lucide-react"
+import { ChevronDown, CheckCircle, Loader2, AlertCircle, CalendarX, Phone } from "lucide-react"
 
 const TIME_SLOTS = [
   "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
@@ -22,12 +22,18 @@ export function BookingForm({
   clinicPhone,
   appointmentTypes = [],
   accentColor = "#1E4638",
+  isBookingEnabled = true,
+  isBookingLimitReached = false,
+  bookingLimitMessage = "",
 }: {
   clinicId: string
   doctors: any[]
   clinicPhone?: string | null
   appointmentTypes?: string[]
   accentColor?: string
+  isBookingEnabled?: boolean
+  isBookingLimitReached?: boolean
+  bookingLimitMessage?: string
 }) {
   const [form, setForm] = useState({
     name: "", email: "", phone: "",
@@ -61,6 +67,76 @@ export function BookingForm({
       setError("Network error. Please check your connection.")
     }
     setLoading(false)
+  }
+
+  if (!isBookingEnabled) {
+    return (
+      <div style={{
+        background: "var(--paper-raised)", border: "1px solid var(--line)",
+        borderRadius: 12, padding: "40px 28px", textAlign: "center",
+      }}>
+        <div style={{
+          width: 52, height: 52, borderRadius: "50%", background: "var(--amber-soft)",
+          display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px",
+          color: "var(--amber)"
+        }}>
+          <CalendarX size={26} />
+        </div>
+        <h3 style={{ fontSize: 19, fontWeight: 700, margin: "0 0 8px", color: "var(--ink)" }}>
+          Online Booking Unavailable
+        </h3>
+        <p style={{ fontSize: 14, color: "var(--ink-soft)", margin: "0 0 20px", lineHeight: 1.6, maxWidth: 360, marginInline: "auto" }}>
+          This clinic is currently not accepting online appointment requests. Please contact the clinic directly.
+        </p>
+        {clinicPhone && (
+          <a
+            href={`tel:${clinicPhone}`}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 8,
+              padding: "10px 22px", borderRadius: 8, background: accentColor,
+              color: "#fff", textDecoration: "none", fontSize: 14, fontWeight: 600
+            }}
+          >
+            <Phone size={15} /> Call {clinicPhone}
+          </a>
+        )}
+      </div>
+    )
+  }
+
+  if (isBookingLimitReached) {
+    return (
+      <div style={{
+        background: "var(--paper-raised)", border: "1px solid var(--line)",
+        borderRadius: 12, padding: "40px 28px", textAlign: "center",
+      }}>
+        <div style={{
+          width: 52, height: 52, borderRadius: "50%", background: "var(--coral-soft)",
+          display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px",
+          color: "var(--coral)"
+        }}>
+          <AlertCircle size={26} />
+        </div>
+        <h3 style={{ fontSize: 19, fontWeight: 700, margin: "0 0 8px", color: "var(--ink)" }}>
+          Monthly Booking Capacity Reached
+        </h3>
+        <p style={{ fontSize: 14, color: "var(--ink-soft)", margin: "0 0 20px", lineHeight: 1.6, maxWidth: 380, marginInline: "auto" }}>
+          {bookingLimitMessage || "This clinic has reached its allocated online booking capacity for this month. Please reach out to the clinic directly to schedule an appointment."}
+        </p>
+        {clinicPhone && (
+          <a
+            href={`tel:${clinicPhone}`}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 8,
+              padding: "10px 22px", borderRadius: 8, background: accentColor,
+              color: "#fff", textDecoration: "none", fontSize: 14, fontWeight: 600
+            }}
+          >
+            <Phone size={15} /> Call {clinicPhone} to Book
+          </a>
+        )}
+      </div>
+    )
   }
 
   if (success) {

@@ -6,11 +6,16 @@ import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { toast } from "sonner"
 import { suspendClinic, reactivateClinic, deleteClinic, grantPromo } from "@/server/actions/admin/clinics"
 import { AdminMenu } from "@/components/ui/AdminMenu"
+import { AdminPagination, paginateData } from "@/components/ui/AdminPagination"
 import Link from "next/link"
+
+const PAGE_SIZE_DEFAULT = 25
 
 export function ClinicsClient({ clinics, activePromos = [], initialFilter = "ALL" }: { clinics: any[], activePromos?: any[], initialFilter?: string }) {
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>(initialFilter)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_DEFAULT)
   const { confirm } = useConfirm()
 
   const filtered = clinics.filter((c) => {
@@ -21,6 +26,11 @@ export function ClinicsClient({ clinics, activePromos = [], initialFilter = "ALL
     const matchStatus = statusFilter === "ALL" || c.status === statusFilter
     return matchSearch && matchStatus
   })
+
+  const paginated = paginateData(filtered, page, pageSize)
+
+  const handleSearch = (val: string) => { setSearch(val); setPage(1) }
+  const handleStatusFilter = (val: string) => { setStatusFilter(val); setPage(1) }
 
   const handleSuspend = async (c: any) => {
     const ok = await confirm({
@@ -94,7 +104,7 @@ export function ClinicsClient({ clinics, activePromos = [], initialFilter = "ALL
           ].map(f => (
             <button
               key={f.key}
-              onClick={() => setStatusFilter(f.key)}
+              onClick={() => handleStatusFilter(f.key)}
               className={`adm-filter-chip${statusFilter === f.key ? " active" : ""}${f.tone ? ` ${f.tone}` : ""}`}
             >
               {f.label}
@@ -102,13 +112,14 @@ export function ClinicsClient({ clinics, activePromos = [], initialFilter = "ALL
           ))}
           <div style={{ flex: 1 }} />
           {/* Search */}
-          <div className="adm-search-row" style={{ padding: "0", border: "none", flex: "0 0 280px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Search size={14} color="var(--adm-muted)" />
             <input
               className="adm-search-input"
               placeholder="Search clinics…"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => handleSearch(e.target.value)}
+              style={{ width: 240 }}
             />
           </div>
         </div>
@@ -128,7 +139,7 @@ export function ClinicsClient({ clinics, activePromos = [], initialFilter = "ALL
               </tr>
             </thead>
             <tbody>
-              {filtered.map((c) => (
+              {paginated.map((c) => (
                 <tr key={c.id}>
                   <td>
                     <Link href={`/admin/clinics/${c.id}`} style={{ textDecoration: "none", color: "inherit" }}>
@@ -191,7 +202,7 @@ export function ClinicsClient({ clinics, activePromos = [], initialFilter = "ALL
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {paginated.length === 0 && (
                 <tr>
                   <td colSpan={8} style={{ textAlign: "center", padding: "48px", color: "var(--adm-muted)" }}>
                     {search ? "No clinics match your search." : "No clinics registered yet."}
@@ -201,6 +212,14 @@ export function ClinicsClient({ clinics, activePromos = [], initialFilter = "ALL
             </tbody>
           </table>
         </div>
+
+        <AdminPagination
+          page={page}
+          pageSize={pageSize}
+          total={filtered.length}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => { setPageSize(size); setPage(1) }}
+        />
       </div>
     </div>
   )

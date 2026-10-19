@@ -267,8 +267,8 @@ export function DashboardShell({
                 </button>
                 {notifOpen && (
                   <>
-                    <div style={{ position: "fixed", inset: 0, zIndex: 90 }} onClick={() => setNotifOpen(false)} />
-                    <div className="cw-dropdown" style={{ width: 280, right: 0, padding: 0 }}>
+                    <div style={{ position: "fixed", inset: 0, zIndex: 99 }} onClick={() => setNotifOpen(false)} />
+                    <div className="cw-dropdown" style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, width: 280, padding: 0, zIndex: 100 }}>
                       <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", fontWeight: 600, fontSize: 13.5 }}>
                         Notifications {(pendingBookings + pendingDataRequests) > 0 && <span style={{ color: "var(--moss)", marginLeft: 6 }}>({pendingBookings + pendingDataRequests})</span>}
                       </div>
@@ -325,8 +325,8 @@ export function DashboardShell({
                 </div>
                 {profileOpen && (
                   <>
-                    <div style={{ position: "fixed", inset: 0, zIndex: 90 }} onClick={() => setProfileOpen(false)} />
-                    <div className="cw-dropdown" style={{ width: 200, right: 0 }}>
+                    <div style={{ position: "fixed", inset: 0, zIndex: 99 }} onClick={() => setProfileOpen(false)} />
+                    <div className="cw-dropdown" style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, width: 200, zIndex: 100 }}>
                       <div style={{ padding: "8px 16px 12px", borderBottom: "1px solid var(--line)", marginBottom: 8 }}>
                         <div style={{ fontWeight: 600, fontSize: 13.5 }}>{userName}</div>
                         <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>{clinicName}</div>

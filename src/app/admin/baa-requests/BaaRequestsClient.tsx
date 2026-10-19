@@ -5,7 +5,8 @@ import { approveBaaRequestAction, finalizeBaaPdfAction, rejectBaaRequestAction }
 import { BaaPdfTemplate } from "@/components/baa/BaaPdfTemplate"
 import { toast } from "sonner"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
-import { FileText, CheckCircle, XCircle } from "lucide-react"
+import { FileText, CheckCircle, XCircle, Search } from "lucide-react"
+import { AdminPagination, paginateData } from "@/components/ui/AdminPagination"
 
 export function BaaRequestsClient({
   requests,
@@ -22,8 +23,24 @@ export function BaaRequestsClient({
   const [rejectingReq, setRejectingReq] = useState<any | null>(null)
   const [rejectReason, setRejectReason] = useState("")
   
+  const [historySearch, setHistorySearch] = useState("")
+  const [historyStatus, setHistoryStatus] = useState("ALL")
+  const [historyPage, setHistoryPage] = useState(1)
+  const [historyPageSize, setHistoryPageSize] = useState(25)
+
   const pendingRequests = requests.filter(r => r.status === "PENDING")
-  const historicalRequests = requests.filter(r => r.status !== "PENDING")
+  const rawHistorical = requests.filter(r => r.status !== "PENDING")
+
+  const filteredHistorical = rawHistorical.filter(req => {
+    const term = historySearch.toLowerCase()
+    const matchSearch =
+      req.clinicLegalName?.toLowerCase().includes(term) ||
+      req.documentReferenceNumber?.toLowerCase().includes(term)
+    const matchStatus = historyStatus === "ALL" || req.status === historyStatus
+    return matchSearch && matchStatus
+  })
+
+  const paginatedHistorical = paginateData(filteredHistorical, historyPage, historyPageSize)
 
   const handleApprove = async (req: any) => {
     const ok = await confirm({
@@ -168,50 +185,91 @@ export function BaaRequestsClient({
         </div>
       )}
 
-      <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Historical Requests</h2>
-      <div className="adm-table-wrap">
-        <table className="adm-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Clinic Legal Name</th>
-              <th>Status</th>
-              <th>Reference #</th>
-              <th>Document</th>
-            </tr>
-          </thead>
-          <tbody>
-            {historicalRequests.map(req => (
-              <tr key={req.id}>
-                <td style={{ fontSize: 13 }}>{new Date(req.updatedAt).toLocaleDateString()}</td>
-                <td style={{ fontSize: 13, fontWeight: 500 }}>{req.clinicLegalName}</td>
-                <td>
-                  <span className={`adm-badge ${req.status === "APPROVED" ? "adm-badge-green" : "adm-badge-red"}`}>
-                    {req.status}
-                  </span>
-                </td>
-                <td style={{ fontSize: 12, fontFamily: "monospace", color: "var(--adm-muted)" }}>
-                  {req.documentReferenceNumber || "-"}
-                </td>
-                <td>
-                  {req.pdfFileKey && (
-                    <a href={req.pdfFileKey} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: "var(--adm-blue)", textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}>
-                      <FileText size={14} /> View PDF
-                    </a>
-                  )}
-                  {req.rejectedReason && (
-                    <div style={{ fontSize: 12, color: "var(--adm-coral)" }}>Reason: {req.rejectedReason}</div>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {historicalRequests.length === 0 && (
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Historical Requests</h2>
+        <span className="adm-badge adm-badge-gray">{filteredHistorical.length} total</span>
+      </div>
+
+      <div className="adm-filters-bar" style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+        <div style={{ position: "relative", flex: 1, minWidth: 220 }}>
+          <Search size={15} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--adm-muted)" }} />
+          <input
+            type="text"
+            className="adm-input"
+            style={{ paddingLeft: 34, width: "100%" }}
+            placeholder="Search by clinic name or reference #..."
+            value={historySearch}
+            onChange={(e) => { setHistorySearch(e.target.value); setHistoryPage(1) }}
+          />
+        </div>
+        <select
+          className="adm-select"
+          style={{ width: "auto", minWidth: 140 }}
+          value={historyStatus}
+          onChange={(e) => { setHistoryStatus(e.target.value); setHistoryPage(1) }}
+        >
+          <option value="ALL">All Statuses</option>
+          <option value="APPROVED">Approved</option>
+          <option value="REJECTED">Rejected</option>
+        </select>
+      </div>
+
+      <div className="adm-card" style={{ padding: 0, overflow: "hidden", marginBottom: 24 }}>
+        <div className="adm-table-wrap">
+          <table className="adm-table">
+            <thead>
               <tr>
-                <td colSpan={5} style={{ textAlign: "center", padding: 20, color: "var(--adm-muted)" }}>No historical requests.</td>
+                <th>Date</th>
+                <th>Clinic Legal Name</th>
+                <th>Status</th>
+                <th>Reference #</th>
+                <th>Document</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {paginatedHistorical.map(req => (
+                <tr key={req.id}>
+                  <td style={{ fontSize: 13 }}>{new Date(req.updatedAt).toLocaleDateString()}</td>
+                  <td style={{ fontSize: 13, fontWeight: 500 }}>{req.clinicLegalName}</td>
+                  <td>
+                    <span className={`adm-badge ${req.status === "APPROVED" ? "adm-badge-green" : "adm-badge-red"}`}>
+                      {req.status}
+                    </span>
+                  </td>
+                  <td style={{ fontSize: 12, fontFamily: "monospace", color: "var(--adm-muted)" }}>
+                    {req.documentReferenceNumber || "-"}
+                  </td>
+                  <td>
+                    {req.pdfFileKey && (
+                      <a href={req.pdfFileKey} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: "var(--adm-blue)", textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}>
+                        <FileText size={14} /> View PDF
+                      </a>
+                    )}
+                    {req.rejectedReason && (
+                      <div style={{ fontSize: 12, color: "var(--adm-coral)" }}>Reason: {req.rejectedReason}</div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {paginatedHistorical.length === 0 && (
+                <tr>
+                  <td colSpan={5} style={{ textAlign: "center", padding: 24, color: "var(--adm-muted)" }}>
+                    {rawHistorical.length === 0 ? "No historical requests." : "No matching historical requests."}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {filteredHistorical.length > 0 && (
+          <AdminPagination
+            totalItems={filteredHistorical.length}
+            page={historyPage}
+            pageSize={historyPageSize}
+            onPageChange={setHistoryPage}
+            onPageSizeChange={(sz) => { setHistoryPageSize(sz); setHistoryPage(1) }}
+          />
+        )}
       </div>
 
       {/* Reject Modal */}

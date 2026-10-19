@@ -3,6 +3,7 @@ import { db } from "@/lib/db"
 import { AddonsClient } from "./AddonsClient"
 import { hasFeature } from "@/lib/features"
 import { getEffectiveStorageQuota } from "@/lib/plugins"
+import { resolvePricingContext } from "@/lib/pricing"
 
 export default async function AddonsPage() {
   const clinicId = await requireClinicId()
@@ -28,10 +29,10 @@ export default async function AddonsPage() {
     orderBy: { sortOrder: "asc" },
   })
 
-  // Detect currency from clinic country
-  const clinic = await db.clinic.findUnique({ where: { id: clinicId }, select: { countryCode: true } })
-  const currency = clinic?.countryCode === "IN" ? "INR" : "USD"
-  const countryCode = clinic?.countryCode || null
+  // Detect currency and country from central pricing context
+  const pricingCtx = await resolvePricingContext()
+  const currency = pricingCtx.currency
+  const countryCode = pricingCtx.countryCode
 
   // Check if plan includes online booking (required for Branded Booking Page)
   const planHasOnlineBooking = await hasFeature(clinicId, "scheduling.online_booking")
@@ -40,19 +41,18 @@ export default async function AddonsPage() {
   const storageInfo = await getEffectiveStorageQuota(clinicId)
 
   const feeSetting = await db.globalSetting.findUnique({ where: { key: "PLATFORM_FEE_PERCENTAGE" } })
-  const platformFeePercentage = parseFloat(feeSetting?.value || "10")
+  const taxPercentage = parseFloat(feeSetting?.value || "18")
 
   return (
     <AddonsClient
       availablePlugins={availablePlugins}
       ownedPlugins={ownedPlugins}
-      currency={currency as "INR" | "USD"}
+      currency={currency}
       countryCode={countryCode}
       planHasOnlineBooking={planHasOnlineBooking}
       storageUsedGB={storageInfo.usedGB}
       storageQuotaGB={storageInfo.quotaGB}
-      platformFeePercentage={platformFeePercentage}
+      platformFeePercentage={taxPercentage}
     />
   )
 }
-

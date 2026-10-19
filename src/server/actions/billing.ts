@@ -33,7 +33,7 @@ export async function createInvoiceAction(data: {
     const platformFeeAmount = Number((subtotal * (feePercentage / 100)).toFixed(2))
     if (platformFeeAmount > 0) {
       processedItems.push({
-        desc: `Platform Fee (${feePercentage}%)`,
+        desc: `Applicable Tax (${feePercentage}%)`,
         amount: platformFeeAmount
       })
     }

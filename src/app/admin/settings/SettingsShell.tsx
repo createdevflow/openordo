@@ -19,6 +19,7 @@ import { BaaSettingsTab } from "./BaaSettingsTab"
 import { GstSettingsTab } from "./GstSettingsTab"
 import { DnsHealthCheck } from "./DnsHealthCheck"
 import { MarketsGeoTab } from "./MarketsGeoTab"
+import { BackupTab } from "./BackupTab"
 
 const FEATURE_CATEGORIES = ["Core", "Scheduling", "Billing", "Communication", "Support"]
 
@@ -260,6 +261,7 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
     { value: 'billing', label: 'Billing & Tax', icon: <Globe size={14} /> },
     { value: 'communications', label: 'Communications', icon: <MessageCircle size={14} /> },
     { value: 'security', label: 'Security & Auth', icon: <ShieldAlert size={14} /> },
+    { value: 'backup', label: 'Backup', icon: <Package size={14} /> },
     { value: 'danger', label: 'Danger Zone', icon: <AlertTriangle size={14} /> },
     { value: 'markets', label: 'Markets & Geo', icon: <Globe size={14} /> },
   ]
@@ -858,6 +860,11 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
           </Tabs.Content>
 
           
+          {/* ── BACKUP ── */}
+          <Tabs.Content value="backup" className="adm-tab-content">
+            <BackupTab />
+          </Tabs.Content>
+
           {/* ── MARKETS & GEO ── */}
           <Tabs.Content value="markets" className="adm-tab-content">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>

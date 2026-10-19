@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { redirect } from "next/navigation"
 import { PaymentSetupForm } from "./PaymentSetupForm"
+import { PriceWithTax } from "@/components/ui/PriceWithTax"
 
 export default async function PaymentSetupPage() {
   const session = await auth()
@@ -34,6 +35,11 @@ export default async function PaymentSetupPage() {
     ? Math.max(0, Math.ceil((trialEndsAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : defaultTrialDays
 
+  const clinic = await db.clinic.findUnique({ where: { id: clinicId } })
+  const isIndia = clinic?.countryCode === "IN"
+  const price = isIndia ? subscription.plan.priceMonthlyInr : subscription.plan.priceMonthlyUsd
+  const currency: "INR" | "USD" = isIndia ? "INR" : "USD"
+
   return (
     <div className="min-h-screen bg-paper flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
@@ -61,7 +67,7 @@ export default async function PaymentSetupPage() {
           </div>
           <div className="text-right">
             <div className="text-[20px] font-bold text-ink">
-              ${subscription.plan.priceMonthlyUsd}<span className="text-[14px] font-normal text-ink-soft">/mo</span>
+              <PriceWithTax amount={price} currency={currency} countryCode={clinic?.countryCode} /><span className="text-[14px] font-normal text-ink-soft">/mo</span>
             </div>
             <div className="text-[12px] text-ink-soft mt-0.5">after trial</div>
           </div>
@@ -75,10 +81,11 @@ export default async function PaymentSetupPage() {
           razorpayPlanId={subscription.plan.razorpayPlanIdMonthly}
           planName={subscription.plan.name}
           trialEndsAt={trialEndsAt?.toISOString() || ""}
+          currency={currency}
         />
 
         <p className="text-center text-[12px] text-ink-soft mt-6">
-          🔒 Secured by Stripe. We never store your card details on our servers.
+          🔒 Secured by Razorpay. We never store your card details on our servers.
         </p>
       </div>
     </div>

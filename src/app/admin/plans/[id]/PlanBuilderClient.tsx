@@ -156,7 +156,7 @@ export function PlanBuilderClient({
             </div>
 
             <div className="adm-section-label" style={{ marginTop: 8 }}>Limits & Settings</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 80px", gap: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 80px", gap: 12 }}>
               <div>
                 <label className="adm-label">Patient Limit (blank = ∞)</label>
                 <input className="adm-input adm-mono" type="number" value={patientLimit} onChange={e => setPatientLimit(e.target.value)} />
@@ -164,6 +164,10 @@ export function PlanBuilderClient({
               <div>
                 <label className="adm-label">Doctor Limit (blank = ∞)</label>
                 <input className="adm-input adm-mono" type="number" value={doctorLimit} onChange={e => setDoctorLimit(e.target.value)} />
+              </div>
+              <div>
+                <label className="adm-label">Booking Limit / mo (blank = ∞)</label>
+                <input className="adm-input adm-mono" type="number" value={bookingPageLimit} onChange={e => setBookingPageLimit(e.target.value)} placeholder="∞" />
               </div>
               <div>
                 <label className="adm-label">Storage Limit GB (blank = ∞)</label>

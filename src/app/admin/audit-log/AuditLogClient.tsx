@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { ShieldCheck, Search, ChevronDown, ChevronRight } from "lucide-react"
+import { AdminPagination, paginateData } from "@/components/ui/AdminPagination"
 
 const ACTION_TONES: Record<string, string> = {
   SUSPEND_CLINIC: "adm-badge-red",
@@ -28,6 +29,8 @@ const ACTION_TONES: Record<string, string> = {
 export function AuditLogClient({ logs }: { logs: any[] }) {
   const [search, setSearch] = useState("")
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
 
   const filtered = logs.filter(l =>
     l.action.toLowerCase().includes(search.toLowerCase()) ||
@@ -35,6 +38,9 @@ export function AuditLogClient({ logs }: { logs: any[] }) {
     l.targetId.toLowerCase().includes(search.toLowerCase()) ||
     l.actorUserId.toLowerCase().includes(search.toLowerCase())
   )
+
+  const paginated = paginateData(filtered, page, pageSize)
+  const handleSearch = (val: string) => { setSearch(val); setPage(1) }
 
   return (
     <div>
@@ -55,7 +61,7 @@ export function AuditLogClient({ logs }: { logs: any[] }) {
             className="adm-search-input"
             placeholder="Filter by action, target type, actor…"
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => handleSearch(e.target.value)}
           />
         </div>
 
@@ -78,7 +84,7 @@ export function AuditLogClient({ logs }: { logs: any[] }) {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((log: any) => (
+                {paginated.map((log: any) => (
                   <>
                     <tr
                       key={log.id}
@@ -123,6 +129,13 @@ export function AuditLogClient({ logs }: { logs: any[] }) {
             </table>
           </div>
         )}
+        <AdminPagination
+          page={page}
+          pageSize={pageSize}
+          total={filtered.length}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => { setPageSize(size); setPage(1) }}
+        />
       </div>
     </div>
   )

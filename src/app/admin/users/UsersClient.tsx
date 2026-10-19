@@ -6,11 +6,16 @@ import { toast } from "sonner"
 import { banUser, unbanUser, softDeleteUser, restoreUser, hardDeleteUser, createUser, changeUserPassword } from "@/server/actions/admin/users"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { AdminMenu } from "@/components/ui/AdminMenu"
+import { AdminPagination, paginateData } from "@/components/ui/AdminPagination"
 import Link from "next/link"
+
+const PAGE_SIZE_DEFAULT = 25
 
 export function UsersClient({ users }: { users: any[] }) {
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("ALL")
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_DEFAULT)
   const { confirm } = useConfirm()
 
   const [showAddUser, setShowAddUser] = useState(false)
@@ -27,6 +32,12 @@ export function UsersClient({ users }: { users: any[] }) {
     const matchStatus = statusFilter === "ALL" || u.status === statusFilter
     return matchSearch && matchStatus
   })
+
+  const paginated = paginateData(filtered, page, pageSize)
+
+  // Reset to page 1 on filter/search change
+  const handleSearch = (val: string) => { setSearch(val); setPage(1) }
+  const handleStatusFilter = (val: string) => { setStatusFilter(val); setPage(1) }
 
   const handleBan = async (userId: string, isBanned: boolean) => {
     const ok = await confirm({
@@ -142,7 +153,7 @@ export function UsersClient({ users }: { users: any[] }) {
         <div style={{ background: "var(--adm-bg)", border: "1px solid var(--adm-border)", borderRadius: 10, padding: 20, marginBottom: 20 }}>
           <div className="adm-section-label" style={{ marginBottom: 16 }}>New User</div>
           <form onSubmit={handleAddUser}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 16 }}>
               <div>
                 <label className="adm-label">Name</label>
                 <input className="adm-input" required value={newUser.name} onChange={e => setNewUser(p => ({ ...p, name: e.target.value }))} />
@@ -172,8 +183,8 @@ export function UsersClient({ users }: { users: any[] }) {
         <div style={{ background: "var(--adm-bg)", border: "1px solid var(--adm-border)", borderRadius: 10, padding: 20, marginBottom: 20 }}>
           <div className="adm-section-label" style={{ marginBottom: 16 }}>Change Password</div>
           <form onSubmit={handleChangePassword}>
-            <div style={{ display: "flex", gap: 16, alignItems: "flex-end" }}>
-              <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", gap: 16, alignItems: "flex-end", flexWrap: "wrap" }}>
+              <div style={{ flex: 1, minWidth: 200 }}>
                 <label className="adm-label">New Password</label>
                 <input className="adm-input" type="password" required value={newPassword} onChange={e => setNewPassword(e.target.value)} />
               </div>
@@ -194,7 +205,7 @@ export function UsersClient({ users }: { users: any[] }) {
           ].map(f => (
             <button
               key={f.key}
-              onClick={() => setStatusFilter(f.key)}
+              onClick={() => handleStatusFilter(f.key)}
               className={`adm-filter-chip${statusFilter === f.key ? " active" : ""}${f.tone ? ` ${f.tone}` : ""}`}
             >
               {f.label}
@@ -207,7 +218,7 @@ export function UsersClient({ users }: { users: any[] }) {
               className="adm-search-input"
               placeholder="Search users…"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => handleSearch(e.target.value)}
               style={{ width: 220 }}
             />
           </div>
@@ -226,7 +237,7 @@ export function UsersClient({ users }: { users: any[] }) {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((u) => (
+              {paginated.map((u) => (
                 <tr key={u.id}>
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -306,7 +317,7 @@ export function UsersClient({ users }: { users: any[] }) {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {paginated.length === 0 && (
                 <tr>
                   <td colSpan={6} style={{ textAlign: "center", padding: "48px", color: "var(--adm-muted)" }}>
                     {search ? "No users match your search." : "No users found."}
@@ -316,6 +327,14 @@ export function UsersClient({ users }: { users: any[] }) {
             </tbody>
           </table>
         </div>
+
+        <AdminPagination
+          page={page}
+          pageSize={pageSize}
+          total={filtered.length}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => { setPageSize(size); setPage(1) }}
+        />
       </div>
     </div>
   )

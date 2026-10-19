@@ -3,6 +3,7 @@ import { notFound } from "next/navigation"
 import { BookingPageLayout } from "./BookingPageLayout"
 import "../../dashboard.css"
 import { hasActivePlugin } from "@/lib/plugins"
+import { hasFeature, canAcceptBooking } from "@/lib/features"
 
 export default async function PublicBookingPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
@@ -15,6 +16,12 @@ export default async function PublicBookingPage({ params }: { params: Promise<{ 
   })
 
   if (!clinic || clinic.status !== "ACTIVE") return notFound()
+
+  const [isBookingEnabled, bookingStatus] = await Promise.all([
+    hasFeature(clinic.id, "scheduling.online_booking").catch(() => false),
+    canAcceptBooking(clinic.id).catch(() => ({ allowed: true, current: 0, effectiveLimit: null, featureDisabled: false, overLimit: false, message: undefined as string | undefined })),
+  ])
+  const isBookingLimitReached = !bookingStatus.allowed && !bookingStatus.featureDisabled
 
   // Guard: bookingPageConfig relation not available until Prisma client is regenerated.
   const bpc: any = await (async () => {
@@ -76,6 +83,9 @@ export default async function PublicBookingPage({ params }: { params: Promise<{ 
       showHours={showHours}
       socialLinks={socialLinks}
       showBadge={showBadge}
+      isBookingEnabled={isBookingEnabled}
+      isBookingLimitReached={isBookingLimitReached}
+      bookingLimitMessage={bookingStatus.message || ""}
     />
   )
 }

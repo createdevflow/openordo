@@ -17,8 +17,11 @@ function PluginIcon({ name, size = 20 }: { name: string; size?: number }) {
 }
 
 function formatAmt(amount: number, currency: "INR" | "USD"): string {
-  if (currency === "INR") return `₹${(amount / 100).toLocaleString("en-IN")}`
-  return `$${(amount / 100).toFixed(2)}`
+  const val = amount / 100
+  if (currency === "INR") {
+    return `₹${val.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  }
+  return `$${val.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 interface PurchaseModalProps {
@@ -71,6 +74,8 @@ function PurchaseModal({ plugin, currency, onClose, onSuccess, platformFeePercen
         type: "PLUGIN",
         itemId: plugin.id,
         quantity,
+        currency,
+        billingCycle: selected,
       }
       
       if (!isOneTime) {
@@ -117,6 +122,7 @@ function PurchaseModal({ plugin, currency, onClose, onSuccess, platformFeePercen
           key: json.keyId,
           name: "OpenORDO",
           description: `Purchase ${plugin.name}`,
+          currency: currency,
           handler: async function (response: any) {
             try {
               const verifyRes = await fetch("/api/razorpay/verify", {
@@ -226,20 +232,20 @@ function PurchaseModal({ plugin, currency, onClose, onSuccess, platformFeePercen
 
         {totalPrice > 0 && (
           <div style={{ marginBottom: 20, padding: 14, background: "var(--surface)", borderRadius: 8, border: "1px solid var(--line)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 13, color: "var(--ink-soft)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, fontSize: 13, color: "var(--ink-soft)" }}>
               <span>Base Price:</span>
-              <span>{formatAmt(baseTotal, currency)}</span>
+              <span style={{ fontWeight: 600, color: "var(--ink)", fontVariantNumeric: "tabular-nums" }}>{formatAmt(baseTotal, currency)}</span>
             </div>
             {platformFee > 0 && (
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 13, color: "var(--ink-soft)" }}>
-                <span>Platform Fee ({platformFeePercentage}%):</span>
-                <span>{formatAmt(platformFee, currency)}</span>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, fontSize: 13, color: "var(--ink-soft)" }}>
+                <span>Applicable Tax ({platformFeePercentage}%):</span>
+                <span style={{ fontWeight: 600, color: "var(--ink)", fontVariantNumeric: "tabular-nums" }}>{formatAmt(platformFee, currency)}</span>
               </div>
             )}
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line)", fontSize: 14, fontWeight: 700, color: "var(--forest)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line)", fontSize: 14, fontWeight: 700, color: "var(--forest)" }}>
               <span>Total{selected === "MONTHLY" ? " / mo" : selected === "YEARLY" ? " / yr" : ""}:</span>
-              <span>
-                <PriceWithTax amount={totalPrice / 100} currency={currency} countryCode={countryCode} />
+              <span style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                {formatAmt(totalPrice, currency)}
               </span>
             </div>
           </div>

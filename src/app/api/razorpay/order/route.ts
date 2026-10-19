@@ -21,7 +21,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { itemId, quantity = 1 } = await req.json()
+    const { itemId, quantity = 1, currency: requestedCurrency } = await req.json()
     const clinicId = await requireClinicId()
 
     if (bypass) {
@@ -29,55 +29,44 @@ export async function POST(req: Request) {
     }
 
     const plugin = await db.plugin.findUnique({ where: { id: itemId } })
-    if (!plugin || !plugin.priceOneTimeINR) throw new Error("Plugin not found or missing one-time price")
+    if (!plugin) throw new Error("Plugin not found")
+
+    const clinic = await db.clinic.findUnique({ where: { id: clinicId } })
+    const currency: "INR" | "USD" = requestedCurrency === "USD" || requestedCurrency === "INR" 
+      ? requestedCurrency 
+      : (clinic?.countryCode === "IN" ? "INR" : "USD")
+
+    const rawPrice = currency === "INR" ? plugin.priceOneTimeINR : plugin.priceOneTimeUSD
+    if (!rawPrice) throw new Error(`Plugin missing one-time price for ${currency}`)
 
     const rzp = new Razorpay({ key_id, key_secret })
 
-    let baseAmount = plugin.priceOneTimeINR * quantity
+    const baseAmount = rawPrice * quantity
     
-    // Fetch platform fee percentage
+    // Fetch applicable tax percentage (formerly platform fee)
     const feeSetting = await db.globalSetting.findUnique({ where: { key: "PLATFORM_FEE_PERCENTAGE" } }).catch(() => null)
-    const platformFeeRate = feeSetting?.value || "10"
-    const feePercentage = parseFloat(platformFeeRate)
-    let platformFee = 0
-    if (!isNaN(feePercentage) && feePercentage > 0) {
-      platformFee = Math.round(baseAmount * (feePercentage / 100))
+    const taxRate = parseFloat(feeSetting?.value || "18")
+    let taxAmount = 0
+    if (!isNaN(taxRate) && taxRate > 0) {
+      taxAmount = Math.round(baseAmount * (taxRate / 100))
     }
 
-    let totalAmount = baseAmount + platformFee
-
-    // Optionally calculate GST to add to Razorpay order amount if GST is configured
-    // For INR, we should include GST in the checkout amount. 
-    // Wait, the current code just charged priceOneTimeINR directly. Let's keep it simple and just add the platform fee for now, 
-    // or add GST if that was also missing. 
-    // We will just add the platform fee so it matches what tax-invoice will calculate.
-    
-    // We should ideally calculate GST here too, but to be safe, I'll just add platform fee.
-    // Wait, if tax-invoice.ts adds GST, the invoice totalValue will be greater than the Razorpay amount!
-    // The previous code didn't add GST to the Razorpay amount. It just charged `plugin.priceOneTimeINR * quantity`.
-    // Let's add GST here!
-
-    const supplierStateSetting = await db.globalSetting.findUnique({ where: { key: "GST_SUPPLIER_STATE" } }).catch(() => null)
-    const supplierState = supplierStateSetting?.value || ""
-    const clinic = await db.clinic.findUnique({ where: { id: clinicId } })
-    let placeOfSupply = ""
-    try {
-      placeOfSupply = JSON.parse(clinic?.billingConfig || "{}").state || ""
-    } catch { }
-
-    if (supplierState && placeOfSupply) {
-      const isIntraState = supplierState.trim().toLowerCase() === placeOfSupply.trim().toLowerCase()
-      const totalGst = Math.round(totalAmount * 0.18) // 18% GST
-      totalAmount += totalGst
-    }
+    const totalAmount = baseAmount + taxAmount
 
     const order = await rzp.orders.create({
-      amount: totalAmount, // already in paise
-      currency: "INR",
-      notes: { clinicId, type: "PLUGIN", itemId }
+      amount: totalAmount, // in paise or cents
+      currency: currency,
+      notes: { clinicId, type: "PLUGIN", itemId, currency }
     })
 
-    return NextResponse.json({ id: order.id, amount: order.amount, keyId: key_id, platformFee })
+    return NextResponse.json({ 
+      id: order.id, 
+      amount: order.amount, 
+      currency,
+      keyId: key_id, 
+      platformFee: taxAmount,
+      taxAmount 
+    })
   } catch (err: any) {
     console.error("razorpay order error:", JSON.stringify(err?.error || err?.message || err, null, 2))
     return NextResponse.json({ error: err?.error?.description || err?.message || "Failed" }, { status: 500 })

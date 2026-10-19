@@ -16,6 +16,7 @@ export async function updateClinicSettingsAction(data: {
   closeTime: string
   whatsappNumber?: string
   shareRecordsWithPatients?: boolean
+  countryCode?: string
 }) {
   const clinicId = await requireClinicId()
 

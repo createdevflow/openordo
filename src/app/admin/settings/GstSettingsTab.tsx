@@ -218,8 +218,8 @@ export function GstSettingsTab({ globalSettings }: GstSettingsTabProps) {
           Pricing &amp; Fees
         </h3>
 
-        {field("PLATFORM_FEE_PERCENTAGE", "Platform Fee Percentage (%)", "10",
-          "The percentage of the transaction taken as platform fee (e.g., '10'). This fee will be explicitly mentioned on invoices and applied to purchases.")}
+        {field("PLATFORM_FEE_PERCENTAGE", "Applicable Tax Rate (%)", "18",
+          "The default percentage added as applicable tax (e.g., '18'). This tax will be explicitly mentioned on invoices and applied to addon purchases.")}
       </div>
 
       {/* Section: Auto-generate toggle */}

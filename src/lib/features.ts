@@ -346,6 +346,8 @@ export async function getBookingUsage(clinicId: string): Promise<{
   })
 
   // Extra capacity from addon
+  // If MONTHLY/YEARLY: recurring while active
+  // If ONE_TIME: applies during the calendar month of purchase
   const addon = await db.clinicPlugin.findFirst({
     where: {
       clinicId,
@@ -354,7 +356,18 @@ export async function getBookingUsage(clinicId: string): Promise<{
     },
     include: { plugin: true }
   })
-  const extraCapacity = addon ? addon.quantity * 50 : 0 // each unit = 50 extra bookings/month
+
+  let extraCapacity = 0
+  if (addon) {
+    if (addon.pricingModel === "MONTHLY" || addon.pricingModel === "YEARLY") {
+      extraCapacity = addon.quantity * 50
+    } else if (addon.pricingModel === "ONE_TIME") {
+      const purchaseDate = new Date(addon.purchasedAt)
+      if (purchaseDate >= monthStart) {
+        extraCapacity = addon.quantity * 50
+      }
+    }
+  }
 
   const basePlanLimit = details.bookingPageLimit
   const effectiveLimit = basePlanLimit !== null ? basePlanLimit + extraCapacity : null
@@ -378,15 +391,32 @@ export async function canAcceptBooking(clinicId: string): Promise<{
   current: number
   effectiveLimit: number | null
   message?: string
+  featureDisabled?: boolean
+  overLimit?: boolean
 }> {
+  // First check if online booking feature is enabled on the clinic's active plan/tier
+  const isFeatureActive = await hasFeature(clinicId, "scheduling.online_booking")
+  if (!isFeatureActive) {
+    return {
+      allowed: false,
+      current: 0,
+      effectiveLimit: 0,
+      featureDisabled: true,
+      overLimit: false,
+      message: "Online booking is not enabled for this clinic."
+    }
+  }
+
   const usage = await getBookingUsage(clinicId)
   if (usage.overLimit) {
     return {
       allowed: false,
       current: usage.current,
       effectiveLimit: usage.effectiveLimit,
+      featureDisabled: false,
+      overLimit: true,
       message: `You have reached your monthly booking limit of ${usage.effectiveLimit} on the ${usage.planName} plan.`
     }
   }
-  return { allowed: true, current: usage.current, effectiveLimit: usage.effectiveLimit }
+  return { allowed: true, current: usage.current, effectiveLimit: usage.effectiveLimit, featureDisabled: false, overLimit: false }
 }

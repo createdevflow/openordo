@@ -27,6 +27,9 @@ interface Props {
   showHours: boolean
   socialLinks: Record<string, string>
   showBadge: boolean
+  isBookingEnabled?: boolean
+  isBookingLimitReached?: boolean
+  bookingLimitMessage?: string
 }
 
 export function BookingPageLayout({
@@ -35,6 +38,9 @@ export function BookingPageLayout({
   displayName, tagline, aboutText, logoUrl, coverUrl, faviconUrl,
   showAddress, showPhone, showHours,
   socialLinks, showBadge,
+  isBookingEnabled = true,
+  isBookingLimitReached = false,
+  bookingLimitMessage = "",
 }: Props) {
 
   // Inject favicon dynamically
@@ -188,10 +194,18 @@ export function BookingPageLayout({
         {/* ── BOOKING SECTION HEADING ───────────────────────────────────────── */}
         <div style={{ marginBottom: 20, textAlign: "center" }}>
           <h2 style={{ fontSize: 26, fontWeight: 700, color: "var(--ink)", margin: "0 0 6px" }}>
-            Book an Appointment
+            {!isBookingEnabled
+              ? "Clinic Appointments"
+              : isBookingLimitReached
+              ? "Online Booking Capacity Reached"
+              : "Book an Appointment"}
           </h2>
           <p style={{ fontSize: 14, color: "var(--ink-soft)", margin: 0 }}>
-            Fill in your details below — we&apos;ll confirm your slot shortly.
+            {!isBookingEnabled
+              ? "Online booking is not currently active for this clinic — please contact them directly."
+              : isBookingLimitReached
+              ? "This clinic has filled all allocated online booking slots for this month."
+              : "Fill in your details below — we'll confirm your slot shortly."}
           </p>
         </div>
 
@@ -347,6 +361,9 @@ export function BookingPageLayout({
               clinicPhone={clinicPhone}
               appointmentTypes={appointmentTypes}
               accentColor={accentColor}
+              isBookingEnabled={isBookingEnabled}
+              isBookingLimitReached={isBookingLimitReached}
+              bookingLimitMessage={bookingLimitMessage}
             />
           </div>
         </div>

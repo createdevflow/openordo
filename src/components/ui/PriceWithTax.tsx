@@ -9,12 +9,26 @@ export interface PriceWithTaxProps {
   className?: string
   currency?: "USD" | "INR"
   taxConfig?: any // Optional pre-fetched config
+  showTaxSuffix?: boolean
 }
 
-export function PriceWithTax({ amount, countryCode, className, currency = "USD", taxConfig }: PriceWithTaxProps) {
+export function PriceWithTax({
+  amount,
+  countryCode,
+  className,
+  currency = "USD",
+  taxConfig,
+  showTaxSuffix = true,
+}: PriceWithTaxProps) {
   const [config, setConfig] = useState<any>(taxConfig)
   const currencySymbol = currency === "INR" ? "₹" : "$"
-  const formatted = amount === 0 ? "Free" : `${currencySymbol}${amount.toLocaleString()}`
+
+  const formattedAmount = amount === 0
+    ? "Free"
+    : `${currencySymbol}${amount % 1 === 0
+        ? amount.toLocaleString(currency === "INR" ? "en-IN" : "en-US")
+        : amount.toLocaleString(currency === "INR" ? "en-IN" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      }`
 
   useEffect(() => {
     if (!taxConfig && countryCode) {
@@ -22,23 +36,25 @@ export function PriceWithTax({ amount, countryCode, className, currency = "USD",
     }
   }, [countryCode, taxConfig])
 
+  if (!showTaxSuffix || amount === 0) {
+    return <span className={className}>{formattedAmount}</span>
+  }
+
   if (!countryCode) {
-    if (amount === 0) return <span className={className}>{formatted}</span>
     return (
       <span className={className}>
-        {formatted} <span className="text-sm font-normal text-ink-soft">+ applicable tax</span>
+        {formattedAmount} <span className="text-sm font-normal text-ink-soft">+ applicable tax</span>
       </span>
     )
   }
 
-  if (!config || config.calculationMode === "NONE" || amount === 0) {
-    return <span className={className}>{formatted}</span>
+  if (!config || config.calculationMode === "NONE") {
+    return <span className={className}>{formattedAmount}</span>
   }
 
   return (
     <span className={className}>
-      {formatted} <span className="text-sm font-normal text-ink-soft">+{config.flatRate}% {config.taxLabel}</span>
+      {formattedAmount} <span className="text-sm font-normal text-ink-soft">+{config.flatRate}% {config.taxLabel}</span>
     </span>
   )
 }
-

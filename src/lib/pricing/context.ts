@@ -82,6 +82,18 @@ export async function resolvePricingContext(): Promise<PricingContext> {
           source: "CLINIC_COUNTRY",
         };
       }
+
+      // Clinic exists but countryCode is not set: check user phone and default platform market
+      const defaultMarketSetting = await db.globalSetting.findUnique({ where: { key: "DEFAULT_MARKET" } }).catch(() => null);
+      const isIndia = user?.phone?.startsWith("+91") || defaultMarketSetting?.value === "IN";
+      const resolvedCountry = isIndia ? "IN" : "US";
+      return {
+        market: isIndia ? "IN" : "INTL",
+        currency: isIndia ? "INR" : "USD",
+        countryCode: resolvedCountry,
+        taxConfig: await getTaxConfig(resolvedCountry),
+        source: "CLINIC_COUNTRY",
+      };
     }
   }
 

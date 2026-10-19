@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { CreditCard, Search, ExternalLink } from "lucide-react"
+import { AdminPagination, paginateData } from "@/components/ui/AdminPagination"
 
 const STATUS_CLASSES: Record<string, string> = {
   succeeded: "adm-badge-green",
@@ -13,6 +14,8 @@ const STATUS_CLASSES: Record<string, string> = {
 export function PaymentsClient({ payments }: { payments: any[] }) {
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("ALL")
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
 
   const filtered = payments.filter(p => {
     const matchSearch =
@@ -22,6 +25,10 @@ export function PaymentsClient({ payments }: { payments: any[] }) {
     const matchStatus = statusFilter === "ALL" || p.status === statusFilter
     return matchSearch && matchStatus
   })
+
+  const paginated = paginateData(filtered, page, pageSize)
+  const handleSearch = (val: string) => { setSearch(val); setPage(1) }
+  const handleFilter = (val: string) => { setStatusFilter(val); setPage(1) }
 
   const totals = {
     succeeded: payments.filter(p => p.status === "succeeded").reduce((s, p) => s + p.amount, 0),
@@ -69,7 +76,7 @@ export function PaymentsClient({ payments }: { payments: any[] }) {
           ].map(f => (
             <button
               key={f.key}
-              onClick={() => setStatusFilter(f.key)}
+              onClick={() => handleFilter(f.key)}
               className={`adm-filter-chip${statusFilter === f.key ? " active" : ""}${f.tone ? ` ${f.tone}` : ""}`}
             >
               {f.label}
@@ -82,7 +89,7 @@ export function PaymentsClient({ payments }: { payments: any[] }) {
               className="adm-search-input"
               placeholder="Search clinic or invoice ID…"
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => handleSearch(e.target.value)}
               style={{ width: 240 }}
             />
           </div>
@@ -108,7 +115,7 @@ export function PaymentsClient({ payments }: { payments: any[] }) {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((p: any) => (
+                {paginated.map((p: any) => (
                   <tr key={p.id}>
                     <td>
                       <Link href={`/admin/clinics/${p.clinicId}`} style={{ textDecoration: "none", color: "var(--adm-accent)", fontWeight: 600, fontSize: 13.5 }}>
@@ -148,6 +155,13 @@ export function PaymentsClient({ payments }: { payments: any[] }) {
             </table>
           </div>
         )}
+        <AdminPagination
+          page={page}
+          pageSize={pageSize}
+          total={filtered.length}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => { setPageSize(size); setPage(1) }}
+        />
       </div>
     </div>
   )

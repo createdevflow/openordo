@@ -279,6 +279,18 @@
 .cw-icon-btn:hover { color: var(--ink); }
 .cw-dot-badge { position: absolute; top: 6px; right: 7px; width: 7px; height: 7px; border-radius: 50%; background: var(--coral); }
 
+.cw-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--paper-raised, #ffffff);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+  z-index: 100;
+  overflow: hidden;
+}
+
 .cw-dropdown-item {
   display: flex !important;
   align-items: center;

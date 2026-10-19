@@ -131,6 +131,14 @@ export async function selectPlanAction(prevState: any, formData: FormData) {
   const plan = await db.plan.findUnique({ where: { id: planId } })
   if (!plan) return { error: "Plan not found" }
 
+  const currency = formData.get("currency") as string
+  if (currency === "INR" || currency === "USD") {
+    await db.clinic.update({
+      where: { id: clinicId },
+      data: { countryCode: currency === "INR" ? "IN" : "US" }
+    }).catch(() => null)
+  }
+
   const isPaidPlan = plan.priceMonthlyUsd > 0 || plan.priceMonthlyInr > 0
 
   if (isPaidPlan) {

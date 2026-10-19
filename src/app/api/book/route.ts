@@ -22,12 +22,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Clinic not found" }, { status: 404 })
     }
 
-    // Enforce booking page monthly limit
+    // Enforce booking page feature and monthly limit
     const limitCheck = await canAcceptBooking(clinicId)
     if (!limitCheck.allowed) {
+      const errorMsg = limitCheck.featureDisabled
+        ? "Online booking is not enabled for this clinic. Please contact the clinic directly."
+        : "This clinic has reached its monthly online booking capacity. Please contact the clinic directly."
       return NextResponse.json(
-        { error: "This clinic is not accepting online bookings at this time. Please contact the clinic directly." },
-        { status: 429 }
+        { error: errorMsg },
+        { status: limitCheck.featureDisabled ? 403 : 429 }
       )
     }
 

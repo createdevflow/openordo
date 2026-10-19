@@ -38,12 +38,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing required fields: name, email, phone, date, time, reason" }, { status: 400 })
     }
 
-    // Enforce booking page monthly limit
+    // Enforce booking page feature and monthly limit
     const limitCheck = await canAcceptBooking(clinic.id)
     if (!limitCheck.allowed) {
+      const errorMsg = limitCheck.featureDisabled
+        ? "Online booking is not enabled for this clinic."
+        : "Monthly booking capacity reached. This clinic is not accepting online bookings at this time."
       return NextResponse.json(
-        { error: "Booking limit reached. This clinic is not accepting online bookings at this time." },
-        { status: 429 }
+        { error: errorMsg },
+        { status: limitCheck.featureDisabled ? 403 : 429 }
       )
     }
 

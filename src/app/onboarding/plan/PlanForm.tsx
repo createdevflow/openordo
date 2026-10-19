@@ -118,8 +118,9 @@ export function PlanForm({
             </div>
           </div>
 
-          {/* Hidden input for selected plan submission */}
+          {/* Hidden inputs for selected plan and currency submission */}
           <input type="hidden" name="planId" value={selectedPlanId} />
+          <input type="hidden" name="currency" value={selectedCurrency} />
 
           {/* Vertical Pricing Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch mb-8">
