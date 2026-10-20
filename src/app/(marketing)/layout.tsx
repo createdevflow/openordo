@@ -15,7 +15,7 @@ export default async function MarketingLayout({
 
   return (
     <div className="min-h-screen bg-paper flex flex-col">
-      <nav className="sticky top-0 z-40 border-b border-line bg-[#F1F0EA]/90 backdrop-blur-[10px]">
+      <nav className="sticky top-0 z-40 border-b border-line bg-[#F1F0EA]/90 backdrop-blur-[10px] relative">
         <div className="mx-auto flex max-w-[1180px] items-center justify-between px-7 py-[18px]">
           <Link href="/" className="flex items-center gap-[10px] text-ink">
             <img src="/openordo_logo.png" alt="OpenORDO Logo" className="h-[36px] w-auto shrink-0" />
@@ -24,7 +24,7 @@ export default async function MarketingLayout({
               <span className="text-[11px] font-sans font-medium text-ink-soft leading-none tracking-tight mt-[2px]">your clinic, in order</span>
             </div>
           </Link>
-          <div className="hidden md:flex items-center gap-[30px]">
+          <div className="hidden lg:flex items-center gap-[30px]">
             <Link href="/features" className="text-[14.5px] font-medium text-ink-soft hover:text-ink">Features</Link>
             <Link href="/workflow" className="text-[14.5px] font-medium text-ink-soft hover:text-ink">How it works</Link>
             <Link href="/pricing" className="text-[14.5px] font-medium text-ink-soft hover:text-ink">Pricing</Link>
@@ -44,7 +44,7 @@ export default async function MarketingLayout({
               </div>
             </div>
           </div>
-          <div className="hidden md:flex items-center gap-2.5">
+          <div className="hidden lg:flex items-center gap-2.5">
             {session ? (
               <Link href={session.user?.platformRole === "SUPER_ADMIN" ? "/admin" : "/dashboard"} tabIndex={-1}>
                 <Button size="sm">Go to Dashboard</Button>
