@@ -12,6 +12,7 @@ import { sendNotificationEmail } from "@/lib/notifications/send"
 import { Routes } from "@/lib/routes"
 import { renderAppointmentConfirmed, renderAppointmentChangedByClinic, renderNewBookingReceived, renderVideoConsultLink } from "@/lib/notifications/templates"
 import { randomBytes } from "crypto"
+import { ensurePatientAccount } from "@/lib/patient-account"
 
 export async function createAppointmentAction(data: {
   patientId?: string
@@ -58,6 +59,18 @@ export async function createAppointmentAction(data: {
       }
     })
     finalPatientId = createdPatient.id
+
+    // Patient portal: create/link PatientAccount for portal access
+    try {
+      await ensurePatientAccount(clinicId, {
+        id: createdPatient.id,
+        name: createdPatient.name,
+        email: createdPatient.email,
+        phone: createdPatient.phone
+      })
+    } catch (err) {
+      console.error("[createAppointmentAction] ensurePatientAccount error:", err)
+    }
   }
 
   if (!finalPatientId) {

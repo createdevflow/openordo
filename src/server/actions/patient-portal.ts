@@ -27,55 +27,82 @@ export async function requestPatientLoginCodeAction(identifier: string) {
     const cleanId = identifier.trim().toLowerCase()
     if (!cleanId) return { error: "Please enter your email or phone number." }
 
-    // Rate limit: 3 per 15 min per identifier
-    const allowed = checkRateLimit(`patient_login_code:${cleanId}`, 3, 15 * 60 * 1000)
+    // Rate limit: 5 per 15 min per identifier
+    const allowed = checkRateLimit(`patient_login_code:${cleanId}`, 5, 15 * 60 * 1000)
     if (!allowed) {
       return { error: "Too many code requests. Please wait 15 minutes before trying again." }
     }
 
     const digits = cleanId.replace(/[^0-9]/g, "")
+    const last10 = digits.length >= 10 ? digits.slice(-10) : digits
+    const phoneConditions: any[] = []
+    if (digits.length >= 7) {
+      phoneConditions.push({ phone: { contains: digits } })
+      if (last10 !== digits && last10.length >= 7) {
+        phoneConditions.push({ phone: { contains: last10 } })
+      }
+    }
 
+    // Auto-provision or link any Patient records registered under ANY clinic matching identifier
+    const matchingPatients = await db.patient.findMany({
+      where: {
+        OR: [
+          { email: { equals: cleanId, mode: "insensitive" as const } },
+          ...phoneConditions
+        ]
+      },
+      select: { id: true, clinicId: true, name: true, email: true, phone: true }
+    })
+
+    if (matchingPatients.length > 0) {
+      const { ensurePatientAccount } = await import("@/lib/patient-account")
+      for (const p of matchingPatients) {
+        await ensurePatientAccount(p.clinicId, p)
+      }
+    }
+
+    // Look up the patient account
     let account = await db.patientAccount.findFirst({
       where: {
         OR: [
-          { email: cleanId },
-          ...(digits.length >= 7 ? [{ phone: { contains: digits } }] : [])
+          { email: { equals: cleanId, mode: "insensitive" as const } },
+          ...phoneConditions
         ]
+      },
+      include: {
+        links: {
+          include: { clinic: true }
+        }
       }
     })
 
     if (!account) {
-      // Auto-provision PatientAccount for existing legacy patients
-      const legacyPatients = await db.patient.findMany({
+      return { error: "No patient account found with this email or phone number." }
+    }
+
+    // If account has no clinic links, attempt to link with any clinic patients matching email/phone
+    if (account.links.length === 0) {
+      const pEmail = account.email.includes("@placeholder.local") ? null : account.email
+      const pPhone = account.phone
+      const extraPatients = await db.patient.findMany({
         where: {
           OR: [
-            { email: cleanId },
-            ...(digits.length >= 7 ? [{ phone: { contains: digits } }] : [])
+            ...(pEmail ? [{ email: { equals: pEmail, mode: "insensitive" as const } }] : []),
+            ...(pPhone ? [{ phone: { contains: pPhone.replace(/[^0-9]/g, "") } }] : [])
           ]
         },
         select: { id: true, clinicId: true, name: true, email: true, phone: true }
       })
-
-      if (legacyPatients.length > 0) {
+      if (extraPatients.length > 0) {
         const { ensurePatientAccount } = await import("@/lib/patient-account")
-        for (const lp of legacyPatients) {
-          await ensurePatientAccount(lp.clinicId, lp)
+        for (const ep of extraPatients) {
+          await ensurePatientAccount(ep.clinicId, ep)
         }
-        
-        // Re-fetch the account
         account = await db.patientAccount.findFirst({
-          where: {
-            OR: [
-              { email: cleanId },
-              ...(digits.length >= 7 ? [{ phone: { contains: digits } }] : [])
-            ]
-          }
+          where: { id: account.id },
+          include: { links: { include: { clinic: true } } }
         })
       }
-    }
-
-    if (!account) {
-      return { error: "No patient account found with this email or phone number." }
     }
 
     const rawCode = generateCode()
@@ -83,26 +110,33 @@ export async function requestPatientLoginCodeAction(identifier: string) {
 
     await db.patientLoginCode.create({
       data: {
-        patientAccountId: account.id,
+        patientAccountId: account!.id,
         codeHash,
         expiresAt: new Date(Date.now() + 10 * 60 * 1000) // 10 min
       }
     })
 
-    // Send PATIENT_LOGIN_CODE — mandatory, always sends regardless of preferences
-    const APP = process.env.NEXT_PUBLIC_APP_URL || "https://openordo.com"
-    sendNotificationEmail(
-      "PATIENT_LOGIN_CODE",
-      { toEmail: account.email, ownerType: "PATIENT_ACCOUNT", ownerId: account.id },
-      renderPatientLoginCode({
-        patientName: account.name,
-        clinicName: "Patient Portal", // generic — no clinic scope at login time
-        code: rawCode,
-        loginUrl: `${APP}`,
-      })
-    ).catch(console.error)
+    // Send PATIENT_LOGIN_CODE if real email exists
+    const isPlaceholderEmail = account!.email.includes("@placeholder.local")
+    const destinationEmail = !isPlaceholderEmail ? account!.email : null
 
-    return { success: true, hasPassword: !!account.passwordHash }
+    if (destinationEmail) {
+      const APP = process.env.NEXT_PUBLIC_APP_URL || "https://openordo.com"
+      sendNotificationEmail(
+        "PATIENT_LOGIN_CODE",
+        { toEmail: destinationEmail, ownerType: "PATIENT_ACCOUNT", ownerId: account!.id },
+        renderPatientLoginCode({
+          patientName: account!.name,
+          clinicName: account!.links[0]?.clinic?.name || "Patient Portal",
+          code: rawCode,
+          loginUrl: `${APP}`,
+        })
+      ).catch(console.error)
+    } else {
+      console.log(`[PATIENT_LOGIN_CODE] Patient ${account!.name} has phone ${account!.phone}. Login code is: ${rawCode}`)
+    }
+
+    return { success: true, hasPassword: !!account!.passwordHash }
   } catch (e: any) {
     return { error: e.message }
   }
@@ -120,12 +154,20 @@ export async function verifyPatientLoginCodeAction(identifier: string, code: str
   try {
     const cleanId = identifier.trim().toLowerCase()
     const digits = cleanId.replace(/[^0-9]/g, "")
+    const last10 = digits.length >= 10 ? digits.slice(-10) : digits
+    const phoneConditions: any[] = []
+    if (digits.length >= 7) {
+      phoneConditions.push({ phone: { contains: digits } })
+      if (last10 !== digits && last10.length >= 7) {
+        phoneConditions.push({ phone: { contains: last10 } })
+      }
+    }
 
-    const account = await db.patientAccount.findFirst({
+    let account = await db.patientAccount.findFirst({
       where: {
         OR: [
-          { email: cleanId },
-          ...(digits.length >= 7 ? [{ phone: { contains: digits } }] : [])
+          { email: { equals: cleanId, mode: "insensitive" as const } },
+          ...phoneConditions
         ]
       },
       include: {
@@ -141,6 +183,42 @@ export async function verifyPatientLoginCodeAction(identifier: string, code: str
         }
       }
     })
+
+    if (!account) return { error: "Account not found." }
+
+    // If account has no clinic links, attempt to link on verify as well
+    if (account.links.length === 0) {
+      const pEmail = account.email.includes("@placeholder.local") ? null : account.email
+      const pPhone = account.phone
+      const extraPatients = await db.patient.findMany({
+        where: {
+          OR: [
+            ...(pEmail ? [{ email: { equals: pEmail, mode: "insensitive" as const } }] : []),
+            ...(pPhone ? [{ phone: { contains: pPhone.replace(/[^0-9]/g, "") } }] : [])
+          ]
+        },
+        select: { id: true, clinicId: true, name: true, email: true, phone: true }
+      })
+      if (extraPatients.length > 0) {
+        const { ensurePatientAccount } = await import("@/lib/patient-account")
+        for (const ep of extraPatients) {
+          await ensurePatientAccount(ep.clinicId, ep)
+        }
+        account = await db.patientAccount.findFirst({
+          where: { id: account.id },
+          include: {
+            loginCodes: {
+              where: {
+                consumedAt: null,
+                expiresAt: { gt: new Date() }
+              },
+              orderBy: { createdAt: "desc" }
+            },
+            links: { include: { clinic: true } }
+          }
+        })
+      }
+    }
 
     if (!account) return { error: "Account not found." }
 
@@ -190,6 +268,14 @@ export async function loginPatientWithPasswordAction(identifier: string, passwor
   try {
     const cleanId = identifier.trim().toLowerCase()
     const digits = cleanId.replace(/[^0-9]/g, "")
+    const last10 = digits.length >= 10 ? digits.slice(-10) : digits
+    const phoneConditions: any[] = []
+    if (digits.length >= 7) {
+      phoneConditions.push({ phone: { contains: digits } })
+      if (last10 !== digits && last10.length >= 7) {
+        phoneConditions.push({ phone: { contains: last10 } })
+      }
+    }
 
     const allowed = checkRateLimit(`patient_password:${cleanId}`, 10, 15 * 60 * 1000)
     if (!allowed) {
@@ -199,8 +285,8 @@ export async function loginPatientWithPasswordAction(identifier: string, passwor
     const account = await db.patientAccount.findFirst({
       where: {
         OR: [
-          { email: cleanId },
-          ...(digits.length >= 7 ? [{ phone: { contains: digits } }] : [])
+          { email: { equals: cleanId, mode: "insensitive" as const } },
+          ...phoneConditions
         ]
       },
       include: { links: { include: { clinic: true } } }

@@ -79,9 +79,15 @@ function LoginForm() {
     } else if (res.clinics) {
       if (res.clinics.length === 1) {
         router.push(`/portal/${res.clinics[0].slug}`)
-      } else {
+      } else if (res.clinics.length > 1) {
         setPatientClinics(res.clinics)
+        setPatientLoading(false)
+      } else {
+        setPatientError("No clinic records are linked to this patient account yet.")
+        setPatientLoading(false)
       }
+    } else {
+      setPatientLoading(false)
     }
   }
 

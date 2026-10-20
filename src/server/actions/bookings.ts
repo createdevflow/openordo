@@ -34,13 +34,17 @@ export async function confirmBookingAction(id: string) {
     })
   }
 
-  // Patient portal: create/link PatientAccount (fire-and-forget)
-  ensurePatientAccount(clinicId, {
-    id: patient.id,
-    name: patient.name,
-    email: patient.email,
-    phone: patient.phone
-  }).catch(console.error)
+  // Patient portal: create/link PatientAccount for portal access
+  try {
+    await ensurePatientAccount(clinicId, {
+      id: patient.id,
+      name: patient.name,
+      email: patient.email,
+      phone: patient.phone
+    })
+  } catch (err) {
+    console.error("[acceptBookingAction] ensurePatientAccount error:", err)
+  }
 
   // Find first available doctor if none specified
   let doctorId = req.doctorId

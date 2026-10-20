@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ClipboardList, LogOut, Menu, Search, Bell, ChevronsLeft, ChevronsRight, Settings, X } from "lucide-react"
+import { ClipboardList, LogOut, Menu, Search, Bell, ChevronsLeft, ChevronsRight, Settings, X, Check, CheckCheck } from "lucide-react"
 import { DashboardNav } from "./DashboardNav"
 import { FeedbackWidget } from "./FeedbackWidget"
 import { signOut } from "next-auth/react"
@@ -57,6 +57,45 @@ export function DashboardShell({
   const [profileOpen, setProfileOpen] = useState(false)
   const [timeLeft, setTimeLeft] = useState<{ d: number, h: number, m: number, s: number } | null>(null)
   const [isBannerDismissed, setIsBannerDismissed] = useState(false)
+  const [readNotifIds, setReadNotifIds] = useState<string[]>([])
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(`read_notifs_${clinicId || "default"}`)
+      if (stored) {
+        setReadNotifIds(JSON.parse(stored))
+      }
+    } catch (e) {}
+  }, [clinicId])
+
+  const markAsRead = (id: string) => {
+    setReadNotifIds(prev => {
+      if (prev.includes(id)) return prev
+      const updated = [...prev, id]
+      try {
+        localStorage.setItem(`read_notifs_${clinicId || "default"}`, JSON.stringify(updated))
+      } catch (e) {}
+      return updated
+    })
+  }
+
+  const markAllAsRead = () => {
+    const allIds = [
+      ...(recentDataRequests || []).map((r: any) => `req_${r.id}`),
+      ...(recentBookings || []).map((b: any) => `booking_${b.id}`)
+    ]
+    setReadNotifIds(prev => {
+      const combined = Array.from(new Set([...prev, ...allIds]))
+      try {
+        localStorage.setItem(`read_notifs_${clinicId || "default"}`, JSON.stringify(combined))
+      } catch (e) {}
+      return combined
+    })
+  }
+
+  const unreadDataRequests = (recentDataRequests || []).filter((r: any) => !readNotifIds.includes(`req_${r.id}`))
+  const unreadBookings = (recentBookings || []).filter((b: any) => !readNotifIds.includes(`booking_${b.id}`))
+  const unreadTotal = unreadDataRequests.length + unreadBookings.length
 
   useEffect(() => {
     if (clinicStatus === "LOCKED_CANCELLED" && pathname !== "/dashboard/settings") {
@@ -263,39 +302,151 @@ export function DashboardShell({
                   style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center", color: "var(--ink-soft)", position: "relative" }}
                 >
                   <Bell size={18} />
-                  <span className="cw-dot-badge" style={{ right: -2, top: -2, display: (pendingBookings + pendingDataRequests) > 0 ? "block" : "none" }} />
+                  <span className="cw-dot-badge" style={{ right: -2, top: -2, display: unreadTotal > 0 ? "block" : "none" }} />
                 </button>
                 {notifOpen && (
                   <>
                     <div style={{ position: "fixed", inset: 0, zIndex: 99 }} onClick={() => setNotifOpen(false)} />
-                    <div className="cw-dropdown" style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, width: 280, padding: 0, zIndex: 100 }}>
-                      <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", fontWeight: 600, fontSize: 13.5 }}>
-                        Notifications {(pendingBookings + pendingDataRequests) > 0 && <span style={{ color: "var(--moss)", marginLeft: 6 }}>({pendingBookings + pendingDataRequests})</span>}
+                    <div className="cw-dropdown" style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, width: 310, padding: 0, zIndex: 100 }}>
+                      <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ fontWeight: 600, fontSize: 13.5, display: "flex", alignItems: "center", gap: 6 }}>
+                          <span>Notifications</span>
+                          {unreadTotal > 0 && (
+                            <span style={{ background: "rgba(30, 70, 56, 0.1)", color: "var(--forest)", fontSize: 11.5, fontWeight: 700, padding: "1px 7px", borderRadius: 10 }}>
+                              {unreadTotal}
+                            </span>
+                          )}
+                        </div>
+                        {unreadTotal > 0 ? (
+                          <button 
+                            type="button" 
+                            onClick={markAllAsRead} 
+                            style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, color: "var(--forest)", display: "flex", alignItems: "center", gap: 4, padding: "2px 4px" }}
+                            className="hover:underline"
+                          >
+                            <CheckCheck size={14} /> Mark all read
+                          </button>
+                        ) : (
+                          <span style={{ fontSize: 11.5, color: "var(--ink-soft)", opacity: 0.75 }}>All caught up</span>
+                        )}
                       </div>
-                      <div style={{ maxHeight: 300, overflowY: "auto", padding: "8px 0" }}>
+                      <div style={{ maxHeight: 320, overflowY: "auto", padding: "4px 0" }}>
                         {((!recentBookings || recentBookings.length === 0) && (!recentDataRequests || recentDataRequests.length === 0)) ? (
-                          <div style={{ padding: "16px", fontSize: 13, color: "var(--ink-soft)", textAlign: "center" }}>
+                          <div style={{ padding: "20px 16px", fontSize: 13, color: "var(--ink-soft)", textAlign: "center" }}>
                             No new notifications
                           </div>
                         ) : (
                           <>
-                            {recentDataRequests?.map((req: any) => (
-                              <div key={req.id} style={{ padding: "12px 16px", fontSize: 13, borderBottom: "1px solid var(--line)" }}>
-                                <div style={{ fontWeight: 600 }}>Data export requested</div>
-                                <div style={{ color: "var(--ink-soft)", marginTop: 4 }}>{req.patientAccount?.name} requested their data</div>
-                                <a href="/dashboard/settings?tab=data-requests" onClick={() => setNotifOpen(false)} style={{ display: "inline-block", marginTop: 8, color: "var(--forest)", fontWeight: 500, textDecoration: "underline" }}>View Settings</a>
-                              </div>
-                            ))}
-                            {recentBookings?.map((b: any) => (
-                              <div key={b.id} style={{ padding: "12px 16px", fontSize: 13, borderBottom: "1px solid var(--line)" }}>
-                                <div style={{ fontWeight: 600 }}>New booking request</div>
-                                <div style={{ color: "var(--ink-soft)", marginTop: 4 }}>{b.name} requested {b.date} at {b.time}</div>
-                              </div>
-                            ))}
+                            {recentDataRequests?.map((req: any) => {
+                              const isRead = readNotifIds.includes(`req_${req.id}`)
+                              return (
+                                <div 
+                                  key={req.id} 
+                                  onClick={() => {
+                                    markAsRead(`req_${req.id}`)
+                                    setNotifOpen(false)
+                                    router.push("/dashboard/settings?tab=data-requests")
+                                  }}
+                                  style={{ 
+                                    padding: "11px 16px", 
+                                    fontSize: 13, 
+                                    borderBottom: "1px solid var(--line)",
+                                    cursor: "pointer",
+                                    background: isRead ? "transparent" : "rgba(30, 70, 56, 0.04)",
+                                    display: "flex",
+                                    alignItems: "flex-start",
+                                    justifyContent: "space-between",
+                                    gap: 8,
+                                    transition: "background 0.15s ease"
+                                  }}
+                                  className="hover:bg-paper"
+                                >
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: isRead ? 500 : 700, color: isRead ? "var(--ink-soft)" : "var(--ink)", display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                                      {!isRead && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--forest)", flexShrink: 0 }} />}
+                                      Data export requested
+                                    </div>
+                                    <div style={{ color: "var(--ink-soft)", marginTop: 3, fontSize: 12 }}>
+                                      {req.patientAccount?.name} requested their data
+                                    </div>
+                                    <div style={{ color: "var(--forest)", fontSize: 11.5, marginTop: 4, fontWeight: 500 }}>
+                                      View in Settings →
+                                    </div>
+                                  </div>
+                                  {!isRead && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        markAsRead(`req_${req.id}`)
+                                      }}
+                                      title="Mark as read"
+                                      style={{ background: "transparent", border: "none", cursor: "pointer", padding: 4, color: "var(--ink-soft)", opacity: 0.6 }}
+                                      className="hover:opacity-100 hover:text-forest"
+                                    >
+                                      <Check size={14} />
+                                    </button>
+                                  )}
+                                </div>
+                              )
+                            })}
+                            {recentBookings?.map((b: any) => {
+                              const isRead = readNotifIds.includes(`booking_${b.id}`)
+                              return (
+                                <div 
+                                  key={b.id} 
+                                  onClick={() => {
+                                    markAsRead(`booking_${b.id}`)
+                                    setNotifOpen(false)
+                                    router.push("/dashboard/bookings")
+                                  }}
+                                  style={{ 
+                                    padding: "11px 16px", 
+                                    fontSize: 13, 
+                                    borderBottom: "1px solid var(--line)",
+                                    cursor: "pointer",
+                                    background: isRead ? "transparent" : "rgba(30, 70, 56, 0.04)",
+                                    display: "flex",
+                                    alignItems: "flex-start",
+                                    justifyContent: "space-between",
+                                    gap: 8,
+                                    transition: "background 0.15s ease"
+                                  }}
+                                  className="hover:bg-paper"
+                                >
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: isRead ? 500 : 700, color: isRead ? "var(--ink-soft)" : "var(--ink)", display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                                      {!isRead && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--forest)", flexShrink: 0 }} />}
+                                      New booking request
+                                    </div>
+                                    <div style={{ color: "var(--ink-soft)", marginTop: 3, fontSize: 12 }}>
+                                      {b.name} requested {b.date} at {b.time}
+                                    </div>
+                                    <div style={{ color: "var(--moss)", fontSize: 11.5, marginTop: 4, fontWeight: 500 }}>
+                                      Review booking →
+                                    </div>
+                                  </div>
+                                  {!isRead && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        markAsRead(`booking_${b.id}`)
+                                      }}
+                                      title="Mark as read"
+                                      style={{ background: "transparent", border: "none", cursor: "pointer", padding: 4, color: "var(--ink-soft)", opacity: 0.6 }}
+                                      className="hover:opacity-100 hover:text-forest"
+                                    >
+                                      <Check size={14} />
+                                    </button>
+                                  )}
+                                </div>
+                              )
+                            })}
                           </>
                         )}
                         {((recentBookings && recentBookings.length > 0) || (recentDataRequests && recentDataRequests.length > 0)) && (
-                          <a href="/dashboard/bookings" style={{ display: "block", padding: "12px 16px", fontSize: 13, textAlign: "center", color: "var(--moss)", textDecoration: "none", fontWeight: 500 }}>
+                          <a href="/dashboard/bookings" style={{ display: "block", padding: "10px 16px", fontSize: 12.5, textAlign: "center", color: "var(--moss)", textDecoration: "none", fontWeight: 500, borderTop: "1px solid var(--line)" }}>
                             View all bookings
                           </a>
                         )}

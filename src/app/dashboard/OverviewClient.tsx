@@ -1,12 +1,42 @@
 "use client"
 
 import React, { useMemo, useState, useEffect } from "react"
-import { Users, CalendarClock, TrendingUp, Receipt, Link as LinkIcon, X, Copy, Check, Stethoscope, CheckCircle2, Lock, ArrowUpRight } from "lucide-react"
+import { 
+  Users, 
+  CalendarClock, 
+  TrendingUp, 
+  Receipt, 
+  Link as LinkIcon, 
+  X, 
+  Copy, 
+  Check, 
+  Stethoscope, 
+  CheckCircle2, 
+  Lock, 
+  ArrowUpRight,
+  Package,
+  FileSignature,
+  Video,
+  HardDrive
+} from "lucide-react"
 import { AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts"
 import { currency, fmtDateShort, fmtTime12, initials, StatusBadge, toISO } from "@/components/DashboardHelpers"
 import Link from "next/link"
 
-export function OverviewClient({ clinic, patients, appointments, invoices, doctors, planDetails, storageStats }: any) {
+export function OverviewClient({ 
+  clinic, 
+  patients, 
+  appointments, 
+  invoices, 
+  doctors, 
+  planDetails, 
+  storageStats,
+  clinicPlugins = [],
+  extraDoctorSeats = 0,
+  effectiveDoctorLimit = null,
+  inventoryItems = [],
+  prescriptions = []
+}: any) {
   const [showPopup, setShowPopup] = useState(false)
   const [copied, setCopied] = useState(false)
   const [isClient, setIsClient] = useState(false)
@@ -89,81 +119,300 @@ export function OverviewClient({ clinic, patients, appointments, invoices, docto
 
   const pieColors = ["#1E4638", "#C8862B", "#386A8A", "#B5432F", "#5C7A67"]
 
-  const stats = hasBilling ? [
-    { 
-      label: "Total patients", 
-      value: planDetails?.patientLimit ? `${patients.length} / ${planDetails.patientLimit}` : patients.length, 
-      icon: Users, 
-      tint: "#DCE7EC", 
-      color: "#386A8A", 
-      delta: `${planDetails?.planName || "Starter"} plan`, 
-      up: true 
-    },
-    { 
-      label: "Today's appointments", 
-      value: todays.length, 
-      icon: CalendarClock, 
-      tint: "#F3E3C6", 
-      color: "#C8862B", 
-      delta: `${todays.filter((a: any) => a.status.toLowerCase() === "completed").length} completed`, 
-      up: true 
-    },
-    { 
-      label: "Revenue this month", 
-      value: currency(revenueThisMonth), 
-      icon: TrendingUp, 
-      tint: "#DCEADD", 
-      color: "#2E6B3E", 
-      delta: "Total collected", 
-      up: true 
-    },
-    { 
-      label: "Pending invoices", 
-      value: currency(pendingAmount), 
-      icon: Receipt, 
-      tint: "#F3DBD3", 
-      color: "#B5432F", 
-      delta: `${mappedInvoices.filter((i: any) => i.status.toLowerCase() === "unpaid").length} unpaid`, 
-      up: false 
-    },
-  ] : [
-    { 
-      label: "Total patients", 
-      value: planDetails?.patientLimit ? `${patients.length} / ${planDetails.patientLimit}` : patients.length, 
-      icon: Users, 
-      tint: "#DCE7EC", 
-      color: "#386A8A", 
-      delta: `${planDetails?.planName || "Starter"} quota`, 
-      up: true 
-    },
-    { 
-      label: "Today's appointments", 
-      value: todays.length, 
-      icon: CalendarClock, 
-      tint: "#F3E3C6", 
-      color: "#C8862B", 
-      delta: `${todays.filter((a: any) => a.status.toLowerCase() === "completed").length} completed`, 
-      up: true 
-    },
-    { 
-      label: "Doctors & Staff", 
-      value: planDetails?.doctorLimit ? `${doctors.length} / ${planDetails.doctorLimit}` : doctors.length, 
-      icon: Stethoscope, 
-      tint: "#DCEADD", 
-      color: "#2E6B3E", 
-      delta: "Active staff", 
-      up: true 
-    },
-    { 
-      label: "Completed visits", 
-      value: completedVisits, 
-      icon: CheckCircle2, 
-      tint: "#F3E3C6", 
-      color: "#C8862B", 
-      delta: "All-time", 
-      up: true 
-    },
-  ]
+  // Active Plugin Slugs
+  const activePluginSlugs = useMemo(() => {
+    return (clinicPlugins || []).map((cp: any) => cp.plugin?.slug)
+  }, [clinicPlugins])
+
+  const hasExtraDoctorSeats = extraDoctorSeats > 0
+  const hasInventoryPlugin = activePluginSlugs.includes("inventory-management")
+  const hasPrescriptionsPlugin = activePluginSlugs.includes("e-prescriptions")
+  const hasVideoPlugin = activePluginSlugs.includes("video-consultation")
+  const hasStoragePlugin = activePluginSlugs.includes("document-storage")
+
+  // Effective limits
+  const isDoctorUnlimited = effectiveDoctorLimit === null
+  const isPatientUnlimited = planDetails?.patientLimit === null || !planDetails?.patientLimit
+
+  const stats = useMemo(() => {
+    // ── Card 1: Total Patients (Aligned with Plan Quota) ──
+    const card1 = {
+      label: "Total patients",
+      href: "/dashboard/patients",
+      icon: Users,
+      tint: "#DCE7EC",
+      color: "#386A8A",
+      mainVal: patients.length,
+      subVal: isPatientUnlimited ? null : ` / ${planDetails?.patientLimit || 200}`,
+      hint: isPatientUnlimited 
+        ? "Unlimited quota" 
+        : `${Math.max(0, (planDetails?.patientLimit || 200) - patients.length)} left`,
+      badge: isPatientUnlimited ? {
+        text: `${planDetails?.planName || "Active"} Plan`,
+        bg: "#ECFDF5",
+        color: "#065F46",
+        border: "#A7F3D0"
+      } : patients.length >= (planDetails?.patientLimit || 200) ? {
+        text: "Quota Full",
+        bg: "#FEF2F2",
+        color: "#B91C1C",
+        border: "#FECACA"
+      } : patients.length / (planDetails?.patientLimit || 200) >= 0.8 ? {
+        text: "Near Quota",
+        bg: "#FFFBEB",
+        color: "#B45309",
+        border: "#FDE68A"
+      } : {
+        text: `${planDetails?.planName || "Free"} Plan (${planDetails?.patientLimit || 200})`,
+        bg: "var(--paper)",
+        color: "var(--ink-soft)",
+        border: "var(--line)"
+      }
+    }
+
+    // ── Card 2: Today's Appointments (Today's Visits & Status) ──
+    const completedToday = todays.filter((a: any) => a.status.toLowerCase() === "completed").length
+    const videoToday = todays.filter((a: any) => a.visitType === "VIDEO").length
+
+    const card2 = {
+      label: "Today's appointments",
+      href: "/dashboard/appointments",
+      icon: CalendarClock,
+      tint: "#F3E3C6",
+      color: "#C8862B",
+      mainVal: todays.length,
+      subVal: null,
+      hint: todays.length === 0 ? "No visits scheduled" : `${completedToday} of ${todays.length} completed`,
+      badge: todays.length === 0 ? {
+        text: "No Visits Today",
+        bg: "var(--paper)",
+        color: "var(--ink-soft)",
+        border: "var(--line)"
+      } : completedToday > 0 ? {
+        text: `${completedToday} Completed`,
+        bg: "#ECFDF5",
+        color: "#065F46",
+        border: "#A7F3D0"
+      } : videoToday > 0 ? {
+        text: `${videoToday} Video Visit${videoToday > 1 ? 's' : ''}`,
+        bg: "#F0F9FF",
+        color: "#0369A1",
+        border: "#BAE6FD"
+      } : {
+        text: `${todays.length} Scheduled`,
+        bg: "#FFFBEB",
+        color: "#B45309",
+        border: "#FDE68A"
+      }
+    }
+
+    // ── Card 3: Doctors & Staff (Aligned with Plan + Extra Seats) OR Revenue ──
+    let card3;
+    if (hasBilling) {
+      card3 = {
+        label: "Revenue this month",
+        href: "/dashboard/billing",
+        icon: TrendingUp,
+        tint: "#DCEADD",
+        color: "#2E6B3E",
+        mainVal: currency(revenueThisMonth),
+        subVal: null,
+        hint: `${mappedInvoices.filter((i: any) => i.status.toLowerCase() === "paid").length} paid invoices`,
+        badge: {
+          text: "Total Collected",
+          bg: "#ECFDF5",
+          color: "#065F46",
+          border: "#A7F3D0"
+        }
+      }
+    } else {
+      card3 = {
+        label: "Doctors & Staff",
+        href: "/dashboard/doctors",
+        icon: Stethoscope,
+        tint: "#DCEADD",
+        color: "#2E6B3E",
+        mainVal: doctors.length,
+        subVal: isDoctorUnlimited ? null : ` / ${effectiveDoctorLimit}`,
+        hint: isDoctorUnlimited 
+          ? "Unlimited staff" 
+          : `${Math.max(0, (effectiveDoctorLimit || 0) - doctors.length)} slots left`,
+        badge: hasExtraDoctorSeats ? {
+          text: `+${extraDoctorSeats} Add-on Seat${extraDoctorSeats > 1 ? 's' : ''}`,
+          bg: "#ECFDF5",
+          color: "#065F46",
+          border: "#A7F3D0"
+        } : isDoctorUnlimited ? {
+          text: "Unlimited Plan",
+          bg: "#ECFDF5",
+          color: "#065F46",
+          border: "#A7F3D0"
+        } : (effectiveDoctorLimit !== null && doctors.length > effectiveDoctorLimit) ? {
+          text: `Over Limit (+${doctors.length - effectiveDoctorLimit})`,
+          bg: "#FEF2F2",
+          color: "#B91C1C",
+          border: "#FECACA"
+        } : (effectiveDoctorLimit !== null && doctors.length === effectiveDoctorLimit) ? {
+          text: "Capacity Full",
+          bg: "#FFFBEB",
+          color: "#B45309",
+          border: "#FDE68A"
+        } : {
+          text: "Active Staff",
+          bg: "var(--paper)",
+          color: "var(--ink-soft)",
+          border: "var(--line)"
+        }
+      }
+    }
+
+    // ── Card 4: Plugins Add-on KPI OR Pending Invoices OR Completed Visits ──
+    let card4;
+    
+    if (hasPrescriptionsPlugin) {
+      card4 = {
+        label: "E-Prescriptions",
+        href: "/dashboard/prescriptions",
+        icon: FileSignature,
+        tint: "#EDE9FE",
+        color: "#7C3AED",
+        mainVal: prescriptions.length,
+        subVal: null,
+        hint: prescriptions.length === 1 ? "1 prescription issued" : `${prescriptions.length} prescriptions issued`,
+        badge: {
+          text: "E-Rx Add-on",
+          bg: "#F5F3FF",
+          color: "#6D28D9",
+          border: "#DDD6FE"
+        }
+      }
+    } else if (hasInventoryPlugin) {
+      const lowStockCount = (inventoryItems || []).filter((i: any) => i.quantityOnHand <= (i.reorderThreshold ?? 5)).length
+      card4 = {
+        label: "Inventory items",
+        href: "/dashboard/inventory",
+        icon: Package,
+        tint: "#FEF3C7",
+        color: "#D97706",
+        mainVal: (inventoryItems || []).length,
+        subVal: null,
+        hint: lowStockCount > 0 ? `${lowStockCount} items need restock` : "Stock levels optimal",
+        badge: lowStockCount > 0 ? {
+          text: `${lowStockCount} Low Stock`,
+          bg: "#FEF2F2",
+          color: "#B91C1C",
+          border: "#FECACA"
+        } : {
+          text: "Inventory Add-on",
+          bg: "#ECFDF5",
+          color: "#065F46",
+          border: "#A7F3D0"
+        }
+      }
+    } else if (hasBilling) {
+      const unpaidCount = mappedInvoices.filter((i: any) => i.status.toLowerCase() === "unpaid").length
+      card4 = {
+        label: "Pending invoices",
+        href: "/dashboard/billing",
+        icon: Receipt,
+        tint: "#F3DBD3",
+        color: "#B5432F",
+        mainVal: currency(pendingAmount),
+        subVal: null,
+        hint: `${unpaidCount} unpaid invoice${unpaidCount !== 1 ? 's' : ''}`,
+        badge: unpaidCount > 0 ? {
+          text: `${unpaidCount} Pending`,
+          bg: "#FEF2F2",
+          color: "#B91C1C",
+          border: "#FECACA"
+        } : {
+          text: "All Paid",
+          bg: "#ECFDF5",
+          color: "#065F46",
+          border: "#A7F3D0"
+        }
+      }
+    } else if (hasVideoPlugin) {
+      const videoVisits = appointments.filter((a: any) => a.visitType === "VIDEO").length
+      card4 = {
+        label: "Video visits",
+        href: "/dashboard/appointments",
+        icon: Video,
+        tint: "#E0F2FE",
+        color: "#0284C7",
+        mainVal: videoVisits,
+        subVal: null,
+        hint: "Telehealth consultations",
+        badge: {
+          text: "Video Add-on",
+          bg: "#F0F9FF",
+          color: "#0369A1",
+          border: "#BAE6FD"
+        }
+      }
+    } else if (hasStoragePlugin && storageStats?.addonStorageGb > 0) {
+      const usedGb = ((storageStats.usedBytes || 0) / (1024 * 1024 * 1024)).toFixed(1)
+      const totalGb = (storageStats.baseStorageGb || 0) + (storageStats.addonStorageGb || 0)
+      card4 = {
+        label: "Document storage",
+        href: "/dashboard/settings?tab=storage",
+        icon: HardDrive,
+        tint: "#F1F5F9",
+        color: "#475569",
+        mainVal: `${usedGb}`,
+        subVal: ` / ${totalGb} GB`,
+        hint: `+${storageStats.addonStorageGb} GB Add-on capacity`,
+        badge: {
+          text: `+${storageStats.addonStorageGb} GB Storage`,
+          bg: "#F1F5F9",
+          color: "#334155",
+          border: "#CBD5E1"
+        }
+      }
+    } else {
+      card4 = {
+        label: "Completed visits",
+        href: "/dashboard/appointments",
+        icon: CheckCircle2,
+        tint: "#DCEADD",
+        color: "#2E6B3E",
+        mainVal: completedVisits,
+        subVal: null,
+        hint: "All-time completed visits",
+        badge: {
+          text: "All-Time",
+          bg: "var(--paper)",
+          color: "var(--ink-soft)",
+          border: "var(--line)"
+        }
+      }
+    }
+
+    return [card1, card2, card3, card4]
+  }, [
+    patients.length,
+    planDetails,
+    isPatientUnlimited,
+    todays,
+    hasBilling,
+    revenueThisMonth,
+    mappedInvoices,
+    doctors.length,
+    effectiveDoctorLimit,
+    isDoctorUnlimited,
+    hasExtraDoctorSeats,
+    extraDoctorSeats,
+    hasPrescriptionsPlugin,
+    prescriptions.length,
+    hasInventoryPlugin,
+    inventoryItems,
+    pendingAmount,
+    hasVideoPlugin,
+    appointments,
+    hasStoragePlugin,
+    storageStats,
+    completedVisits
+  ])
 
   return (
     <div>
@@ -208,15 +457,57 @@ export function OverviewClient({ clinic, patients, appointments, invoices, docto
 
       <div className="cw-grid-2" style={{ marginBottom: 24 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          {stats.map(s => (
-            <div className="cw-stat-card" key={s.label} style={{ margin: 0 }}>
-              <div className="top">
-                <div className="icon" style={{ background: s.tint, color: s.color }}><s.icon size={15} /></div>
+          {stats.map(s => {
+            const cardEl = (
+              <div 
+                className="cw-stat-card transition-all duration-150 hover:border-forest/40 hover:shadow-[0_4px_12px_rgba(0,0,0,0.05)] cursor-pointer" 
+                key={s.label} 
+                style={{ margin: 0, display: "flex", flexDirection: "column", justifyContent: "space-between" }}
+              >
+                <div className="top" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <div className="icon" style={{ background: s.tint, color: s.color, width: 32, height: 32, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <s.icon size={16} />
+                  </div>
+                  {s.badge && (
+                    <span 
+                      className="px-2 py-0.5 rounded-full text-[11px] font-semibold tracking-tight inline-flex items-center gap-1 border"
+                      style={{
+                        background: s.badge.bg,
+                        color: s.badge.color,
+                        borderColor: s.badge.border || "transparent",
+                      }}
+                    >
+                      {s.badge.text}
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <div className="val" style={{ display: "flex", alignItems: "baseline", gap: 3, fontSize: 24, fontWeight: 700, fontFamily: "'Fraunces', serif" }}>
+                    <span>{s.mainVal}</span>
+                    {s.subVal && (
+                      <span style={{ fontSize: 15, fontWeight: 500, color: "var(--ink-soft)", opacity: 0.75, fontFamily: "'Inter', sans-serif" }}>
+                        {s.subVal}
+                      </span>
+                    )}
+                  </div>
+                  <div className="lbl" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
+                    <span style={{ fontSize: 13, color: "var(--ink-soft)", fontWeight: 500 }}>{s.label}</span>
+                    {s.hint && (
+                      <span style={{ fontSize: 11.5, color: "var(--ink-soft)", opacity: 0.7 }}>{s.hint}</span>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div className="val">{s.value}</div>
-              <div className="lbl">{s.label}</div>
-            </div>
-          ))}
+            )
+
+            return s.href ? (
+              <Link key={s.label} href={s.href} style={{ textDecoration: "none", color: "inherit", display: "block" }}>
+                {cardEl}
+              </Link>
+            ) : (
+              <div key={s.label}>{cardEl}</div>
+            )
+          })}
         </div>
 
         <div className="cw-panel">

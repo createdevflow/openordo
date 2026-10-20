@@ -38,13 +38,17 @@ export async function createPatientAction(data: {
     }
   })
 
-  // Patient portal: create/link PatientAccount if clinic has the feature active
-  ensurePatientAccount(clinicId, {
-    id: patient.id,
-    name: patient.name,
-    email: patient.email,
-    phone: patient.phone
-  }).catch(console.error)
+  // Patient portal: create/link PatientAccount for portal access
+  try {
+    await ensurePatientAccount(clinicId, {
+      id: patient.id,
+      name: patient.name,
+      email: patient.email,
+      phone: patient.phone
+    })
+  } catch (err) {
+    console.error("[createPatientAction] ensurePatientAccount error:", err)
+  }
 
   revalidatePath("/dashboard", "layout")
   return patient
@@ -69,12 +73,16 @@ export async function updatePatientAction(id: string, data: {
   })
 
   // Patient portal: update/link PatientAccount
-  ensurePatientAccount(clinicId, {
-    id: patient.id,
-    name: patient.name,
-    email: patient.email,
-    phone: patient.phone
-  }).catch(console.error)
+  try {
+    await ensurePatientAccount(clinicId, {
+      id: patient.id,
+      name: patient.name,
+      email: patient.email,
+      phone: patient.phone
+    })
+  } catch (err) {
+    console.error("[updatePatientAction] ensurePatientAccount error:", err)
+  }
 
   revalidatePath("/dashboard", "layout")
   return patient
