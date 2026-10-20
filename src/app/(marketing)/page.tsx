@@ -1,9 +1,8 @@
 import Link from "next/link"
-import { headers } from "next/headers"
 import { resolvePricingContext } from "@/lib/pricing"
 import { db } from "@/lib/db"
 import { Button } from "@/components/ui/Button"
-import { PluginCard } from "@/components/ui/PluginCard"
+import { MarketingAddonsSection } from "@/components/marketing/MarketingAddonsSection"
 import { 
   Users, Calendar, Stethoscope, Receipt, FileText, Activity, ShieldCheck, 
   Building2, CalendarDays, ArrowRight, ChevronDown, Quote, Download, BellRing, Puzzle
@@ -342,7 +341,7 @@ export default async function MarketingPage() {
 
       {/* PLUGINS SECTION */}
       {landingPlugins.length > 0 && (
-        <section id="addons" className="cw-plugins-section">
+        <section id="addons" className="max-w-[1180px] mx-auto px-4 sm:px-7 py-16 sm:py-20">
           <div style={{ maxWidth: 640, marginBottom: 36 }}>
             <h2 className="font-serif" style={{ fontSize: 34, fontWeight: 600, letterSpacing: "-0.01em", color: "var(--ink)", marginBottom: 14 }}>
               Power up your clinic
@@ -351,17 +350,12 @@ export default async function MarketingPage() {
               Plugins are powerful features you can add to any plan — including Starter. Buy only what your clinic needs, and switch them on or off anytime.
             </p>
           </div>
-          <div className="cw-plugins-grid">
-            {landingPlugins.map((plugin) => (
-              <PluginCard
-                key={plugin.id}
-                plugin={plugin}
-                currency={pricingContext.currency as "INR" | "USD"}
-                variant="landing"
-                isLoggedIn={false}
-              />
-            ))}
-          </div>
+          <MarketingAddonsSection
+            plugins={landingPlugins}
+            currency={pricingContext.currency as "INR" | "USD"}
+            countryCode={pricingContext.countryCode}
+            taxConfig={pricingContext.taxConfig}
+          />
         </section>
       )}
 

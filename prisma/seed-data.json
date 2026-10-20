@@ -476,7 +476,7 @@
       "tagline": "+10 GB of secure document storage per unit.",
       "description": "Expand your clinic's document and report storage. Each unit adds 10 GB to your base 5 GB quota. Purchase multiple units for even more capacity. All files are stored securely and accessible from patient records.",
       "category": "Operations",
-      "icon": "HardDrive",
+      "icon": "FolderLock",
       "kind": "LIMIT_MODIFIER",
       "priceOneTimeINR": null,
       "priceOneTimeUSD": null,
