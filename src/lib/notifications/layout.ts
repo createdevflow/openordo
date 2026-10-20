@@ -33,7 +33,7 @@ export function baseEmailLayout({
   const year = new Date().getFullYear()
   const brandLine = clinicName
     ? `This email was sent on behalf of <strong>${clinicName}</strong> via OpenORDO.`
-    : "Automating the day-to-day of your clinic."
+    : "OpenORDO — your clinic, in order."
 
   const unsubscribeSection =
     showPreferencesLink && preferencesUrl

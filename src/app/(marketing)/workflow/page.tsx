@@ -1,6 +1,6 @@
 export const metadata = {
-  title: "How it works",
-  description: "See the seamless daily workflow of a clinic using OpenORDO.",
+  title: "How it works | OpenORDO",
+  description: "See how OpenORDO (Organized Records & Daily Operations) keeps your clinic in order from walk-in to paid invoice.",
 }
 
 export default function WorkflowPage() {
@@ -11,7 +11,7 @@ export default function WorkflowPage() {
           From walk-in to paid invoice
         </h1>
         <p className="text-[18px] leading-[1.55] text-ink-soft">
-          The same four steps repeat all day at the front desk — OpenORDO is built around that exact loop. See how our intuitive design speeds up your daily operations.
+          The same four steps repeat all day at the front desk — OpenORDO is built around that exact loop. See how Organized Records &amp; Daily Operations speed up your workflow and keep your clinic in order.
         </p>
       </div>
 

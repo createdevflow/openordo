@@ -43,7 +43,7 @@ export async function generateMetadata(): Promise<Metadata> {
     title = "OpenORDO";
   }
 
-  const description = config.SEO_META_DESC || "Clinic management system";
+  const description = config.SEO_META_DESC || "OpenORDO — your clinic, in order. Organized Records & Daily Operations.";
   const favicon = config.SEO_FAVICON_URL || null;
   const ogImage = config.SEO_OG_IMAGE_URL || "";
 

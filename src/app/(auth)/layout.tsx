@@ -23,10 +23,10 @@ export default async function AuthLayout({
         </div>
         <div>
           <div className="font-serif text-[30px] font-medium leading-[1.25] max-w-[24ch]">
-            Every patient, every visit, every clinic — kept in one record.
+            Your clinic, in order.
           </div>
           <p className="mt-4 max-w-[34ch] text-[14.5px] leading-[1.6] text-[#CFE0D6]">
-            OpenORDO is the day-to-day system for running a clinic: booking appointments, keeping patient charts current, and sending invoices that get paid.
+            OpenORDO (Organized Records &amp; Daily Operations) is the day-to-day system for running a clinic: booking appointments, keeping patient charts current, and sending invoices that get paid.
           </p>
         </div>
         <div className="text-[13px] text-[#93A69C]">

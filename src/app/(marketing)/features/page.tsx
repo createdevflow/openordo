@@ -1,8 +1,8 @@
 import { Users, Calendar, Stethoscope, Receipt, FileText, Activity, CalendarDays, BellRing, Download } from "lucide-react"
 
 export const metadata = {
-  title: "Features",
-  description: "Explore the comprehensive features of OpenORDO.",
+  title: "Features | OpenORDO — your clinic, in order",
+  description: "Explore the comprehensive features of OpenORDO: Organized Records & Daily Operations to keep your clinic in order.",
 }
 
 export default function FeaturesPage() {
@@ -13,7 +13,7 @@ export default function FeaturesPage() {
           Everything a clinic actually needs
         </h1>
         <p className="text-[18px] leading-[1.55] text-ink-soft">
-          Not a bloated hospital ERP, and not a bare-bones calendar. OpenORDO covers the daily operations of a clinic front-to-back.
+          Not a bloated hospital ERP, and not a bare-bones calendar. OpenORDO covers the daily operations of a clinic front-to-back — keeping your clinic in order.
         </p>
       </div>
 

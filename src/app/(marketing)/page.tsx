@@ -12,7 +12,8 @@ import { LandingPricingSection, PlanItem } from "./LandingPricingSection"
 import { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "Home",
+  title: "OpenORDO — your clinic, in order",
+  description: "OpenORDO (Organized Records & Daily Operations) is the day-to-day system for running a modern clinic. Your clinic, in order.",
 }
 
 export default async function MarketingPage() {
@@ -192,7 +193,7 @@ export default async function MarketingPage() {
           Every patient, every visit, in one record.
         </h1>
         <p className="mx-auto mb-[32px] max-w-[64ch] text-[18px] leading-[1.55] text-ink-soft">
-          OpenORDO (<span className="font-semibold text-ink">O</span>rganized <span className="font-semibold text-ink">R</span>ecords, <span className="font-semibold text-ink">D</span>octors & <span className="font-semibold text-ink">O</span>perations) is the day-to-day system for running a modern clinic: booking appointments, keeping patient charts current, and sending invoices that get paid.
+          OpenORDO (<span className="font-semibold text-ink">O</span>rganized <span className="font-semibold text-ink">R</span>ecords &amp; <span className="font-semibold text-ink">D</span>aily <span className="font-semibold text-ink">O</span>perations) is the day-to-day system for running a modern clinic: booking appointments, keeping patient charts current, and sending invoices that get paid.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-[18px]">
           <Link href="/register">

@@ -17,9 +17,12 @@ export default async function MarketingLayout({
     <div className="min-h-screen bg-paper flex flex-col">
       <nav className="sticky top-0 z-40 border-b border-line bg-[#F1F0EA]/90 backdrop-blur-[10px]">
         <div className="mx-auto flex max-w-[1180px] items-center justify-between px-7 py-[18px]">
-          <Link href="/" className="flex items-center gap-[9px] text-[19px] font-bold font-serif text-ink">
-            <img src="/openordo_logo.png" alt="OpenORDO Logo" className="h-[36px] w-auto" />
-            OpenORDO
+          <Link href="/" className="flex items-center gap-[10px] text-ink">
+            <img src="/openordo_logo.png" alt="OpenORDO Logo" className="h-[36px] w-auto shrink-0" />
+            <div className="flex flex-col justify-center">
+              <span className="text-[19px] font-bold font-serif leading-tight">OpenORDO</span>
+              <span className="text-[11px] font-sans font-medium text-ink-soft leading-none tracking-tight mt-[2px]">your clinic, in order</span>
+            </div>
           </Link>
           <div className="hidden md:flex items-center gap-[30px]">
             <Link href="/features" className="text-[14.5px] font-medium text-ink-soft hover:text-ink">Features</Link>
@@ -67,9 +70,12 @@ export default async function MarketingLayout({
 
       <footer className="border-t border-line mt-auto">
         <div className="mx-auto flex max-w-[1180px] flex-wrap items-center justify-between gap-4 px-7 py-11">
-          <div className="flex items-center gap-[9px] text-[19px] font-bold font-serif text-ink">
-            <img src="/openordo_logo.png" alt="OpenORDO Logo" className="h-[36px] w-auto" />
-            OpenORDO
+          <div className="flex items-center gap-[10px] text-ink">
+            <img src="/openordo_logo.png" alt="OpenORDO Logo" className="h-[36px] w-auto shrink-0" />
+            <div className="flex flex-col justify-center">
+              <span className="text-[19px] font-bold font-serif leading-tight">OpenORDO</span>
+              <span className="text-[11px] font-sans font-medium text-ink-soft leading-none tracking-tight mt-[2px]">your clinic, in order</span>
+            </div>
           </div>
           <div className="flex flex-wrap gap-10 md:gap-20">
             <div className="flex flex-col gap-2.5">

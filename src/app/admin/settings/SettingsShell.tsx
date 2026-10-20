@@ -157,7 +157,7 @@ export function SettingsShell({ flags, features, plans, globalSettings, adminEma
   })
   const [seoSettings, setSeoSettings] = useState({
     SEO_META_TITLE: globalSettings.SEO_META_TITLE || "OpenORDO Admin",
-    SEO_META_DESC: globalSettings.SEO_META_DESC || "Automating your clinic",
+    SEO_META_DESC: globalSettings.SEO_META_DESC || "OpenORDO — your clinic, in order.",
     SEO_FAVICON_URL: globalSettings.SEO_FAVICON_URL || "",
     SEO_OG_IMAGE_URL: globalSettings.SEO_OG_IMAGE_URL || "",
     demo_video_url: globalSettings.demo_video_url || "",

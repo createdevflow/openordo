@@ -1,6 +1,7 @@
 # OpenORDO
 
-Automating the day-to-day of your clinic.
+> **OpenORDO — your clinic, in order.**  
+> *ORDO*: Organized Records & Daily Operations.
 
 ## Getting Started
 

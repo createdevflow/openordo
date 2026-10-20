@@ -143,7 +143,7 @@ function maintenancePage(message: string, etaText: string): string {
     <h1>Scheduled Maintenance</h1>
     <p>${body}</p>
     ${eta}
-    <div class="footer">OpenORDO — Clinic Management Platform</div>
+    <div class="footer">OpenORDO — your clinic, in order.</div>
   </div>
 </body>
 </html>`

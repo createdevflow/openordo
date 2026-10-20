@@ -83,7 +83,7 @@ const baseTemplate = (content: string) => `
     </div>
     <div class="footer">
       &copy; ${new Date().getFullYear()} OpenORDO. All rights reserved.<br>
-      Automating the day-to-day of your clinic.
+      OpenORDO — your clinic, in order.
     </div>
   </div>
 </body>
