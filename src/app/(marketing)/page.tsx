@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { resolvePricingContext } from "@/lib/pricing"
+import { resolvePricingContext } from "@/lib/pricing/context"
 import { db } from "@/lib/db"
 import { Button } from "@/components/ui/Button"
 import { MarketingAddonsSection } from "@/components/marketing/MarketingAddonsSection"
@@ -47,7 +47,9 @@ export default async function MarketingPage() {
         name: "Starter",
         slug: "starter",
         priceMonthlyUsd: 0,
+        priceYearlyUsd: 0,
         priceMonthlyInr: 0,
+        priceYearlyInr: 0,
         patientLimit: 200,
         doctorLimit: 1,
         isFeatured: false
@@ -57,7 +59,9 @@ export default async function MarketingPage() {
         name: "Practice",
         slug: "practice",
         priceMonthlyUsd: 39,
+        priceYearlyUsd: 390,
         priceMonthlyInr: 1990,
+        priceYearlyInr: 19900,
         patientLimit: null,
         doctorLimit: 6,
         isFeatured: true
@@ -67,7 +71,9 @@ export default async function MarketingPage() {
         name: "Clinic Group",
         slug: "clinic-group",
         priceMonthlyUsd: 89,
+        priceYearlyUsd: 890,
         priceMonthlyInr: 4990,
+        priceYearlyInr: 49900,
         patientLimit: null,
         doctorLimit: null,
         isFeatured: false
@@ -133,7 +139,9 @@ export default async function MarketingPage() {
       slug: p.slug || (p.name || "").toLowerCase(),
       description: p.description || "",
       priceMonthlyUsd: p.priceMonthlyUsd,
+      priceYearlyUsd: p.priceYearlyUsd,
       priceMonthlyInr: p.priceMonthlyInr,
+      priceYearlyInr: p.priceYearlyInr,
       patientLimit: p.patientLimit,
       doctorLimit: p.doctorLimit,
       storageLimitGb: p.storageLimitGb,

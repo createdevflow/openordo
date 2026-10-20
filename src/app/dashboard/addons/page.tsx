@@ -3,7 +3,7 @@ import { db } from "@/lib/db"
 import { AddonsClient } from "./AddonsClient"
 import { hasFeature } from "@/lib/features"
 import { getEffectiveStorageQuota } from "@/lib/plugins"
-import { resolvePricingContext } from "@/lib/pricing"
+import { resolvePricingContext } from "@/lib/pricing/context"
 
 export default async function AddonsPage() {
   const clinicId = await requireClinicId()

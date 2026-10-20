@@ -1,5 +1,5 @@
 import { db } from "@/lib/db"
-import { resolvePricingContext } from "@/lib/pricing"
+import { resolvePricingContext } from "@/lib/pricing/context"
 import { MarketingAddonsSection } from "@/components/marketing/MarketingAddonsSection"
 
 import { PluginCardData } from "@/components/ui/PluginCard"

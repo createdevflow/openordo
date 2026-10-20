@@ -19,6 +19,7 @@ import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { toast } from "sonner"
 import { StorageTab } from "./StorageTab"
 import { PriceWithTax } from "@/components/ui/PriceWithTax"
+import { calculateSavingsPct } from "@/lib/pricing"
 
 export function SettingsClient({ 
   initialClinic, 
@@ -109,6 +110,7 @@ export function SettingsClient({
   const [customEnd, setCustomEnd] = useState(() => new Date().toISOString().split("T")[0])
 
   const isIndia = clinic.countryCode === "IN"
+  const [planBillingCycle, setPlanBillingCycle] = useState<"monthly" | "yearly">("monthly")
 
   const [promoTimeLeft, setPromoTimeLeft] = useState<{ d: number, h: number, m: number, s: number } | null>(null)
   const [showBillingModal, setShowBillingModal] = useState(false)
@@ -508,7 +510,10 @@ export function SettingsClient({
           return
         }
         
-        const plan_id = plan.razorpayPlanIdMonthly || plan.razorpayPlanIdYearly
+        const isYearly = planBillingCycle === "yearly"
+        const plan_id = isYearly
+          ? (plan.razorpayPlanIdYearly || plan.razorpayPlanIdMonthly)
+          : (plan.razorpayPlanIdMonthly || plan.razorpayPlanIdYearly)
         const selectedCurrency = (clinic.countryCode || "IN") === "IN" ? "INR" : "USD"
         
         const res = await fetch("/api/razorpay/subscription", {
@@ -519,7 +524,7 @@ export function SettingsClient({
             itemId: plan.id,
             planId: plan_id,
             currency: selectedCurrency,
-            billingCycle: "MONTHLY"
+            billingCycle: isYearly ? "YEARLY" : "MONTHLY"
           })
         })
         
@@ -1030,16 +1035,68 @@ export function SettingsClient({
 
           {/* Available Plans Switcher */}
           <div id="available-plans" className="bg-white border border-line rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.02)] overflow-hidden">
-            <div className="px-6 py-5 border-b border-line bg-paper-raised">
-              <h3 className="text-[17px] font-bold m-0 text-ink">Available Plans & Upgrades</h3>
-              <p className="text-[13px] text-ink-soft mt-1 mb-0">Select a plan to change your features and limits. Changes take effect immediately.</p>
-            </div>
+            {(() => {
+              const maxSettingsSavings = Math.max(
+                0,
+                ...allPlans.map((p: any) => {
+                  const monthly = isIndia ? (p.priceMonthlyInr || 0) : (p.priceMonthlyUsd || 0)
+                  const yearly = isIndia ? (p.priceYearlyInr || 0) : (p.priceYearlyUsd || 0)
+                  return calculateSavingsPct(monthly, yearly)
+                })
+              )
+
+              return (
+                <div className="px-6 py-5 border-b border-line bg-paper-raised flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-[17px] font-bold m-0 text-ink">Available Plans & Upgrades</h3>
+                    <p className="text-[13px] text-ink-soft mt-1 mb-0">Select a plan to change your features and limits. Changes take effect immediately.</p>
+                  </div>
+
+                  {/* Monthly / Yearly Billing Cycle Toggle */}
+                  <div className="inline-flex rounded-full p-1 bg-paper border border-line shrink-0 self-start sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => setPlanBillingCycle("monthly")}
+                      className={`px-3.5 py-1.5 text-[12px] font-semibold rounded-full transition-all cursor-pointer ${
+                        planBillingCycle === "monthly"
+                          ? "bg-forest text-white shadow-xs"
+                          : "text-ink-soft hover:text-ink"
+                      }`}
+                    >
+                      Monthly
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPlanBillingCycle("yearly")}
+                      className={`px-3.5 py-1.5 text-[12px] font-semibold rounded-full transition-all flex items-center gap-1.5 cursor-pointer ${
+                        planBillingCycle === "yearly"
+                          ? "bg-forest text-white shadow-xs"
+                          : "text-ink-soft hover:text-ink"
+                      }`}
+                    >
+                      <span>Yearly</span>
+                      {maxSettingsSavings >= 5 && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10.5px] font-bold bg-[#F3E3C6] text-[#C8862B] border border-[#C8862B]/20">
+                          Save {maxSettingsSavings}%
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
             <div className="p-6">
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 {allPlans.map((plan: any) => {
                   const isCurrent = plan.name.toLowerCase() === (planDetails?.planName || "").toLowerCase()
-                  const priceValue = isIndia ? (plan.priceMonthlyInr || 0) : (plan.priceMonthlyUsd || 0)
+                  const priceMonthly = isIndia ? (plan.priceMonthlyInr || 0) : (plan.priceMonthlyUsd || 0)
+                  const priceYearly = isIndia ? (plan.priceYearlyInr || 0) : (plan.priceYearlyUsd || 0)
                   const priceCurrency = isIndia ? "INR" : "USD"
+                  const isFree = priceMonthly === 0
+                  const savingsPct = calculateSavingsPct(priceMonthly, priceYearly)
+
+                  const activePrice = planBillingCycle === "yearly" && priceYearly > 0 ? priceYearly : priceMonthly
+                  const billingSuffix = planBillingCycle === "yearly" && priceYearly > 0 ? "/yr" : "/mo"
 
                   const catalogFeatures = (plan.planFeatures || [])
                     .filter((pf: any) => pf.feature?.isGloballyEnabled !== false)
@@ -1105,9 +1162,23 @@ export function SettingsClient({
                         </div>
 
                         <div style={{ textAlign: "right" }}>
-                          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--ink)" }}>
-                            <PriceWithTax amount={priceValue} currency={priceCurrency} countryCode={clinic.countryCode} />/mo
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, flexWrap: "wrap" }}>
+                            <div style={{ fontSize: 18, fontWeight: 700, color: "var(--ink)" }}>
+                              <PriceWithTax amount={activePrice} currency={priceCurrency} countryCode={clinic.countryCode} />{isFree ? "" : billingSuffix}
+                            </div>
+                            {!isFree && planBillingCycle === "yearly" && savingsPct >= 5 && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-[#F3E3C6] text-[#C8862B] border border-[#C8862B]/20 shrink-0">
+                                Save {savingsPct}%
+                              </span>
+                            )}
                           </div>
+                          {!isFree && planBillingCycle === "monthly" && savingsPct >= 5 && (
+                            <div style={{ marginTop: 2, display: "flex", justifyContent: "flex-end" }}>
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10.5px] font-medium bg-[#F3E3C6]/60 text-[#C8862B] border border-[#C8862B]/20">
+                                Yearly: Save {savingsPct}%
+                              </span>
+                            </div>
+                          )}
                           {isCurrent ? (
                             <button className="cw-btn cw-btn-ghost cw-btn-sm" disabled style={{ marginTop: 6, opacity: 0.8 }}>
                               Active

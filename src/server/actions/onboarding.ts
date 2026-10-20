@@ -139,6 +139,9 @@ export async function selectPlanAction(prevState: any, formData: FormData) {
     }).catch(() => null)
   }
 
+  const billingCycleRaw = formData.get("billingCycle") as string
+  const billingCycle = billingCycleRaw === "yearly" ? "yearly" : "monthly"
+
   const isPaidPlan = plan.priceMonthlyUsd > 0 || plan.priceMonthlyInr > 0
 
   if (isPaidPlan) {
@@ -150,8 +153,8 @@ export async function selectPlanAction(prevState: any, formData: FormData) {
 
     await db.subscription.upsert({
       where: { clinicId },
-      update: { planId, status: "TRIALING", trialEndsAt, cancelAtPeriodEnd: false },
-      create: { clinicId, planId, status: "TRIALING", trialEndsAt }
+      update: { planId, status: "TRIALING", trialEndsAt, cancelAtPeriodEnd: false, billingCycle },
+      create: { clinicId, planId, status: "TRIALING", trialEndsAt, billingCycle }
     })
 
     await db.user.update({

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button"
 import { OnboardingPromoCard } from "./OnboardingPromoCard"
 import { Check, Sparkles } from "lucide-react"
 import { PriceWithTax } from "@/components/ui/PriceWithTax"
+import { calculateSavingsPct } from "@/lib/pricing"
 
 export function PlanForm({
   plans,
@@ -23,6 +24,7 @@ export function PlanForm({
   const [state, formAction, pending] = useActionState(selectPlanAction, null)
   const [showAll, setShowAll] = useState(!promo)
   const [selectedCurrency, setSelectedCurrency] = useState<"USD" | "INR">(currency)
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly")
 
   // Default selected plan: matched initialPlan, featured plan, or the first plan
   const [selectedPlanId, setSelectedPlanId] = useState<string>(() => {
@@ -49,9 +51,20 @@ export function PlanForm({
     } catch (e) {}
   }, [])
 
+  const maxSavings = Math.max(
+    0,
+    ...plans.map((p) => {
+      const monthly = selectedCurrency === "INR" ? p.priceMonthlyInr : p.priceMonthlyUsd
+      const yearly = selectedCurrency === "INR" ? p.priceYearlyInr : p.priceYearlyUsd
+      return calculateSavingsPct(monthly, yearly)
+    })
+  )
+
   const targetPlan = promo ? plans.find(p => p.id === promo.targetPlanId) : null
   const selectedPlan = plans.find(p => p.id === selectedPlanId) || plans[0]
-  const selectedPrice = selectedCurrency === "INR" ? selectedPlan?.priceMonthlyInr : selectedPlan?.priceMonthlyUsd
+  const selectedPriceMonthly = selectedCurrency === "INR" ? selectedPlan?.priceMonthlyInr : selectedPlan?.priceMonthlyUsd
+  const selectedPriceYearly = selectedCurrency === "INR" ? selectedPlan?.priceYearlyInr : selectedPlan?.priceYearlyUsd
+  const activeSelectedPrice = billingCycle === "yearly" && selectedPriceYearly && selectedPriceYearly > 0 ? selectedPriceYearly : selectedPriceMonthly
   const selectedSymbol = selectedCurrency === "INR" ? "₹" : "$"
 
   return (
@@ -79,7 +92,7 @@ export function PlanForm({
             </div>
           )}
 
-          {/* Currency Toggle & Location Indicator */}
+          {/* Billing Cycle & Currency Toggles */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-8 pb-5 border-b border-line">
             <div>
               <div className="text-[14px] font-semibold text-ink flex items-center gap-1.5">
@@ -92,42 +105,81 @@ export function PlanForm({
               </p>
             </div>
 
-            <div className="inline-flex rounded-full p-1 bg-paper border border-line shrink-0 self-start sm:self-auto">
-              <button
-                type="button"
-                onClick={() => setSelectedCurrency("INR")}
-                className={`px-3.5 py-1.5 text-[12.5px] font-semibold rounded-full transition-all flex items-center gap-1.5 cursor-pointer ${
-                  selectedCurrency === "INR"
-                    ? "bg-forest text-white shadow-xs"
-                    : "text-ink-soft hover:text-ink"
-                }`}
-              >
-                <span>🇮🇳</span> INR (₹)
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedCurrency("USD")}
-                className={`px-3.5 py-1.5 text-[12.5px] font-semibold rounded-full transition-all flex items-center gap-1.5 cursor-pointer ${
-                  selectedCurrency === "USD"
-                    ? "bg-forest text-white shadow-xs"
-                    : "text-ink-soft hover:text-ink"
-                }`}
-              >
-                <span>🇺🇸</span> USD ($)
-              </button>
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Monthly / Yearly Billing Cycle Toggle */}
+              <div className="inline-flex rounded-full p-1 bg-paper border border-line shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setBillingCycle("monthly")}
+                  className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-all cursor-pointer ${
+                    billingCycle === "monthly"
+                      ? "bg-forest text-white shadow-xs"
+                      : "text-ink-soft hover:text-ink"
+                  }`}
+                >
+                  Monthly
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBillingCycle("yearly")}
+                  className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-all flex items-center gap-1.5 cursor-pointer ${
+                    billingCycle === "yearly"
+                      ? "bg-forest text-white shadow-xs"
+                      : "text-ink-soft hover:text-ink"
+                  }`}
+                >
+                  <span>Yearly</span>
+                  {maxSavings >= 5 && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#F3E3C6] text-[#C8862B] border border-[#C8862B]/20">
+                      Save {maxSavings}%
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              {/* Currency Toggle */}
+              <div className="inline-flex rounded-full p-1 bg-paper border border-line shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSelectedCurrency("INR")}
+                  className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-all flex items-center gap-1.5 cursor-pointer ${
+                    selectedCurrency === "INR"
+                      ? "bg-forest text-white shadow-xs"
+                      : "text-ink-soft hover:text-ink"
+                  }`}
+                >
+                  <span>🇮🇳</span> INR (₹)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCurrency("USD")}
+                  className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-all flex items-center gap-1.5 cursor-pointer ${
+                    selectedCurrency === "USD"
+                      ? "bg-forest text-white shadow-xs"
+                      : "text-ink-soft hover:text-ink"
+                  }`}
+                >
+                  <span>🇺🇸</span> USD ($)
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Hidden inputs for selected plan and currency submission */}
+          {/* Hidden inputs for selected plan, currency, and billing cycle submission */}
           <input type="hidden" name="planId" value={selectedPlanId} />
           <input type="hidden" name="currency" value={selectedCurrency} />
+          <input type="hidden" name="billingCycle" value={billingCycle} />
 
           {/* Vertical Pricing Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch mb-8">
             {plans.map((plan) => {
               const isSelected = selectedPlanId === plan.id
               const priceMonthly = selectedCurrency === "INR" ? plan.priceMonthlyInr : plan.priceMonthlyUsd
-              const currencySymbol = selectedCurrency === "INR" ? "₹" : "$"
+              const priceYearly = selectedCurrency === "INR" ? plan.priceYearlyInr : plan.priceYearlyUsd
+              const isFree = priceMonthly === 0
+              const savingsPct = calculateSavingsPct(priceMonthly, priceYearly)
+              const activePrice = billingCycle === "yearly" && priceYearly && priceYearly > 0 ? priceYearly : priceMonthly
+              const billingSuffix = billingCycle === "yearly" && priceYearly && priceYearly > 0 ? "/year" : "/month"
               const isPromoTarget = promo && promo.targetPlanId === plan.id
 
               return (
@@ -177,16 +229,32 @@ export function PlanForm({
 
                     {/* Price Tag */}
                     <div className="my-5 pb-5 border-b border-line">
-                      <div className="flex items-baseline gap-1">
+                      <div className="flex items-baseline gap-1.5 flex-wrap">
                         <span className="text-[36px] font-serif font-bold text-ink leading-none">
-                          <PriceWithTax amount={priceMonthly} currency={selectedCurrency} countryCode={countryCode} />
+                          <PriceWithTax amount={activePrice} currency={selectedCurrency} countryCode={countryCode} />
                         </span>
-                        {priceMonthly > 0 ? (
-                          <span className="text-[14px] font-medium text-ink-soft">/month</span>
+                        {activePrice > 0 ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[14px] font-medium text-ink-soft">{billingSuffix}</span>
+                            {billingCycle === "yearly" && savingsPct >= 5 && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-[#F3E3C6] text-[#C8862B] border border-[#C8862B]/20 shrink-0">
+                                Save {savingsPct}%
+                              </span>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-[13.5px] font-medium text-ink-soft">forever</span>
                         )}
                       </div>
+
+                      {/* When in monthly view, show savings hint if yearly savings exist */}
+                      {billingCycle === "monthly" && savingsPct >= 5 && (
+                        <div className="mt-1.5">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10.5px] font-medium bg-[#F3E3C6]/60 text-[#C8862B] border border-[#C8862B]/20">
+                            Yearly option: Save {savingsPct}%
+                          </span>
+                        </div>
+                      )}
 
                       {/* Doctor / Patient Capacity Chips */}
                       <div className="text-[12px] text-ink-soft mt-2.5 flex flex-wrap items-center gap-1.5">
@@ -252,9 +320,9 @@ export function PlanForm({
                 Selected: {selectedPlan?.name}
               </div>
               <div className="text-[13px] text-ink-soft mt-0.5">
-                {selectedPrice === 0
+                {activeSelectedPrice === 0
                   ? "Free forever · No credit card required"
-                  : <><PriceWithTax amount={selectedPrice!} currency={selectedCurrency} countryCode={countryCode} />/month · You can change or cancel anytime</>}
+                  : <><PriceWithTax amount={activeSelectedPrice!} currency={selectedCurrency} countryCode={countryCode} />{billingCycle === "yearly" && selectedPriceYearly && selectedPriceYearly > 0 ? "/year" : "/month"} · You can change or cancel anytime</>}
               </div>
             </div>
 

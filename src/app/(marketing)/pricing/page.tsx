@@ -1,6 +1,6 @@
 import { db } from "@/lib/db"
 import { headers } from "next/headers"
-import { resolvePricingContext } from "@/lib/pricing"
+import { resolvePricingContext } from "@/lib/pricing/context"
 import { LandingPricingSection, PlanItem } from "../LandingPricingSection"
 
 export default async function PricingPage() {
@@ -29,9 +29,9 @@ export default async function PricingPage() {
   // Fallback to real default plans if DB query fails
   if (!dbPlans || dbPlans.length === 0) {
     dbPlans = [
-      { id: "free", name: "Free", slug: "free", priceMonthlyUsd: 0, priceMonthlyInr: 0, patientLimit: 200, doctorLimit: 1, isFeatured: false, planFeatures: [] },
-      { id: "practice", name: "Practice", slug: "practice", priceMonthlyUsd: 39, priceMonthlyInr: 1990, patientLimit: null, doctorLimit: 6, isFeatured: true, planFeatures: [] },
-      { id: "clinic", name: "Clinic", slug: "clinic", priceMonthlyUsd: 89, priceMonthlyInr: 4990, patientLimit: null, doctorLimit: null, isFeatured: false, planFeatures: [] }
+      { id: "free", name: "Free", slug: "free", priceMonthlyUsd: 0, priceYearlyUsd: 0, priceMonthlyInr: 0, priceYearlyInr: 0, patientLimit: 200, doctorLimit: 1, isFeatured: false, planFeatures: [] },
+      { id: "practice", name: "Practice", slug: "practice", priceMonthlyUsd: 39, priceYearlyUsd: 390, priceMonthlyInr: 1990, priceYearlyInr: 19900, patientLimit: null, doctorLimit: 6, isFeatured: true, planFeatures: [] },
+      { id: "clinic", name: "Clinic", slug: "clinic", priceMonthlyUsd: 89, priceYearlyUsd: 890, priceMonthlyInr: 4990, priceYearlyInr: 49900, patientLimit: null, doctorLimit: null, isFeatured: false, planFeatures: [] }
     ]
   }
 
@@ -92,7 +92,9 @@ export default async function PricingPage() {
       slug: p.slug || (p.name || "").toLowerCase(),
       description: p.description || "",
       priceMonthlyUsd: p.priceMonthlyUsd,
+      priceYearlyUsd: p.priceYearlyUsd,
       priceMonthlyInr: p.priceMonthlyInr,
+      priceYearlyInr: p.priceYearlyInr,
       patientLimit: p.patientLimit,
       doctorLimit: p.doctorLimit,
       storageLimitGb: p.storageLimitGb,
