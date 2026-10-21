@@ -14,7 +14,7 @@ import {
 } from "@/server/actions/settings"
 import { saveBookingPageConfig } from "@/server/actions/bookingPageConfig"
 import { submitDeletionRequest } from "@/server/actions/deletion-request"
-import { Copy, RefreshCw, Eye, EyeOff, ExternalLink, Lock, Check, ArrowUpRight, Sparkles, Download, Calendar, Receipt, Users, X, FileText, Palette, Globe, Plus, Trash2, ImagePlus, Upload, Info, AlertTriangle } from "lucide-react"
+import { Copy, RefreshCw, Eye, EyeOff, ExternalLink, Lock, Check, ArrowUpRight, Sparkles, Download, Calendar, Receipt, Users, X, FileText, Palette, Globe, Plus, Trash2, ImagePlus, Upload, Info, AlertTriangle, Bell, Clock, Package, Send, ShieldCheck, CheckCircle2 } from "lucide-react"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { toast } from "sonner"
 import { StorageTab } from "./StorageTab"
@@ -51,14 +51,42 @@ export function SettingsClient({
   // User Account State
   const [user, setUser] = useState({ name: initialUser?.name || "", email: initialUser?.email || "", password: "" })
   
-  // Notification State
-  let initialNotifs = { appointmentReminders: true, dailySummary: true, invoiceAlerts: false }
+  // Notification State with comprehensive defaults aligned with clinic workflow
+  const defaultNotifPrefs: Record<string, boolean> = {
+    // 1. Appointments & Consultations
+    newBooking: true,
+    patientCancellation: true,
+    appointmentReminders: true,
+    lobbyCheckIn: true,
+    missedVisit: true,
+
+    // 2. Schedules & Daily Briefings
+    dailySummary: true,
+    weeklySummary: true,
+
+    // 3. Billing, Invoices & Subscriptions
+    invoiceAlerts: true,
+    paymentReceipts: true,
+    renewalReminder: true,
+    usageLimitWarning: true,
+
+    // 4. Inventory & Operations
+    lowStockAlert: true,
+    inviteAccepted: true,
+
+    // 5. Patient Automated Communications
+    patientAppointmentReminder: true,
+    patientPrescriptionNotice: true,
+    patientRecordShare: true,
+  }
+
+  let initialNotifs: Record<string, boolean> = { ...defaultNotifPrefs }
   try {
     if (initialUser?.notificationPrefs) {
       initialNotifs = { ...initialNotifs, ...JSON.parse(initialUser.notificationPrefs) }
     }
   } catch (e) {}
-  const [notifs, setNotifs] = useState(initialNotifs)
+  const [notifs, setNotifs] = useState<Record<string, boolean>>(initialNotifs)
 
   // Billing Config State
   let initialBillingConfig: any = {}
@@ -1499,63 +1527,369 @@ export function SettingsClient({
 
       {tab === "data-requests" && <ClinicDataRequestsTab />}
 
-      {tab === "notifs" && (
-        <div className="bg-white border border-line rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.02)] overflow-hidden">
-          <div className="px-6 py-5 border-b border-line bg-paper-raised">
-            <h3 className="text-[17px] font-bold m-0 text-ink">Notification preferences</h3>
-            <p className="text-[13px] text-ink-soft mt-1 mb-0">Control when and how you receive alerts and summaries.</p>
-          </div>
-          <div className="p-6 flex flex-col gap-5">
-            {[
-              { 
-                key: "appointmentReminders", 
-                label: "Appointment reminders", 
-                desc: "Get notified an hour before each scheduled visit.",
-                reqFeature: "communication.reminders" 
+      {tab === "notifs" && (() => {
+        const notifSections = [
+          {
+            id: "appointments",
+            title: "Appointments & Consultations",
+            desc: "Real-time alerts sent to clinic doctors and staff for patient booking activity.",
+            icon: Calendar,
+            items: [
+              {
+                key: "newBooking",
+                label: "New online bookings",
+                desc: "Receive an instant email when a patient books an appointment online or through the patient portal.",
+                reqFeature: "scheduling.online_booking",
+                badge: "Staff & Doctors",
               },
-              { 
-                key: "dailySummary", 
-                label: "Daily summary", 
-                desc: "A morning email with the day's full schedule.",
-                reqFeature: null 
+              {
+                key: "patientCancellation",
+                label: "Cancellations & reschedules",
+                desc: "Get notified immediately when a patient cancels or requests to reschedule a visit.",
+                reqFeature: null,
+                badge: "Staff & Doctors",
               },
-              { 
-                key: "invoiceAlerts", 
-                label: "Invoice alerts", 
-                desc: "Get notified when an invoice is marked unpaid for 7+ days.",
-                reqFeature: "billing.invoices" 
+              {
+                key: "appointmentReminders",
+                label: "Staff consultation reminders",
+                desc: "Receive an email reminder 1 hour before each of your scheduled consultations.",
+                reqFeature: "communication.reminders",
+                badge: "Doctors",
               },
-            ].map((n: any) => {
-              const isLocked = n.reqFeature && !planDetails?.activeFeatures?.includes(n.reqFeature)
-              return (
-                <div key={n.key} className="cw-list-row" style={{ alignItems: "flex-start", opacity: isLocked ? 0.6 : 1 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
-                      {n.label}
-                      {isLocked && (
-                        <span style={{ fontSize: 10.5, background: "var(--line)", color: "var(--ink-soft)", padding: "1px 6px", borderRadius: 4 }}>
-                          Plan upgrade required
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>{n.desc}</div>
+              {
+                key: "lobbyCheckIn",
+                label: "Patient waiting in video lobby",
+                desc: "Instant notification when a patient checks in to the virtual consultation waiting room.",
+                reqFeature: null,
+                badge: "Telehealth",
+              },
+              {
+                key: "missedVisit",
+                label: "No-show / Missed visit alerts",
+                desc: "Alert clinic staff when a scheduled appointment is missed or marked as no-show.",
+                reqFeature: null,
+                badge: "Operations",
+              },
+            ],
+          },
+          {
+            id: "digests",
+            title: "Schedules & Briefings",
+            desc: "Automated digests keeping doctors and clinic administrators aligned on upcoming volume.",
+            icon: Clock,
+            items: [
+              {
+                key: "dailySummary",
+                label: "Doctor morning schedule briefing",
+                desc: "A daily morning email at 8:00 AM with the day's full agenda and patient schedule.",
+                reqFeature: null,
+                badge: "Daily 8 AM",
+              },
+              {
+                key: "weeklySummary",
+                label: "Weekly clinic performance digest",
+                desc: "An end-of-week summary report covering total appointments, completed visits, revenue, and pending invoices.",
+                reqFeature: null,
+                badge: "Weekly",
+              },
+            ],
+          },
+          {
+            id: "billing",
+            title: "Billing, Invoices & Subscriptions",
+            desc: "Stay informed on patient invoice collections and clinic SaaS subscription lifecycle.",
+            icon: Receipt,
+            items: [
+              {
+                key: "invoiceAlerts",
+                label: "Overdue invoice reminders",
+                desc: "Get alerted when a patient invoice remains unpaid for 7+ days past its due date.",
+                reqFeature: "billing.invoices",
+                badge: "Finance",
+              },
+              {
+                key: "paymentReceipts",
+                label: "Payment confirmations",
+                desc: "Email receipt and confirmation whenever an invoice is paid or a transaction is recorded.",
+                reqFeature: "billing.invoices",
+                badge: "Finance",
+              },
+              {
+                key: "renewalReminder",
+                label: "Subscription & add-on renewals",
+                desc: "Advance notification 7 days before your clinic plan or add-on subscriptions renew.",
+                reqFeature: null,
+                badge: "Admin",
+              },
+              {
+                key: "usageLimitWarning",
+                label: "Capacity & usage quota warnings",
+                desc: "Proactive warnings when your clinic reaches 80% or more of doctor seats, active patients, or storage quota.",
+                reqFeature: null,
+                badge: "Capacity",
+              },
+            ],
+          },
+          {
+            id: "operations",
+            title: "Inventory & Clinic Operations",
+            desc: "Operational alerts for clinic inventory supplies and staff management.",
+            icon: Package,
+            items: [
+              {
+                key: "lowStockAlert",
+                label: "Low stock & reorder alerts",
+                desc: "Automatic alert when pharmacy, medical supplies, or consumables reach or fall below their reorder threshold.",
+                reqFeature: null,
+                badge: "Inventory",
+              },
+              {
+                key: "inviteAccepted",
+                label: "Staff invitation accepted",
+                desc: "Get notified when an invited doctor, receptionist, or staff member accepts their invitation to join the clinic.",
+                reqFeature: null,
+                badge: "Team",
+              },
+            ],
+          },
+          {
+            id: "patient_comms",
+            title: "Patient Automated Communications",
+            desc: "Control automated emails delivered to your patients under your clinic's name and branding.",
+            icon: Send,
+            items: [
+              {
+                key: "patientAppointmentReminder",
+                label: "Patient appointment reminders",
+                desc: "Automatically send email reminders to patients 24 hours and 2 hours before their scheduled appointment.",
+                reqFeature: "communication.reminders",
+                badge: "To Patients",
+              },
+              {
+                key: "patientPrescriptionNotice",
+                label: "E-Prescription delivery",
+                desc: "Automatically email patients a secure link to view and download their prescription as soon as it is issued.",
+                reqFeature: null,
+                badge: "To Patients",
+              },
+              {
+                key: "patientRecordShare",
+                label: "Shared records & lab reports",
+                desc: "Automatically notify patients when new lab results, treatment notes, or clinical records are shared to their portal.",
+                reqFeature: null,
+                badge: "To Patients",
+              },
+            ],
+          },
+        ]
+
+        const totalActive = Object.values(notifs).filter(Boolean).length
+        const totalKeys = notifSections.reduce((acc, s) => acc + s.items.length, 0)
+
+        function handleEnableAll() {
+          const updated: Record<string, boolean> = { ...notifs }
+          for (const s of notifSections) {
+            for (const item of s.items) {
+              const isLocked = item.reqFeature && !planDetails?.activeFeatures?.includes(item.reqFeature)
+              if (!isLocked) updated[item.key] = true
+            }
+          }
+          setNotifs(updated)
+        }
+
+        function handleDisableOptional() {
+          const updated: Record<string, boolean> = { ...notifs }
+          for (const s of notifSections) {
+            for (const item of s.items) {
+              updated[item.key] = false
+            }
+          }
+          setNotifs(updated)
+        }
+
+        return (
+          <div className="flex flex-col gap-6">
+            {/* Top Overview & Action Header */}
+            <div className="bg-white border border-line rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.02)] overflow-hidden">
+              <div className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-forest/10 border border-forest/15 flex items-center justify-center text-forest shrink-0">
+                    <Bell className="w-6 h-6" />
                   </div>
+                  <div>
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <h3 className="text-[18px] font-bold m-0 text-ink">Notification Center</h3>
+                      <span className="text-[11px] font-semibold tracking-wide bg-forest/10 text-forest px-2.5 py-0.5 rounded-full border border-forest/20">
+                        {totalActive} of {totalKeys} active
+                      </span>
+                    </div>
+                    <p className="text-[13px] text-ink-soft mt-1 mb-0 max-w-xl">
+                      Configure email notifications for doctors and staff, daily schedule briefings, and automated communications sent out to patients.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5 shrink-0">
                   <button
-                    disabled={isLocked}
-                    onClick={() => setNotifs({ ...notifs, [n.key]: !(notifs as any)[n.key] })}
-                    style={{ width: 40, height: 22, borderRadius: 20, border: "none", background: (notifs as any)[n.key] ? "#1E4638" : "#DAD6C9", position: "relative", flexShrink: 0, cursor: isLocked ? "not-allowed" : "pointer" }}
+                    type="button"
+                    onClick={handleEnableAll}
+                    disabled={isPending}
+                    className="text-[12.5px] font-medium text-forest hover:bg-forest/5 px-3 py-1.5 rounded-lg border border-forest/30 transition-colors cursor-pointer"
                   >
-                    <span style={{ position: "absolute", top: 2, left: (notifs as any)[n.key] ? 20 : 2, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left .15s ease" }} />
+                    Enable All
                   </button>
+                  <button
+                    type="button"
+                    onClick={handleDisableOptional}
+                    disabled={isPending}
+                    className="text-[12.5px] font-medium text-ink-soft hover:bg-paper-raised px-3 py-1.5 rounded-lg border border-line transition-colors cursor-pointer"
+                  >
+                    Mute All
+                  </button>
+                  <button 
+                    className="cw-btn cw-btn-primary flex items-center gap-1.5" 
+                    onClick={handleNotifsSave} 
+                    disabled={isPending}
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    {isPending ? "Saving..." : "Save changes"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Categorized Notification Sections */}
+            {notifSections.map((section) => {
+              const SectionIcon = section.icon
+              const sectionActiveCount = section.items.filter(i => (notifs as any)[i.key]).length
+
+              return (
+                <div key={section.id} className="bg-white border border-line rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.02)] overflow-hidden">
+                  <div className="px-6 py-4 border-b border-line bg-paper-raised flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-white border border-line flex items-center justify-center text-forest shadow-xs">
+                        <SectionIcon className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-[15px] font-bold m-0 text-ink">{section.title}</h4>
+                        <p className="text-[12px] text-ink-soft mt-0.5 mb-0">{section.desc}</p>
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-medium text-ink-soft bg-white border border-line px-2 py-0.5 rounded-md">
+                      {sectionActiveCount}/{section.items.length} enabled
+                    </span>
+                  </div>
+
+                  <div className="divide-y divide-line/60">
+                    {section.items.map((item) => {
+                      const isLocked = item.reqFeature && !planDetails?.activeFeatures?.includes(item.reqFeature)
+                      const isEnabled = Boolean((notifs as any)[item.key]) && !isLocked
+
+                      return (
+                        <div 
+                          key={item.key} 
+                          className="px-6 py-4 flex items-center justify-between gap-4 hover:bg-paper-raised/30 transition-colors"
+                          style={{ opacity: isLocked ? 0.6 : 1 }}
+                        >
+                          <div className="flex-1 min-w-0 pr-4">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-semibold text-[13.5px] text-ink">{item.label}</span>
+                              {item.badge && (
+                                <span className="text-[10.5px] font-medium text-ink-soft bg-paper-raised border border-line px-1.5 py-0.5 rounded">
+                                  {item.badge}
+                                </span>
+                              )}
+                              {isLocked && (
+                                <span className="text-[10.5px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/80 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                  <Lock className="w-3 h-3" /> Plan upgrade required
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[12.5px] text-ink-soft mt-1 mb-0 leading-relaxed">
+                              {item.desc}
+                            </p>
+                          </div>
+
+                          <div className="shrink-0 flex items-center gap-3">
+                            <span className="text-[11.5px] font-medium text-ink-soft hidden sm:inline-block">
+                              {isEnabled ? "Enabled" : "Disabled"}
+                            </span>
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={isEnabled}
+                              disabled={Boolean(isLocked) || isPending}
+                              onClick={() => setNotifs({ ...notifs, [item.key]: !isEnabled })}
+                              style={{
+                                width: 42,
+                                height: 24,
+                                borderRadius: 24,
+                                border: "none",
+                                background: isEnabled ? "#1E4638" : "#DAD6C9",
+                                position: "relative",
+                                flexShrink: 0,
+                                cursor: isLocked ? "not-allowed" : "pointer",
+                                transition: "background-color 0.2s ease"
+                              }}
+                              className="focus:outline-none focus:ring-2 focus:ring-forest/30"
+                            >
+                              <span
+                                style={{
+                                  position: "absolute",
+                                  top: 3,
+                                  left: isEnabled ? 21 : 3,
+                                  width: 18,
+                                  height: 18,
+                                  borderRadius: "50%",
+                                  background: "#fff",
+                                  boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                                  transition: "left 0.18s cubic-bezier(0.4, 0, 0.2, 1)"
+                                }}
+                              />
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               )
             })}
+
+            {/* Mandatory Compliance & Security Alerts Info Card */}
+            <div className="bg-emerald-50/50 border border-emerald-200/70 rounded-xl p-5 flex items-start gap-4 text-emerald-950">
+              <div className="w-9 h-9 rounded-lg bg-emerald-100/80 border border-emerald-200 flex items-center justify-center text-emerald-800 shrink-0 mt-0.5">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-[14.5px] font-bold m-0 text-emerald-950">Mandatory Security &amp; Compliance Notifications</h4>
+                  <span className="text-[10.5px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-300">
+                    Always Active
+                  </span>
+                </div>
+                <p className="text-[12.5px] text-emerald-800/90 mt-1 mb-0 leading-relaxed">
+                  To comply with HIPAA, GDPR, and medical platform security standards, critical transactional emails (such as 2FA OTP verification codes, password resets, new device login alerts, BAA execution status, payment failure notices, and data export ready links) are always delivered unconditionally.
+                </p>
+              </div>
             </div>
-          <div className="px-6 py-4 bg-paper-raised/50 border-t border-line flex justify-end">
-            <button className="cw-btn cw-btn-primary" onClick={handleNotifsSave} disabled={isPending}>Save changes</button>
+
+            {/* Bottom Save Bar */}
+            <div className="bg-white border border-line rounded-xl px-6 py-4 flex items-center justify-between shadow-[0_2px_4px_rgba(0,0,0,0.02)]">
+              <div className="text-[13px] text-ink-soft">
+                Remember to save after updating your notification settings.
+              </div>
+              <button 
+                className="cw-btn cw-btn-primary flex items-center gap-2" 
+                onClick={handleNotifsSave} 
+                disabled={isPending}
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                {isPending ? "Saving changes..." : "Save changes"}
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {tab === "developer" && (() => {
         const hasOnlineBooking = planDetails?.activeFeatures?.includes("scheduling.online_booking")

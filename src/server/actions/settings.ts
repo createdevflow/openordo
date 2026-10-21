@@ -139,6 +139,62 @@ export async function updateUserSettingsAction(data: {
     data: updateData
   })
 
+  // Sync to NotificationPreference table for runtime enforcement in sendNotificationEmail
+  if (data.notificationPrefs) {
+    const PREF_KEY_TO_EVENT_TYPES: Record<string, string[]> = {
+      newBooking: ["NEW_BOOKING_RECEIVED"],
+      patientCancellation: ["PATIENT_CANCELED_OR_RESCHEDULED"],
+      appointmentReminders: ["STAFF_APPOINTMENT_REMINDER"],
+      lobbyCheckIn: ["PATIENT_WAITING_IN_LOBBY"],
+      missedVisit: ["MISSED_APPOINTMENT"],
+
+      dailySummary: ["DOCTOR_DAILY_DIGEST"],
+      weeklySummary: ["WEEKLY_CLINIC_SUMMARY"],
+
+      invoiceAlerts: ["OVERDUE_INVOICE_ALERT"],
+      paymentReceipts: ["PAYMENT_RECEIPT"],
+      renewalReminder: ["RENEWAL_REMINDER", "ADDON_RENEWAL_REMINDER"],
+      usageLimitWarning: ["USAGE_LIMIT_WARNING"],
+
+      lowStockAlert: ["LOW_STOCK_ALERT"],
+      inviteAccepted: ["INVITE_ACCEPTED"],
+
+      patientAppointmentReminder: ["APPOINTMENT_REMINDER"],
+      patientPrescriptionNotice: ["PRESCRIPTION_ISSUED"],
+      patientRecordShare: ["RECORD_SHARED"],
+    }
+
+    try {
+      for (const [key, enabled] of Object.entries(data.notificationPrefs)) {
+        const eventTypes = PREF_KEY_TO_EVENT_TYPES[key]
+        if (eventTypes && Array.isArray(eventTypes)) {
+          for (const eventType of eventTypes) {
+            await db.notificationPreference.upsert({
+              where: {
+                ownerType_ownerId_eventType: {
+                  ownerType: "USER",
+                  ownerId: user.id,
+                  eventType,
+                },
+              },
+              create: {
+                ownerType: "USER",
+                ownerId: user.id,
+                eventType,
+                enabled: Boolean(enabled),
+              },
+              update: {
+                enabled: Boolean(enabled),
+              },
+            })
+          }
+        }
+      }
+    } catch (prefErr) {
+      console.error("Failed to sync notification preferences to database table:", prefErr)
+    }
+  }
+
   revalidatePath("/dashboard/settings")
   return updatedUser
 }
