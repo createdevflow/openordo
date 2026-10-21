@@ -202,7 +202,7 @@ export async function POST(req: Request) {
       const subscription = await rzp.subscriptions.create({
         plan_id: finalPlanId,
         customer_notify: 1,
-        total_count: isYearly ? 100 : 1200,
+        total_count: isYearly ? 5 : 60,
         quantity: quantity,
         notes: { clinicId, type, itemId, currency, billingCycle: isYearly ? "YEARLY" : "MONTHLY" }
       })

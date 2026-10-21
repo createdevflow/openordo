@@ -89,7 +89,7 @@ export async function POST(req: Request) {
         const subscription = await rzp.subscriptions.create({
           plan_id: gatewayPlanId,
           customer_notify: 1,
-          total_count: quote.interval === "YEARLY" ? 100 : 1200,
+          total_count: quote.interval === "YEARLY" ? 5 : 60,
           notes: { quoteId: quote.id, clinicId },
           ...(quote.trialEndsAt && quote.trialEndsAt > new Date() ? { start_at: Math.floor(quote.trialEndsAt.getTime() / 1000) } : {})
         });
