@@ -19,6 +19,9 @@ export async function createPromo(data: any) {
     const promo = await db.promo.create({ data })
     await logAudit(session.user.id!, "CREATE_PROMO", "Promo", promo.id, { name: promo.name })
     revalidatePath("/admin/promotions")
+    revalidatePath("/")
+    revalidatePath("/pricing")
+    revalidatePath("/onboarding/plan")
     return { ok: true, promoId: promo.id }
   } catch (e: any) {
     return { ok: false, error: e.message }
@@ -32,6 +35,9 @@ export async function updatePromo(id: string, data: any) {
     await logAudit(session.user.id!, "UPDATE_PROMO", "Promo", id)
     revalidatePath("/admin/promotions")
     revalidatePath(`/admin/promotions/${id}`)
+    revalidatePath("/")
+    revalidatePath("/pricing")
+    revalidatePath("/onboarding/plan")
     return { ok: true }
   } catch (e: any) {
     return { ok: false, error: e.message }
@@ -44,6 +50,9 @@ export async function pausePromo(id: string) {
     await db.promo.update({ where: { id }, data: { isActive: false } })
     await logAudit(session.user.id!, "PAUSE_PROMO", "Promo", id)
     revalidatePath("/admin/promotions")
+    revalidatePath("/")
+    revalidatePath("/pricing")
+    revalidatePath("/onboarding/plan")
     return { ok: true }
   } catch (e: any) {
     return { ok: false, error: e.message }
@@ -62,9 +71,17 @@ export async function resumePromo(id: string) {
       }
     }
     
-    await db.promo.update({ where: { id }, data: { isActive: true } })
+    const updateData: any = { isActive: true }
+    if (promoToResume?.endsAt && new Date(promoToResume.endsAt) <= new Date()) {
+      updateData.endsAt = null
+    }
+
+    await db.promo.update({ where: { id }, data: updateData })
     await logAudit(session.user.id!, "RESUME_PROMO", "Promo", id)
     revalidatePath("/admin/promotions")
+    revalidatePath("/")
+    revalidatePath("/pricing")
+    revalidatePath("/onboarding/plan")
     return { ok: true }
   } catch (e: any) {
     return { ok: false, error: e.message }
@@ -74,10 +91,32 @@ export async function resumePromo(id: string) {
 export async function endPromoNow(id: string) {
   try {
     const session = await requireSuperAdmin()
-    await db.promo.update({ where: { id }, data: { isActive: false, endsAt: new Date() } })
-    // In a real app we'd also immediately expire active redemptions here
+    const now = new Date()
+    await db.promo.update({ where: { id }, data: { isActive: false, endsAt: now } })
+
+    // Immediately expire active subscriptions on this promo
+    const defaultFreePlan = await db.plan.findFirst({ where: { isDefaultFree: true } })
+    if (defaultFreePlan) {
+      await db.subscription.updateMany({
+        where: {
+          promoId: id,
+          status: "ACTIVE"
+        },
+        data: {
+          planId: defaultFreePlan.id,
+          promoId: null,
+          promoExpiresAt: null
+        }
+      })
+    }
+
     await logAudit(session.user.id!, "END_PROMO_NOW", "Promo", id)
     revalidatePath("/admin/promotions")
+    revalidatePath("/")
+    revalidatePath("/pricing")
+    revalidatePath("/onboarding/plan")
+    revalidatePath("/dashboard")
+    revalidatePath("/dashboard/settings")
     return { ok: true }
   } catch (e: any) {
     return { ok: false, error: e.message }

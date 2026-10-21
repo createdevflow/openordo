@@ -195,10 +195,16 @@ export async function getClinicSubscriptionDetails(clinicId: string): Promise<Cl
   let patientLimit = plan.patientLimit
   let bookingPageLimit = plan.bookingPageLimit
 
+  const isPromoStillValid = Boolean(
+    subscription.promoId &&
+    subscription.promoExpiresAt &&
+    new Date(subscription.promoExpiresAt).getTime() > Date.now()
+  )
+
   // Feature Override Engine for Active Promos
-  if (subscription.promoId && subscription.promoExpiresAt && new Date(subscription.promoExpiresAt).getTime() > Date.now()) {
+  if (isPromoStillValid) {
     const promo = await db.promo.findUnique({
-      where: { id: subscription.promoId },
+      where: { id: subscription.promoId! },
       include: {
         targetPlan: {
           include: {
@@ -211,7 +217,7 @@ export async function getClinicSubscriptionDetails(clinicId: string): Promise<Cl
       }
     })
     
-    if (promo?.targetPlan) {
+    if (promo && promo.isActive && (!promo.endsAt || new Date(promo.endsAt).getTime() > Date.now()) && promo.targetPlan) {
       features = promo.targetPlan.planFeatures
         .map(pf => pf.feature)
         .filter(f => f.isGloballyEnabled)
@@ -224,6 +230,19 @@ export async function getClinicSubscriptionDetails(clinicId: string): Promise<Cl
       doctorLimit = promo.targetPlan.doctorLimit
       patientLimit = promo.targetPlan.patientLimit
       bookingPageLimit = promo.targetPlan.bookingPageLimit
+    }
+  } else if (subscription.promoId) {
+    // Lazily clean up expired promo subscription in DB
+    const defaultFreePlan = await db.plan.findFirst({ where: { isDefaultFree: true } })
+    if (defaultFreePlan) {
+      await db.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          promoId: null,
+          promoExpiresAt: null,
+          planId: defaultFreePlan.id
+        }
+      }).catch(() => {})
     }
   }
 
@@ -238,8 +257,8 @@ export async function getClinicSubscriptionDetails(clinicId: string): Promise<Cl
     bookingPageLimit,
     activeFeatures: features,
     isDefaultFree: plan.isDefaultFree,
-    promoId: subscription.promoId,
-    promoExpiresAt: subscription.promoExpiresAt,
+    promoId: isPromoStillValid ? subscription.promoId : null,
+    promoExpiresAt: isPromoStillValid ? subscription.promoExpiresAt : null,
     trialEndsAt: subscription.trialEndsAt,
     isTrialExpired,
     cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,

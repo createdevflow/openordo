@@ -294,7 +294,7 @@ export function SettingsClient({
       const now = new Date().getTime()
       const diff = target - now
       if (diff <= 0) {
-        setPromoTimeLeft({ d: 0, h: 0, m: 0, s: 0 })
+        setPromoTimeLeft(null)
       } else {
         setPromoTimeLeft({
           d: Math.floor(diff / (1000 * 60 * 60 * 24)),

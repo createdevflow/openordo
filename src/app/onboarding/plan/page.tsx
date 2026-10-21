@@ -1,5 +1,6 @@
 import { db } from "@/lib/db"
 import { auth } from "@/lib/auth"
+import { getActiveNewClinicPromo } from "@/lib/promotions"
 import { PlanForm } from "./PlanForm"
 import { headers, cookies } from "next/headers"
 
@@ -94,17 +95,7 @@ export default async function OnboardingPlanPage() {
     }
   })
 
-  let promo = null
-  try {
-    promo = await db.promo.findFirst({
-      where: {
-        isActive: true,
-        eligibility: "NEW_CLINICS_ONLY"
-      }
-    })
-  } catch (e) {
-    console.error("Failed to fetch promo from DB", e)
-  }
+  const promo = await getActiveNewClinicPromo()
 
   return (
     <div className="bg-paper-raised rounded-card border border-line overflow-hidden shadow-sm">

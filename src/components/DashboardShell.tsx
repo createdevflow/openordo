@@ -140,7 +140,7 @@ export function DashboardShell({
       const now = new Date().getTime()
       const diff = target - now
       if (diff <= 0) {
-        setTimeLeft({ d: 0, h: 0, m: 0, s: 0 })
+        setTimeLeft(null)
       } else {
         setTimeLeft({
           d: Math.floor(diff / (1000 * 60 * 60 * 24)),

@@ -62,14 +62,12 @@ export function PromotionsClient({ promotions }: { promotions: any[] }) {
   }
 
   const getPromoState = (p: any) => {
-    const isLive = p.isActive && (!p.startsAt || new Date(p.startsAt) <= new Date()) && (!p.endsAt || new Date(p.endsAt) >= new Date())
-    const isScheduled = p.isActive && p.startsAt && new Date(p.startsAt) > new Date()
-    const isEnded = !p.isActive && p.endsAt && new Date(p.endsAt) < new Date()
-    const isPaused = !p.isActive && !isEnded
-    if (isLive) return "LIVE"
-    if (isScheduled) return "SCHEDULED"
-    if (isPaused) return "PAUSED"
-    return "ENDED"
+    const now = new Date()
+    const hasEnded = (p.endsAt && new Date(p.endsAt) <= now) || (p.redemptionLimit && (p.redemptionCount ?? 0) >= p.redemptionLimit)
+    if (hasEnded) return "ENDED"
+    if (!p.isActive) return "PAUSED"
+    if (p.startsAt && new Date(p.startsAt) > now) return "SCHEDULED"
+    return "LIVE"
   }
 
   const filtered = promotions.filter((p) => {
@@ -200,6 +198,7 @@ export function PromotionsClient({ promotions }: { promotions: any[] }) {
                               icon: <StopCircle size={14} />,
                               tone: "danger",
                               onSelect: () => handleEndNow(p),
+                              hidden: state === "ENDED",
                             },
                             {
                               label: "Delete",

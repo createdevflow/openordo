@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import { sendNotificationEmail } from "@/lib/notifications/send"
 import { renderOnboardingComplete, renderPromoLifecycle } from "@/lib/notifications/templates"
+import { isPromoActive } from "@/lib/promotions"
 
 export async function createClinicAction(prevState: any, formData: FormData) {
   const session = await auth()
@@ -207,11 +208,7 @@ export async function redeemPromoAction(prevState: any, formData: FormData) {
   if (!promoId) return { error: "No promo selected" }
 
   const promo = await db.promo.findUnique({ where: { id: promoId } })
-  if (!promo || !promo.isActive) return { error: "Promo is not active" }
-  
-  if (promo.redemptionLimit && promo.redemptionCount >= promo.redemptionLimit) {
-    return { error: "Promo limit reached" }
-  }
+  if (!promo || !isPromoActive(promo)) return { error: "This promotion is no longer active or has expired." }
 
   const expiresAt = new Date()
   expiresAt.setDate(expiresAt.getDate() + promo.durationDays)

@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { resolvePricingContext } from "@/lib/pricing/context"
+import { getActiveNewClinicPromo } from "@/lib/promotions"
 import { db } from "@/lib/db"
 import { Button } from "@/components/ui/Button"
 import { MarketingAddonsSection } from "@/components/marketing/MarketingAddonsSection"
@@ -150,19 +151,8 @@ export default async function MarketingPage() {
     }
   })
 
-  // Fetch real active promo if available
-  let promo = null
-  try {
-    promo = await db.promo.findFirst({
-      where: {
-        isActive: true,
-        OR: [
-          { eligibility: "NEW_CLINICS_ONLY" },
-          { eligibility: "ALL_CLINICS" }
-        ]
-      }
-    })
-  } catch (e) {}
+  // Fetch real active promo if available and not expired
+  const promo = await getActiveNewClinicPromo()
 
   // Fetch plugins for landing page
   let landingPlugins: any[] = []

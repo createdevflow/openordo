@@ -3,6 +3,7 @@
 import { db } from "@/lib/db"
 import { revalidatePath } from "next/cache"
 import { requireSuperAdmin, logAudit } from "../admin-base"
+import { isPromoActive } from "@/lib/promotions"
 
 export async function suspendClinic(clinicId: string) {
   try {
@@ -66,7 +67,7 @@ export async function grantPromo(clinicId: string, promoId: string) {
   try {
     const session = await requireSuperAdmin()
     const promo = await db.promo.findUnique({ where: { id: promoId } })
-    if (!promo) throw new Error("Promo not found")
+    if (!promo || !isPromoActive(promo)) throw new Error("Promo is not active or has expired")
     
     const expiresAt = new Date()
     expiresAt.setDate(expiresAt.getDate() + promo.durationDays)

@@ -16,6 +16,17 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "No default free plan configured" }, { status: 500 })
     }
 
+    // 0. Deactivate promos whose endsAt has passed
+    await db.promo.updateMany({
+      where: {
+        isActive: true,
+        endsAt: { lt: now }
+      },
+      data: {
+        isActive: false
+      }
+    })
+
     // 1. Downgrade expired promo subscriptions
     const expiredPromos = await db.subscription.findMany({
       where: {

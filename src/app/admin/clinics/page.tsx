@@ -25,8 +25,15 @@ export default async function AdminClinicsPage({ searchParams }: { searchParams:
     }
   })
 
+  const now = new Date()
   const activePromos = await db.promo.findMany({
-    where: { isActive: true }
+    where: {
+      isActive: true,
+      OR: [
+        { endsAt: null },
+        { endsAt: { gt: now } }
+      ]
+    }
   })
 
   return <ClinicsClient clinics={clinics} activePromos={activePromos} initialFilter={initialFilter} />

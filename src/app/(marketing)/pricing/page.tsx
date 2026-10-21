@@ -1,6 +1,7 @@
 import { db } from "@/lib/db"
 import { headers } from "next/headers"
 import { resolvePricingContext } from "@/lib/pricing/context"
+import { getActiveNewClinicPromo } from "@/lib/promotions"
 import { LandingPricingSection, PlanItem } from "../LandingPricingSection"
 
 export default async function PricingPage() {
@@ -103,18 +104,7 @@ export default async function PricingPage() {
     }
   })
 
-  let promo = null
-  try {
-    promo = await db.promo.findFirst({
-      where: {
-        isActive: true,
-        OR: [
-          { eligibility: "NEW_CLINICS_ONLY" },
-          { eligibility: "ALL_CLINICS" }
-        ]
-      }
-    })
-  } catch (e) {}
+  const promo = await getActiveNewClinicPromo()
 
   return (
     <div className="py-16">
