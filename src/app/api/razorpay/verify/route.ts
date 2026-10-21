@@ -76,7 +76,7 @@ export async function POST(req: Request) {
           create: {
             clinicId,
             pluginId: itemId,
-            pricingModel: isOneTime ? "ONE_TIME" : "MONTHLY",
+            pricingModel: isOneTime ? "ONE_TIME" : (String(body.billingCycle).toUpperCase() === "YEARLY" ? "YEARLY" : "MONTHLY"),
             status: "ACTIVE",
             isEnabled: true,
             quantity,
@@ -86,25 +86,29 @@ export async function POST(req: Request) {
         })
       }
     } else if (type === "PLAN") {
-      const nextMonth = new Date()
-      nextMonth.setDate(nextMonth.getDate() + 30)
+      const isYearly = String(body.billingCycle || "").toLowerCase() === "yearly"
+      const periodDays = isYearly ? 365 : 30
+      const nextPeriod = new Date()
+      nextPeriod.setDate(nextPeriod.getDate() + periodDays)
 
       await db.subscription.upsert({
         where: { clinicId },
         update: { 
           planId: itemId, 
           status: "ACTIVE",
+          billingCycle: isYearly ? "yearly" : "monthly",
           razorpaySubscriptionId: razorpay_subscription_id,
           trialEndsAt: null,
-          currentPeriodEnd: nextMonth,
+          currentPeriodEnd: nextPeriod,
         },
         create: {
           clinicId,
           planId: itemId,
           status: "ACTIVE",
+          billingCycle: isYearly ? "yearly" : "monthly",
           razorpaySubscriptionId: razorpay_subscription_id,
           trialEndsAt: null,
-          currentPeriodEnd: nextMonth,
+          currentPeriodEnd: nextPeriod,
         }
       })
     }

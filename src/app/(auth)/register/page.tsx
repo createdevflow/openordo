@@ -135,8 +135,9 @@ function RegisterForm() {
       )}
 
       <form action={formAction} className="space-y-4">
-        {/* Hidden selected plan */}
+        {/* Hidden selected plan & cycle */}
         <input type="hidden" name="selectedPlan" value={planParam} />
+        <input type="hidden" name="selectedCycle" value={searchParams.get("cycle") || ""} />
 
         {state?.error && (
           <div className="bg-coral-soft text-coral p-3 rounded-md text-[13px] font-medium">

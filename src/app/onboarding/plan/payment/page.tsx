@@ -37,7 +37,10 @@ export default async function PaymentSetupPage() {
 
   const clinic = await db.clinic.findUnique({ where: { id: clinicId } })
   const isIndia = clinic?.countryCode === "IN"
-  const price = isIndia ? subscription.plan.priceMonthlyInr : subscription.plan.priceMonthlyUsd
+  const isYearly = (subscription.billingCycle || "monthly").toLowerCase() === "yearly"
+  const price = isIndia 
+    ? (isYearly ? (subscription.plan.priceYearlyInr || subscription.plan.priceMonthlyInr * 12) : subscription.plan.priceMonthlyInr)
+    : (isYearly ? (subscription.plan.priceYearlyUsd || subscription.plan.priceMonthlyUsd * 12) : subscription.plan.priceMonthlyUsd)
   const currency: "INR" | "USD" = isIndia ? "INR" : "USD"
 
   return (
@@ -63,11 +66,11 @@ export default async function PaymentSetupPage() {
         <div className="bg-white border border-line rounded-xl p-5 mb-6 flex items-center justify-between">
           <div>
             <div className="text-[13px] text-ink-soft font-medium">Selected plan</div>
-            <div className="text-[17px] font-bold text-ink mt-0.5">{subscription.plan.name}</div>
+            <div className="text-[17px] font-bold text-ink mt-0.5">{subscription.plan.name} {isYearly ? "(Yearly)" : "(Monthly)"}</div>
           </div>
           <div className="text-right">
             <div className="text-[20px] font-bold text-ink">
-              <PriceWithTax amount={price} currency={currency} countryCode={clinic?.countryCode} /><span className="text-[14px] font-normal text-ink-soft">/mo</span>
+              <PriceWithTax amount={price} currency={currency} countryCode={clinic?.countryCode} /><span className="text-[14px] font-normal text-ink-soft">{isYearly ? "/yr" : "/mo"}</span>
             </div>
             <div className="text-[12px] text-ink-soft mt-0.5">after trial</div>
           </div>
@@ -78,10 +81,11 @@ export default async function PaymentSetupPage() {
           userId={user.id} 
           razorpayKeyId={razorpayKeyId}
           planId={subscription.plan.id}
-          razorpayPlanId={subscription.plan.razorpayPlanIdMonthly}
+          razorpayPlanId={isYearly ? subscription.plan.razorpayPlanIdYearly : subscription.plan.razorpayPlanIdMonthly}
           planName={subscription.plan.name}
           trialEndsAt={trialEndsAt?.toISOString() || ""}
           currency={currency}
+          billingCycle={isYearly ? "YEARLY" : "MONTHLY"}
         />
 
         <p className="text-center text-[12px] text-ink-soft mt-6">

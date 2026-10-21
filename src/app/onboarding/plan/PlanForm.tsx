@@ -13,18 +13,20 @@ export function PlanForm({
   promo,
   currency = "USD",
   initialPlan,
+  initialBillingCycle = "monthly",
   countryCode
 }: {
   plans: any[]
   promo?: any | null
   currency?: "USD" | "INR"
   initialPlan?: string
+  initialBillingCycle?: "monthly" | "yearly"
   countryCode?: string | null
 }) {
   const [state, formAction, pending] = useActionState(selectPlanAction, null)
   const [showAll, setShowAll] = useState(!promo)
   const [selectedCurrency, setSelectedCurrency] = useState<"USD" | "INR">(currency)
-  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly")
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">(initialBillingCycle || "monthly")
 
   // Default selected plan: matched initialPlan, featured plan, or the first plan
   const [selectedPlanId, setSelectedPlanId] = useState<string>(() => {

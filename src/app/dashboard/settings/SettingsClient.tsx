@@ -512,8 +512,8 @@ export function SettingsClient({
         
         const isYearly = planBillingCycle === "yearly"
         const plan_id = isYearly
-          ? (plan.razorpayPlanIdYearly || plan.razorpayPlanIdMonthly)
-          : (plan.razorpayPlanIdMonthly || plan.razorpayPlanIdYearly)
+          ? (plan.razorpayPlanIdYearly || null)
+          : (plan.razorpayPlanIdMonthly || null)
         const selectedCurrency = (clinic.countryCode || "IN") === "IN" ? "INR" : "USD"
         
         const res = await fetch("/api/razorpay/subscription", {
@@ -547,6 +547,7 @@ export function SettingsClient({
               razorpay_signature: "bypass_sig",
               type: "PLAN",
               itemId: plan.id,
+              billingCycle: isYearly ? "yearly" : "monthly",
               isOneTime: false
             })
           })
@@ -575,6 +576,7 @@ export function SettingsClient({
                     ...response,
                     type: "PLAN",
                     itemId: plan.id,
+                    billingCycle: isYearly ? "yearly" : "monthly",
                     isOneTime: false
                   })
                 })
@@ -1088,7 +1090,8 @@ export function SettingsClient({
             <div className="p-6">
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 {allPlans.map((plan: any) => {
-                  const isCurrent = plan.name.toLowerCase() === (planDetails?.planName || "").toLowerCase()
+                  const isSamePlanName = plan.name.toLowerCase() === (planDetails?.planName || "").toLowerCase()
+                  const isCurrent = isSamePlanName && (planDetails?.billingCycle || "monthly").toLowerCase() === planBillingCycle
                   const priceMonthly = isIndia ? (plan.priceMonthlyInr || 0) : (plan.priceMonthlyUsd || 0)
                   const priceYearly = isIndia ? (plan.priceYearlyInr || 0) : (plan.priceYearlyUsd || 0)
                   const priceCurrency = isIndia ? "INR" : "USD"
@@ -1190,7 +1193,9 @@ export function SettingsClient({
                               disabled={isPending}
                               style={{ marginTop: 6 }}
                             >
-                              Switch to {plan.name}
+                              {isSamePlanName
+                                ? `Switch to ${planBillingCycle === "yearly" ? "Yearly" : "Monthly"}`
+                                : `Switch to ${plan.name}`}
                             </button>
                           )}
                         </div>

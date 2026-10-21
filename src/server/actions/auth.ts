@@ -121,6 +121,7 @@ export async function registerAccountAction(prevState: any, formData: FormData) 
   const countryCode = (formData.get("countryCode") as string) || "+91"
   const phone = phoneRaw ? `${countryCode}${phoneRaw.replace(/^0+/, "")}` : undefined
   const selectedPlan = (formData.get("selectedPlan") as string)?.trim()
+  const selectedCycle = (formData.get("selectedCycle") as string)?.trim()
 
   // ── Consent enforcement (CHARTWELL_PRELAUNCH_OPS_SPEC.md §2.3) ────────────
   // The client checkbox is UX only.  Server rejects if flag is not explicitly true.
@@ -135,10 +136,15 @@ export async function registerAccountAction(prevState: any, formData: FormData) 
   if (!checkRateLimit(`register_${ip}`, 5, 60 * 60 * 1000)) {
     return { error: "Too many registration attempts. Please try again later." }
   }
-  if (selectedPlan) {
+  if (selectedPlan || selectedCycle) {
     try {
       const cookieStore = await cookies()
-      cookieStore.set("selected_plan", selectedPlan, { path: "/", maxAge: 60 * 60 * 24 })
+      if (selectedPlan) {
+        cookieStore.set("selected_plan", selectedPlan, { path: "/", maxAge: 60 * 60 * 24 })
+      }
+      if (selectedCycle) {
+        cookieStore.set("selected_cycle", selectedCycle, { path: "/", maxAge: 60 * 60 * 24 })
+      }
     } catch (e) {}
   }
 

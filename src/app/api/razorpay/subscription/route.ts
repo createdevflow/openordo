@@ -23,6 +23,7 @@ export async function POST(req: Request) {
   try {
     const { type, itemId, planId: explicitPlanId, quantity = 1, currency: requestedCurrency, billingCycle = "MONTHLY" } = await req.json()
     const clinicId = await requireClinicId()
+    const isYearly = String(billingCycle).toUpperCase() === "YEARLY"
 
     if (bypass) {
       if (type === "PLAN") {
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
         if (existingSub?.razorpaySubscriptionId && existingSub.status !== "CANCELLED" && existingSub.status !== "INCOMPLETE") {
           await db.subscription.update({
             where: { id: existingSub.id },
-            data: { planId: itemId }
+            data: { planId: itemId, billingCycle: isYearly ? "yearly" : "monthly" }
           })
           return NextResponse.json({ isUpdate: true, success: true, currency: requestedCurrency || "INR" })
         }
@@ -45,15 +46,32 @@ export async function POST(req: Request) {
 
     const rzp = new Razorpay({ key_id, key_secret })
 
-    let finalPlanId = explicitPlanId
-    const isYearly = String(billingCycle).toUpperCase() === "YEARLY"
+    let finalPlanId: string | null = null
 
-    // Auto-create plan on Razorpay if it doesn't exist or if currency is USD
-    if (!finalPlanId || currency === "USD") {
-      if (type === "PLAN") {
-        const plan = await db.plan.findUnique({ where: { id: itemId } })
-        if (!plan) throw new Error("Plan not found")
+    if (type === "PLAN") {
+      const plan = await db.plan.findUnique({ where: { id: itemId } })
+      if (!plan) throw new Error("Plan not found")
 
+      // For INR, look up existing plan ID strictly matching the requested billing cycle
+      let existingPlanId = currency === "INR"
+        ? (isYearly ? plan.razorpayPlanIdYearly : plan.razorpayPlanIdMonthly)
+        : null
+
+      // Guard against client sending mismatched planId (e.g. monthly ID when yearly was toggled)
+      if (explicitPlanId) {
+        if (isYearly && explicitPlanId === plan.razorpayPlanIdMonthly) {
+          // Explicit plan is monthly but user requested yearly - discard it
+        } else if (!isYearly && explicitPlanId === plan.razorpayPlanIdYearly) {
+          // Explicit plan is yearly but user requested monthly - discard it
+        } else if (!existingPlanId) {
+          existingPlanId = explicitPlanId
+        }
+      }
+
+      finalPlanId = existingPlanId
+
+      // Auto-create plan on Razorpay if it doesn't exist or if currency is USD
+      if (!finalPlanId || currency === "USD") {
         let amountInSubunits = 0
         if (currency === "INR") {
           const price = isYearly ? (plan.priceYearlyInr || plan.priceMonthlyInr * 12) : plan.priceMonthlyInr
@@ -69,28 +87,46 @@ export async function POST(req: Request) {
           amountInSubunits = price * 100 // cents
         }
 
-        if (currency === "INR" && !isYearly && plan.razorpayPlanIdMonthly) {
-          finalPlanId = plan.razorpayPlanIdMonthly
-        } else {
-          const newPlan = await rzp.plans.create({
-            period: isYearly ? "yearly" : "monthly",
-            interval: 1,
-            item: {
-              name: `Plan: ${plan.name} (${currency})`,
-              description: `${isYearly ? "Yearly" : "Monthly"} subscription for ${plan.name}`,
-              amount: amountInSubunits,
-              currency: currency
-            }
-          })
-          finalPlanId = newPlan.id
-          if (currency === "INR" && !isYearly) {
+        const newPlan = await rzp.plans.create({
+          period: isYearly ? "yearly" : "monthly",
+          interval: 1,
+          item: {
+            name: `Plan: ${plan.name} (${currency}) - ${isYearly ? "Yearly" : "Monthly"}`,
+            description: `${isYearly ? "Yearly" : "Monthly"} subscription for ${plan.name}`,
+            amount: amountInSubunits,
+            currency: currency
+          }
+        })
+        finalPlanId = newPlan.id
+        if (currency === "INR") {
+          if (isYearly) {
+            await db.plan.update({ where: { id: plan.id }, data: { razorpayPlanIdYearly: newPlan.id } })
+          } else {
             await db.plan.update({ where: { id: plan.id }, data: { razorpayPlanIdMonthly: newPlan.id } })
           }
         }
-      } else if (type === "PLUGIN") {
-        const plugin = await db.plugin.findUnique({ where: { id: itemId } })
-        if (!plugin) throw new Error("Plugin not found")
+      }
+    } else if (type === "PLUGIN") {
+      const plugin = await db.plugin.findUnique({ where: { id: itemId } })
+      if (!plugin) throw new Error("Plugin not found")
 
+      let existingPlanId = currency === "INR"
+        ? (isYearly ? plugin.razorpayPlanIdYearly : plugin.razorpayPlanIdMonthly)
+        : null
+
+      if (explicitPlanId) {
+        if (isYearly && explicitPlanId === plugin.razorpayPlanIdMonthly) {
+          // Discard mismatched monthly id
+        } else if (!isYearly && explicitPlanId === plugin.razorpayPlanIdYearly) {
+          // Discard mismatched yearly id
+        } else if (!existingPlanId) {
+          existingPlanId = explicitPlanId
+        }
+      }
+
+      finalPlanId = existingPlanId
+
+      if (!finalPlanId || currency === "USD") {
         let amountInSubunits = 0
         if (currency === "INR") {
           amountInSubunits = isYearly 
@@ -106,25 +142,29 @@ export async function POST(req: Request) {
           throw new Error(`Plugin "${plugin.name}" is missing ${isYearly ? "yearly" : "monthly"} price for ${currency}`)
         }
 
-        if (currency === "INR" && !isYearly && plugin.razorpayPlanIdMonthly) {
-          finalPlanId = plugin.razorpayPlanIdMonthly
-        } else {
-          const newPlan = await rzp.plans.create({
-            period: isYearly ? "yearly" : "monthly",
-            interval: 1,
-            item: {
-              name: `Plugin: ${plugin.name} (${currency})`,
-              description: `${isYearly ? "Yearly" : "Monthly"} subscription for ${plugin.name}`,
-              amount: amountInSubunits, // already in paise / cents
-              currency: currency
-            }
-          })
-          finalPlanId = newPlan.id
-          if (currency === "INR" && !isYearly) {
+        const newPlan = await rzp.plans.create({
+          period: isYearly ? "yearly" : "monthly",
+          interval: 1,
+          item: {
+            name: `Plugin: ${plugin.name} (${currency}) - ${isYearly ? "Yearly" : "Monthly"}`,
+            description: `${isYearly ? "Yearly" : "Monthly"} subscription for ${plugin.name}`,
+            amount: amountInSubunits, // already in paise / cents
+            currency: currency
+          }
+        })
+        finalPlanId = newPlan.id
+        if (currency === "INR") {
+          if (isYearly) {
+            await db.plugin.update({ where: { id: plugin.id }, data: { razorpayPlanIdYearly: newPlan.id } })
+          } else {
             await db.plugin.update({ where: { id: plugin.id }, data: { razorpayPlanIdMonthly: newPlan.id } })
           }
         }
       }
+    }
+
+    if (!finalPlanId) {
+      throw new Error("Unable to determine Razorpay plan")
     }
 
     let isUpdate = false
@@ -148,7 +188,7 @@ export async function POST(req: Request) {
           })
           await db.subscription.update({
             where: { id: existingSub!.id },
-            data: { planId: itemId }
+            data: { planId: itemId, billingCycle: isYearly ? "yearly" : "monthly" }
           })
           isUpdate = true
           subscriptionId = updatedSub.id
@@ -164,7 +204,7 @@ export async function POST(req: Request) {
         customer_notify: 1,
         total_count: 1200,
         quantity: quantity,
-        notes: { clinicId, type, itemId, currency }
+        notes: { clinicId, type, itemId, currency, billingCycle: isYearly ? "YEARLY" : "MONTHLY" }
       })
       subscriptionId = subscription.id
     }

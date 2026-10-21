@@ -104,6 +104,7 @@ function PurchaseModal({ plugin, currency, onClose, onSuccess, platformFeePercen
             razorpay_signature: "bypass_sig",
             type: "PLUGIN",
             itemId: plugin.id,
+            billingCycle: selected,
             isOneTime,
             quantity,
           })
@@ -132,7 +133,9 @@ function PurchaseModal({ plugin, currency, onClose, onSuccess, platformFeePercen
                   ...response,
                   type: "PLUGIN",
                   itemId: plugin.id,
-                  isOneTime
+                  billingCycle: selected,
+                  isOneTime,
+                  quantity,
                 })
               })
               const verifyJson = await verifyRes.json()

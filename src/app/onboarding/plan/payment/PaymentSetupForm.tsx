@@ -12,9 +12,10 @@ interface Props {
   planName: string
   trialEndsAt: string
   currency?: "INR" | "USD"
+  billingCycle?: "MONTHLY" | "YEARLY"
 }
 
-export function PaymentSetupForm({ clinicId, userId, razorpayKeyId, planId, razorpayPlanId, planName, trialEndsAt, currency = "INR" }: Props) {
+export function PaymentSetupForm({ clinicId, userId, razorpayKeyId, planId, razorpayPlanId, planName, trialEndsAt, currency = "INR", billingCycle = "MONTHLY" }: Props) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -51,7 +52,7 @@ export function PaymentSetupForm({ clinicId, userId, razorpayKeyId, planId, razo
           itemId: planId,
           planId: razorpayPlanId,
           currency,
-          billingCycle: "MONTHLY"
+          billingCycle
         })
       })
       
@@ -68,6 +69,7 @@ export function PaymentSetupForm({ clinicId, userId, razorpayKeyId, planId, razo
             razorpay_signature: "bypass_sig",
             type: "PLAN",
             itemId: planId,
+            billingCycle: billingCycle.toLowerCase(),
             isOneTime: false
           })
         })
@@ -100,6 +102,7 @@ export function PaymentSetupForm({ clinicId, userId, razorpayKeyId, planId, razo
                   ...response,
                   type: "PLAN",
                   itemId: planId,
+                  billingCycle: billingCycle.toLowerCase(),
                   isOneTime: false
                 })
               })

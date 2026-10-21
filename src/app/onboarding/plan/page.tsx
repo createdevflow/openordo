@@ -9,6 +9,7 @@ export default async function OnboardingPlanPage() {
   const headersList = await headers()
   const cookieStore = await cookies()
   const initialPlan = cookieStore.get("selected_plan")?.value
+  const initialCycle = (cookieStore.get("selected_cycle")?.value as "monthly" | "yearly") || "monthly"
   let country = headersList.get('x-user-country') || 'US'
 
   if (session?.user?.id) {
@@ -107,7 +108,7 @@ export default async function OnboardingPlanPage() {
       </div>
 
       <div className="p-6 md:p-8">
-        <PlanForm plans={plans} promo={promo} currency={currency} initialPlan={initialPlan} countryCode={country} />
+        <PlanForm plans={plans} promo={promo} currency={currency} initialPlan={initialPlan} initialBillingCycle={initialCycle} countryCode={country} />
       </div>
     </div>
   )
