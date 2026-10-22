@@ -10,7 +10,8 @@ import {
   changeClinicPlanAction,
   exportClinicDataAction,
   cancelSubscriptionAction,
-  submitBaaRequestAction
+  submitBaaRequestAction,
+  updateSlotCapacitiesAction
 } from "@/server/actions/settings"
 import { saveBookingPageConfig } from "@/server/actions/bookingPageConfig"
 import { submitDeletionRequest } from "@/server/actions/deletion-request"
@@ -20,6 +21,7 @@ import { toast } from "sonner"
 import { StorageTab } from "./StorageTab"
 import { PriceWithTax } from "@/components/ui/PriceWithTax"
 import { calculateSavingsPct } from "@/lib/pricing"
+import { generateTimeSlots, formatTime12h } from "@/lib/slot-capacity"
 
 export function SettingsClient({ 
   initialClinic, 
@@ -123,6 +125,17 @@ export function SettingsClient({
   }))
   const [isBpcSaving, setIsBpcSaving] = useState(false)
   const [newApptType, setNewApptType] = useState("")
+
+  // Slot Capacity State (configured independently of visual branding)
+  const initialSlotCapacities = initialBillingConfig?.slotCapacities || { defaultCapacity: 1, slotOverrides: {} }
+  const [slotCapacities, setSlotCapacities] = useState<{
+    defaultCapacity: number
+    slotOverrides: Record<string, number>
+  }>({
+    defaultCapacity: initialSlotCapacities.defaultCapacity || 1,
+    slotOverrides: initialSlotCapacities.slotOverrides || {}
+  })
+  const [isSlotSaving, setIsSlotSaving] = useState(false)
 
   const [isPending, startTransition] = useTransition()
   const [exportMessage, setExportMessage] = useState("")
@@ -2254,6 +2267,217 @@ export function SettingsClient({
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* ── TIME SLOT CAPACITY & BOOKING LIMITS SECTION ── */}
+            <div className="bg-white border border-line rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.02)] overflow-hidden">
+              <div className="px-6 py-5 border-b border-line bg-paper-raised flex justify-between items-start">
+                <div>
+                  <h3 className="text-[17px] font-bold m-0 text-ink flex items-center gap-2">
+                    <Clock size={17} style={{ color: "var(--forest)" }} /> Time Slot Capacity &amp; Booking Limits
+                  </h3>
+                  <p className="text-[13px] text-ink-soft mt-1 mb-0">
+                    Control how many patient bookings are accepted per time slot. When a slot reaches its limit, it will display as &quot;Already Booked&quot; on your public booking page.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-6 flex flex-col gap-6">
+                {/* Default Capacity setting */}
+                <div className="bg-paper-raised/60 border border-line rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <div className="font-semibold text-[14px] text-ink">Default Patients per Time Slot</div>
+                    <div className="text-[12.5px] text-ink-soft mt-0.5">
+                      Applied to all slots unless a custom override is configured below.
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center border border-line rounded-lg bg-white overflow-hidden shadow-xs">
+                      <button
+                        type="button"
+                        onClick={() => setSlotCapacities(prev => ({
+                          ...prev,
+                          defaultCapacity: Math.max(1, prev.defaultCapacity - 1)
+                        }))}
+                        className="px-3 py-1.5 text-ink hover:bg-paper-raised transition-colors text-sm font-bold cursor-pointer"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        min="1"
+                        max="200"
+                        value={slotCapacities.defaultCapacity}
+                        onChange={e => {
+                          const val = Math.max(1, parseInt(e.target.value, 10) || 1)
+                          setSlotCapacities(prev => ({ ...prev, defaultCapacity: val }))
+                        }}
+                        className="w-14 text-center border-none text-[13.5px] font-semibold text-ink focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setSlotCapacities(prev => ({
+                          ...prev,
+                          defaultCapacity: prev.defaultCapacity + 1
+                        }))}
+                        className="px-3 py-1.5 text-ink hover:bg-paper-raised transition-colors text-sm font-bold cursor-pointer"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <span className="text-[12.5px] font-medium text-ink-soft">patients / slot</span>
+                  </div>
+                </div>
+
+                {/* Quick Presets */}
+                <div>
+                  <div className="text-[12px] font-bold text-ink-soft uppercase tracking-wider mb-2">Quick Presets</div>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { label: "1 patient (1-on-1)", cap: 1 },
+                      { label: "5 patients / slot", cap: 5 },
+                      { label: "10 patients / slot", cap: 10 },
+                      { label: "20 patients (High Volume / Walk-in)", cap: 20 },
+                    ].map(preset => (
+                      <button
+                        key={preset.cap}
+                        type="button"
+                        onClick={() => setSlotCapacities(prev => ({ ...prev, defaultCapacity: preset.cap }))}
+                        className={`text-[12px] px-3 py-1.5 rounded-lg border transition-colors cursor-pointer ${
+                          slotCapacities.defaultCapacity === preset.cap
+                            ? "bg-forest/10 border-forest text-forest font-semibold"
+                            : "bg-paper border-line text-ink-soft hover:text-ink hover:bg-paper-raised font-medium"
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ borderTop: "1px solid var(--line)" }} />
+
+                {/* Per-Slot Custom Overrides Grid */}
+                <div>
+                  <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                    <div>
+                      <div className="font-semibold text-[14px] text-ink">Per-Slot Patient Capacity Overrides</div>
+                      <div className="text-[12.5px] text-ink-soft mt-0.5">
+                        Specify custom patient counts for busy hours (e.g. set 20 patients for 10:00 AM).
+                      </div>
+                    </div>
+                    {Object.keys(slotCapacities.slotOverrides).length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setSlotCapacities(prev => ({ ...prev, slotOverrides: {} }))}
+                        className="text-[12px] font-medium text-coral hover:underline cursor-pointer"
+                      >
+                        Reset All Overrides
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="text-[12px] text-ink-soft mb-3 bg-paper p-2.5 rounded-lg border border-line flex items-center justify-between">
+                    <span>
+                      Operating Hours: <strong>{formatTime12h(clinic.openTime || "09:00")} – {formatTime12h(clinic.closeTime || "18:00")}</strong>
+                    </span>
+                    <span className="text-[11px] text-ink-muted">
+                      Configurable in General &gt; Clinic Profile
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                    {generateTimeSlots(clinic.openTime, clinic.closeTime).map(slot => {
+                      const formattedTime = formatTime12h(slot)
+
+                      const hasOverride = slotCapacities.slotOverrides[slot] !== undefined
+                      const currentCapacity = hasOverride ? slotCapacities.slotOverrides[slot] : slotCapacities.defaultCapacity
+
+                      return (
+                        <div
+                          key={slot}
+                          className={`p-3 rounded-lg border transition-all ${
+                            hasOverride
+                              ? "bg-forest/5 border-forest/30"
+                              : "bg-paper border-line"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-bold text-[13px] text-ink">{formattedTime}</span>
+                            {hasOverride ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = { ...slotCapacities.slotOverrides }
+                                  delete updated[slot]
+                                  setSlotCapacities(prev => ({ ...prev, slotOverrides: updated }))
+                                }}
+                                className="text-[10.5px] font-medium text-coral hover:underline cursor-pointer"
+                                title="Reset to default capacity"
+                              >
+                                Clear
+                              </button>
+                            ) : (
+                              <span className="text-[10.5px] text-ink-soft">Default</span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              min="1"
+                              max="200"
+                              value={currentCapacity}
+                              onChange={e => {
+                                const val = Math.max(1, parseInt(e.target.value, 10) || 1)
+                                setSlotCapacities(prev => ({
+                                  ...prev,
+                                  slotOverrides: {
+                                    ...prev.slotOverrides,
+                                    [slot]: val
+                                  }
+                                }))
+                              }}
+                              className="w-full text-center py-1 px-2 border border-line rounded-md text-[13px] font-semibold text-ink bg-white focus:outline-none focus:ring-1 focus:ring-forest"
+                            />
+                            <span className="text-[11px] text-ink-soft shrink-0">patients</span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Save Button for Slot Capacities */}
+                <div className="flex justify-end pt-2 border-t border-line">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setIsSlotSaving(true)
+                      try {
+                        await updateSlotCapacitiesAction(slotCapacities)
+                        toast.success("Time slot capacities saved successfully")
+                      } catch (err: any) {
+                        toast.error(err.message || "Failed to save slot capacities")
+                      } finally {
+                        setIsSlotSaving(false)
+                      }
+                    }}
+                    disabled={isSlotSaving}
+                    className="cw-btn cw-btn-primary flex items-center gap-2 cursor-pointer"
+                  >
+                    {isSlotSaving ? (
+                      <>
+                        <RefreshCw size={14} className="animate-spin" /> Saving…
+                      </>
+                    ) : (
+                      <>
+                        <Check size={14} /> Save Slot Capacities
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* ── SECTION B: Public Booking Link ── */}

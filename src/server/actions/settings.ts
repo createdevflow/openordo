@@ -484,3 +484,41 @@ export async function cancelSubscriptionAction() {
   revalidatePath("/dashboard/settings")
   return { ok: true, currentPeriodEnd: sub.currentPeriodEnd }
 }
+
+export async function updateSlotCapacitiesAction(data: {
+  defaultCapacity: number
+  slotOverrides: Record<string, number>
+}) {
+  const clinicId = await requireClinicId()
+  const clinic = await db.clinic.findUnique({ where: { id: clinicId } })
+  if (!clinic) throw new Error("Clinic not found")
+
+  let config: any = {}
+  try { config = JSON.parse(clinic.billingConfig || "{}") } catch(e) {}
+
+  // Clean slot overrides (filter out invalid or non-numeric values)
+  const cleanedOverrides: Record<string, number> = {}
+  if (data.slotOverrides && typeof data.slotOverrides === "object") {
+    for (const [slot, cap] of Object.entries(data.slotOverrides)) {
+      const num = parseInt(String(cap), 10)
+      if (!isNaN(num) && num > 0) {
+        cleanedOverrides[slot] = num
+      }
+    }
+  }
+
+  config.slotCapacities = {
+    defaultCapacity: Math.max(1, parseInt(String(data.defaultCapacity), 10) || 1),
+    slotOverrides: cleanedOverrides
+  }
+
+  const updatedClinic = await db.clinic.update({
+    where: { id: clinicId },
+    data: { billingConfig: JSON.stringify(config) }
+  })
+
+  revalidatePath("/dashboard/settings")
+  revalidatePath(`/book/${clinic.slug}`)
+  return config.slotCapacities
+}
+

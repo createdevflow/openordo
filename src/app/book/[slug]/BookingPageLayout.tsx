@@ -30,6 +30,10 @@ interface Props {
   isBookingEnabled?: boolean
   isBookingLimitReached?: boolean
   bookingLimitMessage?: string
+  slotCapacityConfig?: {
+    defaultCapacity: number
+    slotOverrides: Record<string, number>
+  }
 }
 
 export function BookingPageLayout({
@@ -41,21 +45,25 @@ export function BookingPageLayout({
   isBookingEnabled = true,
   isBookingLimitReached = false,
   bookingLimitMessage = "",
+  slotCapacityConfig,
 }: Props) {
 
   // Inject favicon dynamically
   useEffect(() => {
     if (!faviconUrl) return
+    const resolvedFavicon = getFileUrl(faviconUrl)
     let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null
     if (!link) {
       link = document.createElement("link")
       link.rel = "icon"
       document.head.appendChild(link)
     }
-    link.href = faviconUrl
+    link.href = resolvedFavicon
   }, [faviconUrl])
 
-  const hasCover = !!coverUrl
+  const resolvedCoverUrl = coverUrl ? getFileUrl(coverUrl) : ""
+  const resolvedLogoUrl = logoUrl ? getFileUrl(logoUrl) : ""
+  const hasCover = !!resolvedCoverUrl
   const hasInfo  = (showAddress && clinicAddress) || (showPhone && clinicPhone) || (showHours && clinicOpenTime)
 
   // ── Brand CSS vars injected inline on the root ────────────────────────────
@@ -72,66 +80,116 @@ export function BookingPageLayout({
 
         {/* Cover image (full-bleed) */}
         {hasCover ? (
-          <div style={{ width: "100%", height: 220, overflow: "hidden", position: "relative" }}>
-            <img src={coverUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <div style={{ width: "100%", height: 260, overflow: "hidden", position: "relative" }}>
+            <img src={resolvedCoverUrl} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             {/* Scrim so card always reads on top of any image */}
             <div style={{
               position: "absolute", inset: 0,
-              background: "linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.55) 100%)"
+              background: "linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.65) 100%)"
             }} />
           </div>
         ) : (
-          /* No cover: solid brand-coloured bar (thin) */
-          <div style={{ width: "100%", height: 8, background: accentColor }} />
+          /* Branded gradient hero banner when no custom image is uploaded */
+          <div style={{
+            width: "100%",
+            height: 180,
+            position: "relative",
+            overflow: "hidden",
+            background: `linear-gradient(135deg, ${accentColor} 0%, #0F231C 100%)`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "0 32px"
+          }}>
+            <div style={{
+              position: "absolute",
+              inset: 0,
+              opacity: 0.12,
+              backgroundImage: `radial-gradient(circle at 20% 50%, #fff 1.5px, transparent 1.5px), radial-gradient(circle at 80% 50%, #fff 1.5px, transparent 1.5px)`,
+              backgroundSize: "28px 28px"
+            }} />
+            <div style={{
+              position: "relative",
+              zIndex: 1,
+              display: "flex",
+              alignItems: "center",
+              gap: 12
+            }}>
+              <span style={{
+                fontSize: 12,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "rgba(255,255,255,0.85)",
+                background: "rgba(255,255,255,0.15)",
+                padding: "5px 14px",
+                borderRadius: 20,
+                backdropFilter: "blur(6px)",
+                border: "1px solid rgba(255,255,255,0.2)"
+              }}>
+                Verified Healthcare Provider
+              </span>
+            </div>
+          </div>
         )}
 
-        {/* Clinic identity card — overlaps cover bottom (or sits flush below the bar) */}
+        {/* Clinic identity card — overlaps cover bottom */}
         <div style={{
           maxWidth: 940,
           margin: "0 auto",
           padding: "0 20px",
           position: "relative",
-          marginTop: hasCover ? -72 : 0,
+          marginTop: hasCover ? -76 : -48,
         }}>
           <div style={{
             display: "flex",
             alignItems: "flex-end",
-            gap: 16,
-            background: hasCover ? "rgba(255,255,255,0.96)" : "transparent",
-            backdropFilter: hasCover ? "blur(8px)" : "none",
-            borderRadius: hasCover ? 14 : 0,
-            border: hasCover ? "1px solid var(--line)" : "none",
-            boxShadow: hasCover ? "0 4px 20px rgba(0,0,0,0.10)" : "none",
-            padding: hasCover ? "16px 20px" : "20px 0 0",
+            gap: 18,
+            background: "rgba(255,255,255,0.98)",
+            backdropFilter: "blur(12px)",
+            borderRadius: 16,
+            border: "1px solid var(--line)",
+            boxShadow: "0 8px 30px rgba(0,0,0,0.08)",
+            padding: "20px 24px",
           }}>
             {/* Logo or initial avatar */}
-            {logoUrl ? (
-              <img src={getFileUrl(logoUrl)} alt={displayName} style={{
-                width: 56, height: 56, objectFit: "contain", borderRadius: 10,
+            {resolvedLogoUrl ? (
+              <img src={resolvedLogoUrl} alt={displayName} style={{
+                width: 68, height: 68, objectFit: "contain", borderRadius: 12,
                 border: "2px solid var(--line)", flexShrink: 0, background: "#fff",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.06)"
               }} />
             ) : (
               <div style={{
-                width: 56, height: 56, borderRadius: 10, flexShrink: 0,
+                width: 68, height: 68, borderRadius: 12, flexShrink: 0,
                 background: accentColor,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 22, fontWeight: 700, color: "#fff",
-                border: "2px solid rgba(255,255,255,0.6)",
+                fontSize: 26, fontWeight: 700, color: "#fff",
+                border: "3px solid #fff",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.12)"
               }}>
                 {displayName?.[0]?.toUpperCase() ?? "C"}
               </div>
             )}
 
             <div style={{ flex: 1, minWidth: 0, paddingBottom: 2 }}>
-              <h1 style={{
-                margin: 0, fontSize: 20, fontWeight: 700,
-                color: "var(--ink)", lineHeight: 1.25,
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              }}>
-                {displayName}
-              </h1>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <h1 style={{
+                  margin: 0, fontSize: 22, fontWeight: 700,
+                  color: "var(--ink)", lineHeight: 1.25,
+                }}>
+                  {displayName}
+                </h1>
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: 4,
+                  fontSize: 11, fontWeight: 600, color: accentColor,
+                  background: `${accentColor}15`, padding: "2px 8px", borderRadius: 12
+                }}>
+                  <CheckCircle size={12} /> Official Portal
+                </span>
+              </div>
               {tagline && (
-                <p style={{ margin: "3px 0 0", fontSize: 13.5, color: "var(--ink-soft)", lineHeight: 1.4 }}>
+                <p style={{ margin: "4px 0 0", fontSize: 14, color: "var(--ink-soft)", lineHeight: 1.4 }}>
                   {tagline}
                 </p>
               )}
@@ -359,11 +417,14 @@ export function BookingPageLayout({
               clinicId={clinicId}
               doctors={doctors}
               clinicPhone={clinicPhone}
+              clinicOpenTime={clinicOpenTime}
+              clinicCloseTime={clinicCloseTime}
               appointmentTypes={appointmentTypes}
               accentColor={accentColor}
               isBookingEnabled={isBookingEnabled}
               isBookingLimitReached={isBookingLimitReached}
               bookingLimitMessage={bookingLimitMessage}
+              slotCapacityConfig={slotCapacityConfig}
             />
           </div>
         </div>

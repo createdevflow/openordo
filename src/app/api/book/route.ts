@@ -34,6 +34,29 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // Enforce per-slot capacity limits
+    const { parseSlotCapacityConfig, getBookedSlotCounts, formatTime12h, generateTimeSlots } = await import("@/lib/slot-capacity")
+    const clinicSlots = generateTimeSlots(clinic.openTime, clinic.closeTime)
+    if (!clinicSlots.includes(time)) {
+      return NextResponse.json(
+        { error: "The selected time slot is outside of this clinic's operating hours." },
+        { status: 400 }
+      )
+    }
+
+    const { defaultCapacity, slotOverrides } = parseSlotCapacityConfig(clinic.billingConfig)
+    const slotMax = slotOverrides[time] !== undefined ? slotOverrides[time] : defaultCapacity
+    const bookedCounts = await getBookedSlotCounts(clinicId, date)
+    const currentBooked = bookedCounts[time] || 0
+
+    if (currentBooked >= slotMax) {
+      const formattedTime = formatTime12h(time) || time
+      return NextResponse.json(
+        { error: `The ${formattedTime} slot is already fully booked for this date (${currentBooked}/${slotMax} patients). Please choose another time.` },
+        { status: 409 }
+      )
+    }
+
     const booking = await db.bookingRequest.create({
       data: {
         clinicId,
