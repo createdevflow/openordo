@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useTransition } from "react"
-import { Search, Plus, LayoutGrid, List as ListIcon, ChevronLeft, ChevronRight, X, Pencil, Trash2, Lock, Video } from "lucide-react"
+import { Search, Plus, LayoutGrid, List as ListIcon, ChevronLeft, ChevronRight, ChevronDown, X, Pencil, Trash2, Lock, Video } from "lucide-react"
 import { initials, fmtDate, fmtDateShort, fmtTime12, toISO, pad, StatusBadge } from "@/components/DashboardHelpers"
 import { createAppointmentAction, updateAppointmentAction, updateAppointmentStatusAction } from "@/server/actions/appointments"
 import { generatePatientLinkToken } from "@/server/actions/video-consultation"
@@ -102,38 +102,44 @@ export function AppointmentsClient({
 
   return (
     <div>
-      <div className="cw-toolbar">
-        <div className="cw-toolbar-left flex-wrap">
-          <div className="cw-tabs">
+      <div className="cw-toolbar !flex !items-center !justify-between !mb-4 !gap-3">
+        <div className="cw-toolbar-left !flex !items-center !gap-3 !flex-nowrap">
+          <div className="cw-tabs shrink-0">
             <button className={`cw-tab ${mode === "calendar" ? "active" : ""}`} onClick={() => setMode("calendar")}><LayoutGrid size={14} /><span className="hidden sm:inline">Calendar</span></button>
             <button className={`cw-tab ${mode === "list" ? "active" : ""}`} onClick={() => setMode("list")}><ListIcon size={14} /><span className="hidden sm:inline">List</span></button>
           </div>
 
           {hasMultiDoctor ? (
-            <select 
-              className="cw-select" 
-              value={doctorFilter} 
-              onChange={e => setDoctorFilter(e.target.value)}
-              style={{ padding: "4px 10px", fontSize: 12.5, height: 32, borderRadius: 6, border: "1px solid var(--line)", background: "var(--paper-raised)" }}
-            >
-              <option value="all">All Doctors ({doctors.length})</option>
-              {doctors.map((d: any) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </select>
+            <div className="relative inline-flex items-center min-w-[200px] sm:min-w-[240px] max-w-[320px]">
+              <select 
+                value={doctorFilter} 
+                onChange={e => setDoctorFilter(e.target.value)}
+                className="w-full text-[13.5px] font-medium text-ink bg-paper-raised border border-line rounded-lg pl-3 pr-8 h-[36px] appearance-none focus:outline-none focus:ring-1 focus:ring-forest cursor-pointer shadow-xs transition-colors hover:border-line-dark"
+                style={{ width: "100%", height: 36, paddingRight: 30 }}
+              >
+                <option value="all">All Doctors ({doctors.length})</option>
+                {doctors.map((d: any) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name?.startsWith("Dr") ? d.name : `Dr. ${d.name}`}{d.specialty ? ` (${d.specialty})` : ""}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={14} className="pointer-events-none absolute right-2.5 text-ink-soft" />
+            </div>
           ) : doctors.length > 1 ? (
             <Link 
               href="/dashboard/settings?tab=subscription" 
-              style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--ink-soft)", textDecoration: "none", background: "var(--paper-raised)", padding: "4px 8px", borderRadius: 6, border: "1px solid var(--line)" }}
+              className="inline-flex items-center gap-2 text-[12.5px] text-ink-soft bg-paper-raised border border-line rounded-lg px-3 h-[36px] hover:text-ink hover:bg-paper transition-colors shadow-xs"
               title="Multi-doctor schedule management is available on Clinic Group"
             >
-              <Lock size={12} /> <span className="hidden sm:inline">Multi-doctor (Clinic Group)</span>
+              <Lock size={12} className="text-amber-600" />
+              <span>All Doctors ({doctors.length})</span>
             </Link>
           ) : null}
         </div>
 
-        <button className="cw-btn cw-btn-primary cw-btn-sm w-full sm:w-auto mt-2 sm:mt-0 justify-center" onClick={() => { setEditing(null); setModalOpen(true); }} disabled={isPending}>
-          <Plus size={15} />New appointment
+        <button className="cw-btn cw-btn-primary cw-btn-sm shrink-0 flex items-center gap-1.5 h-[36px]" onClick={() => { setEditing(null); setModalOpen(true); }} disabled={isPending}>
+          <Plus size={15} /><span>New appointment</span>
         </button>
       </div>
 
