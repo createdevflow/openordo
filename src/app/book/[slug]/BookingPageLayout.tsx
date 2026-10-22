@@ -135,9 +135,9 @@ export function BookingPageLayout({
 
         {/* Clinic identity card — overlaps cover bottom */}
         <div style={{
-          maxWidth: 940,
+          maxWidth: 1240,
           margin: "0 auto",
-          padding: "0 20px",
+          padding: "0 24px",
           position: "relative",
           marginTop: hasCover ? -76 : -48,
         }}>
@@ -199,89 +199,81 @@ export function BookingPageLayout({
       </div>
 
       {/* ── PAGE BODY ──────────────────────────────────────────────────────── */}
-      <div style={{ maxWidth: 940, margin: "0 auto", padding: "24px 20px 56px" }}>
-
-        {/* ── ABOUT / CLINIC INFO CARD (combined, single card) ─────────────── */}
-        {(aboutText || hasInfo) && (
-          <div style={{
-            background: "var(--paper-raised)",
-            border: "1px solid var(--line)",
-            borderRadius: 12,
-            padding: "18px 22px",
-            marginBottom: 24,
-          }}>
-            {aboutText && (
-              <p style={{
-                margin: hasInfo ? "0 0 14px" : 0,
-                fontSize: 14, lineHeight: 1.7,
-                color: "var(--ink-soft)",
-              }}>
-                {aboutText}
-              </p>
-            )}
-
-            {hasInfo && (
-              <div style={{
-                display: "flex", flexWrap: "wrap", gap: "8px 24px",
-                borderTop: aboutText ? "1px solid var(--line)" : "none",
-                paddingTop: aboutText ? 14 : 0,
-              }}>
-                {showAddress && clinicAddress && (
-                  <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--ink-soft)" }}>
-                    <MapPin size={14} style={{ color: accentColor, flexShrink: 0 }} />
-                    {clinicAddress}
-                  </span>
-                )}
-                {showPhone && clinicPhone && (
-                  <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--ink-soft)" }}>
-                    <Phone size={14} style={{ color: accentColor, flexShrink: 0 }} />
-                    {clinicPhone}
-                  </span>
-                )}
-                {showHours && clinicOpenTime && clinicCloseTime && (
-                  <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--ink-soft)" }}>
-                    <Clock size={14} style={{ color: accentColor, flexShrink: 0 }} />
-                    {clinicOpenTime} – {clinicCloseTime}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── BOOKING SECTION HEADING ───────────────────────────────────────── */}
-        <div style={{ marginBottom: 20, textAlign: "center" }}>
-          <h2 style={{ fontSize: 26, fontWeight: 700, color: "var(--ink)", margin: "0 0 6px" }}>
-            {!isBookingEnabled
-              ? "Clinic Appointments"
-              : isBookingLimitReached
-              ? "Online Booking Capacity Reached"
-              : "Book an Appointment"}
-          </h2>
-          <p style={{ fontSize: 14, color: "var(--ink-soft)", margin: 0 }}>
-            {!isBookingEnabled
-              ? "Online booking is not currently active for this clinic — please contact them directly."
-              : isBookingLimitReached
-              ? "This clinic has filled all allocated online booking slots for this month."
-              : "Fill in your details below — we'll confirm your slot shortly."}
-          </p>
-        </div>
+      <div style={{ maxWidth: 1240, margin: "0 auto", padding: "28px 24px 64px" }}>
 
         {/* ── TWO-COLUMN BOOKING LAYOUT ─────────────────────────────────────── */}
         {/*
-          Desktop: two columns [left: context info] [right: form]
+          Desktop: two columns [left: context info & clinic details] [right: form]
           Mobile:  single column, context first then form
-          Breakpoint: 768px (md) — matching CHARTWELL_BUILD_SPEC §1 pattern
+          Breakpoint: 860px
         */}
-        <div style={{ display: "flex", gap: 24, alignItems: "flex-start" }} className="booking-cols">
+        <div style={{ display: "flex", gap: 28, alignItems: "flex-start" }} className="booking-cols">
 
           {/* ── LEFT COLUMN: Context panel ───────────────────────────────── */}
           <div className="booking-col-left" style={{
-            flex: "0 0 280px",
+            flex: "0 0 340px",
             display: "flex",
             flexDirection: "column",
             gap: 16,
           }}>
+
+            {/* 1. Clinic Info / About Card (relocated to left column as requested) */}
+            {(aboutText || hasInfo) && (
+              <div style={{
+                background: "var(--paper-raised)",
+                border: "1px solid var(--line)",
+                borderRadius: 12,
+                overflow: "hidden",
+              }}>
+                <div style={{
+                  padding: "12px 16px",
+                  borderBottom: "1px solid var(--line)",
+                  background: "var(--paper)",
+                  fontSize: 11, fontWeight: 700, color: "var(--moss)",
+                  textTransform: "uppercase", letterSpacing: "0.06em",
+                }}>
+                  About Clinic
+                </div>
+                <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 12 }}>
+                  {aboutText && (
+                    <p style={{
+                      margin: 0,
+                      fontSize: 13.5, lineHeight: 1.6,
+                      color: "var(--ink-soft)",
+                    }}>
+                      {aboutText}
+                    </p>
+                  )}
+
+                  {hasInfo && (
+                    <div style={{
+                      display: "flex", flexDirection: "column", gap: 10,
+                      borderTop: aboutText ? "1px solid var(--line)" : "none",
+                      paddingTop: aboutText ? 12 : 0,
+                    }}>
+                      {showAddress && clinicAddress && (
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: "var(--ink-soft)" }}>
+                          <MapPin size={15} style={{ color: accentColor, flexShrink: 0, marginTop: 2 }} />
+                          <span style={{ lineHeight: 1.4 }}>{clinicAddress}</span>
+                        </div>
+                      )}
+                      {showPhone && clinicPhone && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--ink-soft)" }}>
+                          <Phone size={15} style={{ color: accentColor, flexShrink: 0 }} />
+                          <span>{clinicPhone}</span>
+                        </div>
+                      )}
+                      {showHours && clinicOpenTime && clinicCloseTime && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--ink-soft)" }}>
+                          <Clock size={15} style={{ color: accentColor, flexShrink: 0 }} />
+                          <span>{clinicOpenTime} – {clinicCloseTime}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Doctors available */}
             {doctors.length > 0 && (
@@ -413,6 +405,23 @@ export function BookingPageLayout({
 
           {/* ── RIGHT COLUMN: Booking form ────────────────────────────────── */}
           <div className="booking-col-right" style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ marginBottom: 18 }}>
+              <h2 style={{ fontSize: 24, fontWeight: 700, color: "var(--ink)", margin: "0 0 6px" }}>
+                {!isBookingEnabled
+                  ? "Clinic Appointments"
+                  : isBookingLimitReached
+                  ? "Online Booking Capacity Reached"
+                  : "Book an Appointment"}
+              </h2>
+              <p style={{ fontSize: 13.5, color: "var(--ink-soft)", margin: 0 }}>
+                {!isBookingEnabled
+                  ? "Online booking is not currently active for this clinic — please contact them directly."
+                  : isBookingLimitReached
+                  ? "This clinic has filled all allocated online booking slots for this month."
+                  : "Fill in your details below — we'll confirm your slot shortly."}
+              </p>
+            </div>
+
             <BookingForm
               clinicId={clinicId}
               doctors={doctors}
@@ -444,7 +453,7 @@ export function BookingPageLayout({
       <style>{`
         .booking-cols { flex-direction: row; }
         .booking-col-left { display: flex !important; }
-        @media (max-width: 767px) {
+        @media (max-width: 860px) {
           .booking-cols { flex-direction: column !important; }
           .booking-col-left { flex: none !important; width: 100% !important; }
           .booking-col-right { flex: none !important; width: 100% !important; }
