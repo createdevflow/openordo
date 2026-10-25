@@ -1,4 +1,7 @@
-import React, { useState } from 'react';
+"use client";
+
+import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { MoreVertical } from 'lucide-react';
 
 export function ResponsiveTable({
@@ -20,20 +23,101 @@ export function ResponsiveTable({
   );
 }
 
-export function CardKebab({ children }: { children: React.ReactNode }) {
+export function CardKebab({ 
+  children,
+  direction = "auto"
+}: { 
+  children: React.ReactNode;
+  direction?: "up" | "down" | "auto";
+}) {
   const [open, setOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const updatePosition = () => {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+
+    // Smart auto-flip: flip upwards if requested or if there is not enough room below (< 240px) and more space above
+    const shouldGoUp = direction === "up" || (direction === "auto" && spaceBelow < 240 && spaceAbove > spaceBelow) || spaceBelow < 180;
+
+    if (shouldGoUp) {
+      setMenuPos({
+        bottom: Math.max(8, window.innerHeight - rect.top + 4),
+        right: Math.max(8, window.innerWidth - rect.right),
+      });
+    } else {
+      setMenuPos({
+        top: Math.max(8, rect.bottom + 4),
+        right: Math.max(8, window.innerWidth - rect.right),
+      });
+    }
+  };
+
+  const handleToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!open) {
+      updatePosition();
+      setOpen(true);
+    } else {
+      setOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClose = () => setOpen(false);
+    window.addEventListener('scroll', handleClose, true);
+    window.addEventListener('resize', handleClose);
+    return () => {
+      window.removeEventListener('scroll', handleClose, true);
+      window.removeEventListener('resize', handleClose);
+    };
+  }, [open]);
+
   return (
-    <div className="relative" onClick={e => e.stopPropagation()}>
-      <button className="p-2 -mr-2 text-ink-soft hover:text-ink cursor-pointer" onClick={() => setOpen(!open)}>
+    <div className="relative inline-flex items-center" onClick={e => e.stopPropagation()}>
+      <button 
+        ref={buttonRef}
+        type="button"
+        className="p-1.5 text-ink-soft hover:text-ink hover:bg-paper-raised rounded-md transition-colors cursor-pointer" 
+        onClick={handleToggle} 
+        title="Actions"
+      >
         <MoreVertical size={16} />
       </button>
-      {open && (
+      {open && mounted && menuPos && createPortal(
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 min-w-[140px] w-max max-w-[220px] bg-white border border-line shadow-lg rounded-md z-50 py-1 flex flex-col gap-1" onClick={() => setOpen(false)}>
+          <div 
+            className="fixed inset-0 z-[9998]" 
+            style={{ backgroundColor: "transparent" }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen(false);
+            }} 
+          />
+          <div 
+            style={{
+              position: "fixed",
+              top: menuPos.top !== undefined ? `${menuPos.top}px` : "auto",
+              bottom: menuPos.bottom !== undefined ? `${menuPos.bottom}px` : "auto",
+              right: `${menuPos.right}px`,
+              zIndex: 9999,
+            }}
+            className="min-w-[160px] w-max max-w-[240px] bg-white border border-line shadow-xl rounded-md py-1 flex flex-col gap-0.5 text-left" 
+            onClick={() => setOpen(false)}
+          >
             {children}
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   );

@@ -852,7 +852,14 @@ export function renderVideoConsultLink(
 }
 
 export function renderInvoiceEvent(
-  data: PatientBaseProps & { invoiceDisplayId: string; amount: string; status: "created" | "paid" | "due" }
+  data: PatientBaseProps & { 
+    invoiceDisplayId: string
+    amount: string
+    status: "created" | "paid" | "due"
+    subtotal?: string
+    tax?: string
+    taxLabel?: string
+  }
 ): RenderedEmail {
   const subjectMap = {
     created: `Invoice created — ${data.clinicName}`,
@@ -864,13 +871,22 @@ export function renderInvoiceEvent(
     paid: `Your payment of <strong>${data.amount}</strong> at <strong>${data.clinicName}</strong> has been received. Thank you!`,
     due: `Your invoice of <strong>${data.amount}</strong> at <strong>${data.clinicName}</strong> is due. Please log in to pay.`,
   }
+
+  const cardItems: { label: string; value: string }[] = [
+    { label: "Invoice", value: data.invoiceDisplayId },
+  ]
+  if (data.subtotal && data.tax) {
+    cardItems.push({ label: "Subtotal", value: data.subtotal })
+    cardItems.push({ label: data.taxLabel || "Tax", value: data.tax })
+    cardItems.push({ label: "Total (incl. tax)", value: data.amount })
+  } else {
+    cardItems.push({ label: "Total Amount", value: data.amount })
+  }
+
   const body =
     heading(subjectMap[data.status]) +
     para(`Hi ${data.patientName}, ${bodyText[data.status]}`) +
-    infoCard([
-      { label: "Invoice", value: data.invoiceDisplayId },
-      { label: "Amount", value: data.amount },
-    ]) +
+    infoCard(cardItems) +
     ctaButton("View Invoice", data.loginUrl)
   return {
     subject: subjectMap[data.status],

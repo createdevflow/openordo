@@ -262,7 +262,7 @@ export function BillingClient({
         />
       </div>
 
-      {modalOpen && <InvoiceModal patients={patients} prescriptions={prescriptions} initialPatientId={initialPatientId} onClose={() => setModalOpen(false)} onSave={createInvoice} isPending={isPending} />}
+      {modalOpen && <InvoiceModal clinic={clinic} patients={patients} prescriptions={prescriptions} initialPatientId={initialPatientId} onClose={() => setModalOpen(false)} onSave={createInvoice} isPending={isPending} />}
       {printingInvoice && (
         <div id="print-root">
           <InvoicePrintTemplate 
@@ -362,12 +362,31 @@ function InvoicePrintTemplate({ invoice, clinic, patient }: any) {
   )
 }
 
-function InvoiceModal({ patients, prescriptions, onClose, onSave, isPending, initialPatientId }: any) {
+function InvoiceModal({ clinic, patients, prescriptions, onClose, onSave, isPending, initialPatientId }: any) {
   const [patientId, setPatientId] = useState(initialPatientId || patients[0]?.id || "");
   const today = new Date();
   const [date, setDate] = useState(toISO(today.getFullYear(), today.getMonth(), today.getDate()));
   const [items, setItems] = useState([{ desc: "", amount: "" }]);
   const [includePrescription, setIncludePrescription] = useState(false);
+
+  // Parse clinic-side billing configuration
+  let billingConfig: any = {};
+  try {
+    billingConfig = typeof clinic?.billingConfig === "string" ? JSON.parse(clinic.billingConfig) : (clinic?.billingConfig || {});
+  } catch {}
+
+  const isIndia = (clinic?.countryCode || billingConfig.countryCode || "IN").toUpperCase() === "IN";
+  const defaultTaxLabel = billingConfig.taxLabel || (isIndia ? "GST" : "Tax");
+  const defaultTaxRate = billingConfig.taxRate !== undefined && billingConfig.taxRate !== null && billingConfig.taxRate !== "" 
+    ? Number(billingConfig.taxRate) 
+    : (isIndia ? 18 : 0);
+  const defaultTaxEnabled = billingConfig.taxEnabled !== undefined 
+    ? Boolean(billingConfig.taxEnabled) 
+    : (defaultTaxRate > 0);
+
+  const [applyTax, setApplyTax] = useState(defaultTaxEnabled);
+  const [taxLabel, setTaxLabel] = useState(defaultTaxLabel);
+  const [taxRate, setTaxRate] = useState<number | string>(defaultTaxRate);
 
   const patientPrescriptions = prescriptions?.filter((p: any) => p.patientId === patientId) || [];
   const latestPrescription = patientPrescriptions[0];
@@ -377,11 +396,20 @@ function InvoiceModal({ patients, prescriptions, onClose, onSave, isPending, ini
     next[i] = { ...next[i], [key]: val }; 
     setItems(next);
   }
-  const total = items.reduce((s, it) => s + (Number(it.amount) || 0), 0);
+
+  const subtotal = items.reduce((s, it) => s + (Number(it.amount) || 0), 0);
+  const numericTaxRate = Math.max(0, Number(taxRate) || 0);
+  const taxAmount = applyTax ? (subtotal * numericTaxRate) / 100 : 0;
+  const grandTotal = subtotal + taxAmount;
+
+  const formatMoney = (val: number) => {
+    const sym = isIndia ? "₹" : (clinic?.countryCode === "GB" ? "£" : clinic?.countryCode === "AE" ? "AED " : "$");
+    return `${sym}${Number(val || 0).toLocaleString(isIndia ? "en-IN" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
 
   return (
     <div className="cw-overlay" onClick={onClose}>
-      <div className="cw-modal" onClick={e => e.stopPropagation()}>
+      <div className="cw-modal" style={{ maxWidth: 540 }} onClick={e => e.stopPropagation()}>
         <div className="cw-modal-head">
           <h3>New invoice</h3>
           <button className="cw-btn cw-btn-ghost cw-btn-icon" onClick={onClose} disabled={isPending}><X size={16} /></button>
@@ -392,6 +420,10 @@ function InvoiceModal({ patients, prescriptions, onClose, onSave, isPending, ini
             patientId, 
             date, 
             items: items.filter(it => it.desc && it.amount).map(it => ({ desc: it.desc, amount: Number(it.amount) })),
+            taxApplied: applyTax && taxAmount > 0,
+            taxLabel: (taxLabel || (isIndia ? "GST" : "Tax")).trim(),
+            taxRate: numericTaxRate,
+            taxAmount: Number(taxAmount.toFixed(2)),
             includePrescriptionId: includePrescription && latestPrescription ? latestPrescription.id : null
           });
         }}>
@@ -404,23 +436,105 @@ function InvoiceModal({ patients, prescriptions, onClose, onSave, isPending, ini
               </div>
               <div className="cw-field"><label>Date</label><input className="cw-input" type="date" value={date} onChange={e => setDate(e.target.value)} required disabled={isPending} /></div>
             </div>
+            
             <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--ink-soft)", marginBottom: 8 }}>Line items</label>
             {items.map((it, i) => (
               <div key={i} className="flex flex-col sm:flex-row gap-2 mb-3 bg-paper-raised sm:bg-transparent p-3 sm:p-0 rounded border sm:border-0 border-line">
                 <input className="cw-input w-full" placeholder="Description" value={it.desc} onChange={e => updateItem(i, "desc", e.target.value)} style={{ flex: 2 }} disabled={isPending} />
                 <div className="flex gap-2 w-full" style={{ flex: 1 }}>
-                  <input className="cw-input flex-1" type="number" placeholder="Amount" value={it.amount} onChange={e => updateItem(i, "amount", e.target.value)} disabled={isPending} />
+                  <input className="cw-input flex-1" type="number" step="0.01" min="0" placeholder="Amount" value={it.amount} onChange={e => updateItem(i, "amount", e.target.value)} disabled={isPending} />
                   {items.length > 1 && <button type="button" className="cw-btn cw-btn-ghost cw-btn-icon flex-shrink-0" onClick={() => setItems(items.filter((_, idx) => idx !== i))} disabled={isPending}><X size={14} /></button>}
                 </div>
               </div>
             ))}
             <button type="button" className="cw-btn cw-btn-ghost cw-btn-sm" onClick={() => setItems([...items, { desc: "", amount: "" }])} disabled={isPending}><Plus size={13} />Add line item</button>
-            <div style={{ marginTop: 18, paddingTop: 14, borderTop: "1px solid var(--line)", display: "flex", justifyContent: "space-between", fontWeight: 700 }}>
-              <span>Total</span><span className="mono">{currency(total)}</span>
+
+            {/* Clinic-Side Tax Calculation Setup */}
+            <div style={{ marginTop: 18, padding: 12, background: "var(--paper-raised, #f9fbf9)", border: "1px solid var(--line, #e2e8e2)", borderRadius: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", margin: 0, color: "var(--ink)" }}>
+                  <input 
+                    type="checkbox" 
+                    checked={applyTax} 
+                    onChange={e => setApplyTax(e.target.checked)} 
+                    disabled={isPending} 
+                  />
+                  Apply Tax / {isIndia ? "GST" : "VAT"}
+                </label>
+                {applyTax && (
+                  <span className="mono" style={{ fontSize: 13, fontWeight: 600, color: "var(--moss, #2e6044)" }}>
+                    +{formatMoney(taxAmount)}
+                  </span>
+                )}
+              </div>
+
+              {applyTax && (
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px dashed var(--line, #e2e8e2)" }}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+                    <div>
+                      <label style={{ fontSize: 11, color: "var(--ink-soft)", fontWeight: 500, display: "block", marginBottom: 3 }}>Tax Label / Name</label>
+                      <input 
+                        className="cw-input !py-1 !text-xs w-full" 
+                        placeholder={isIndia ? "GST" : "Tax"} 
+                        value={taxLabel} 
+                        onChange={e => setTaxLabel(e.target.value)} 
+                        disabled={isPending} 
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11, color: "var(--ink-soft)", fontWeight: 500, display: "block", marginBottom: 3 }}>Tax Rate (%)</label>
+                      <input 
+                        className="cw-input !py-1 !text-xs w-full" 
+                        type="number" 
+                        min="0" 
+                        max="100" 
+                        step="0.01" 
+                        placeholder="0" 
+                        value={taxRate} 
+                        onChange={e => setTaxRate(e.target.value)} 
+                        disabled={isPending} 
+                      />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 11, color: "var(--ink-soft)" }}>Presets:</span>
+                    {[0, 5, 12, 18, 28].map(rate => (
+                      <button
+                        key={rate}
+                        type="button"
+                        className={`cw-chip !py-0.5 !px-2 !text-xs ${Number(taxRate) === rate ? "active" : ""}`}
+                        style={{ fontSize: 11 }}
+                        onClick={() => setTaxRate(rate)}
+                        disabled={isPending}
+                      >
+                        {rate}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Calculations Breakdown */}
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--line)" }} className="flex flex-col gap-1.5">
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--ink-soft)" }}>
+                <span>Subtotal</span>
+                <span className="mono">{formatMoney(subtotal)}</span>
+              </div>
+              {applyTax && (
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--ink-soft)" }}>
+                  <span>{(taxLabel || (isIndia ? "GST" : "Tax")).trim()} ({numericTaxRate}%)</span>
+                  <span className="mono">+{formatMoney(taxAmount)}</span>
+                </div>
+              )}
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 700, marginTop: 4, paddingTop: 6, borderTop: "1px solid var(--line)" }}>
+                <span>Total</span>
+                <span className="mono">{formatMoney(grandTotal)}</span>
+              </div>
             </div>
             
-            <div style={{ marginTop: 20, padding: 12, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 6 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: latestPrescription ? "pointer" : "not-allowed", margin: 0, color: latestPrescription ? "var(--ink)" : "var(--ink-soft)" }}>
+            <div style={{ marginTop: 16, padding: 10, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 6 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, cursor: latestPrescription ? "pointer" : "not-allowed", margin: 0, color: latestPrescription ? "var(--ink)" : "var(--ink-soft)" }}>
                 <input 
                   type="checkbox" 
                   checked={includePrescription && !!latestPrescription} 

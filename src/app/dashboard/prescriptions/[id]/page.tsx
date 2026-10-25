@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Printer } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 import { db } from "@/lib/db"
 import { requireClinicId, requireUser } from "@/lib/auth-utils"
+import { PrintButton } from "@/components/ui/PrintButton"
 
 export default async function ViewPrescriptionPage({ params }: { params: Promise<{ id: string }> }) {
   const clinicId = await requireClinicId()
@@ -30,12 +31,7 @@ export default async function ViewPrescriptionPage({ params }: { params: Promise
         <Link href="/dashboard/prescriptions" className="cw-btn cw-btn-ghost cw-btn-sm text-ink-soft hover:text-ink">
           <ArrowLeft size={16} className="mr-1.5" /> Back to Prescriptions
         </Link>
-        <button
-          className="cw-btn cw-btn-primary cw-btn-sm"
-          style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
-        >
-          <Printer size={13} /> Print
-        </button>
+        <PrintButton />
       </div>
 
       <div
@@ -122,13 +118,6 @@ export default async function ViewPrescriptionPage({ params }: { params: Promise
           </div>
         </div>
       </div>
-      
-      {/* Client-side print script */}
-      <script dangerouslySetInnerHTML={{ __html: `
-        document.querySelector('button').addEventListener('click', function() {
-          window.print();
-        });
-      `}} />
     </div>
   )
 }

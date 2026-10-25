@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { getFileUrl } from "@/lib/file-utils"
 import { getStorageStats, getVaultDocuments } from "@/server/actions/documents"
 import { HardDrive, FileText, Download, FolderOpen, Archive, Image as ImageIcon, Search } from "lucide-react"
-import { ResponsiveTable } from "@/components/ResponsiveTable"
+import { ResponsiveTable, Pagination } from "@/components/ResponsiveTable"
 
 export function StorageTab() {
   const [stats, setStats] = useState<any>(null)
@@ -146,6 +146,7 @@ export function StorageTab() {
               <table className="w-full text-left text-[13.5px]">
                 <thead>
                   <tr className="border-b border-line bg-paper/50">
+                    <th className="font-semibold text-ink-soft px-4 py-3 w-12 text-center">#</th>
                     <th className="font-semibold text-ink-soft px-4 py-3">Document Name</th>
                     <th className="font-semibold text-ink-soft px-4 py-3">Patient</th>
                     <th className="font-semibold text-ink-soft px-4 py-3">Size</th>
@@ -153,8 +154,11 @@ export function StorageTab() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  {paginatedDocs.map(doc => (
+                  {paginatedDocs.map((doc, idx) => (
                     <tr key={doc.id} className="hover:bg-paper/30 transition-colors">
+                      <td className="px-4 py-3 text-ink-soft text-center font-mono text-xs">
+                        {(currentPage - 1) * itemsPerPage + idx + 1}
+                      </td>
                       <td className="px-4 py-3 font-medium text-ink flex items-center gap-2">
                         <FileText size={14} className="text-moss" />
                         {doc.name}
@@ -162,8 +166,16 @@ export function StorageTab() {
                       <td className="px-4 py-3 text-ink-soft">{doc.patient?.name}</td>
                       <td className="px-4 py-3 text-ink-soft">{(doc.sizeBytes / 1024 / 1024).toFixed(2)} MB</td>
                       <td className="px-4 py-3 text-right space-x-2">
-                        <a href={getFileUrl(doc.url)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[7px] text-[12.5px] font-medium bg-paper border border-line text-ink hover:bg-paper-raised transition-colors">
-                          View
+                        <a 
+                          href={getFileUrl(doc.url)} 
+                          download 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[7px] text-[12.5px] font-medium bg-paper border border-line text-ink hover:bg-paper-raised hover:text-forest transition-colors"
+                          title="Download document"
+                        >
+                          <Download size={13} className="text-moss" />
+                          Download
                         </a>
                       </td>
                     </tr>
@@ -172,10 +184,11 @@ export function StorageTab() {
               </table>
             }
             cards={
-              paginatedDocs.map(doc => (
+              paginatedDocs.map((doc, idx) => (
                 <div key={doc.id} className="cw-stat-card flex flex-col gap-3">
                   <div className="flex justify-between items-start">
                     <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono text-ink-soft font-semibold">#{(currentPage - 1) * itemsPerPage + idx + 1}</span>
                       <FileText size={16} className="text-moss flex-shrink-0" />
                       <div className="font-semibold truncate">{doc.name}</div>
                     </div>
@@ -187,8 +200,15 @@ export function StorageTab() {
                     <div className="text-right font-medium">{(doc.sizeBytes / 1024 / 1024).toFixed(2)} MB</div>
                   </div>
                   <div className="border-t border-line mt-1 pt-3 flex justify-end">
-                    <a href={getFileUrl(doc.url)} target="_blank" rel="noreferrer" className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-[7px] text-[12.5px] font-medium bg-paper border border-line text-ink hover:bg-paper-raised transition-colors w-full sm:w-auto">
-                      View
+                    <a 
+                      href={getFileUrl(doc.url)} 
+                      download 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-[7px] text-[12.5px] font-medium bg-paper border border-line text-ink hover:bg-paper-raised hover:text-forest transition-colors w-full sm:w-auto"
+                    >
+                      <Download size={13} className="text-moss" />
+                      Download
                     </a>
                   </div>
                 </div>
@@ -199,13 +219,13 @@ export function StorageTab() {
       </div>
 
       {!loading && filteredDocs.length > 0 && (
-        <div className="flex flex-col sm:flex-row justify-between items-center mt-4 text-[13.5px] text-ink-soft gap-4">
-          <div>Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredDocs.length)} of {filteredDocs.length} entries</div>
-          <div className="flex items-center gap-2">
-            <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1.5 border border-line rounded bg-white hover:bg-paper-raised disabled:opacity-50 text-ink transition-colors font-medium">Previous</button>
-            <button disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1.5 border border-line rounded bg-white hover:bg-paper-raised disabled:opacity-50 text-ink transition-colors font-medium">Next</button>
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={filteredDocs.length}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+        />
       )}
     </div>
   )

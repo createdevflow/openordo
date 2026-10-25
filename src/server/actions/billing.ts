@@ -16,25 +16,25 @@ export async function createInvoiceAction(data: {
   documentSize?: number
   documentName?: string
   includePrescriptionId?: string
+  taxApplied?: boolean
+  taxLabel?: string
+  taxRate?: number
+  taxAmount?: number
 }) {
   const clinicId = await requireClinicId()
 
   const count = await db.invoice.count({ where: { clinicId } })
   const displayId = "INV-" + (2200 + count) + "-" + Math.floor(1000 + Math.random() * 9000)
 
-  // Fetch platform fee percentage from global settings
-  const feeSetting = await db.globalSetting.findUnique({ where: { key: "PLATFORM_FEE_PERCENTAGE" } }).catch(() => null)
-  const feePercentage = parseFloat(feeSetting?.value || "10")
-  
   const processedItems = [...data.items]
   
-  if (!isNaN(feePercentage) && feePercentage > 0) {
-    const subtotal = processedItems.reduce((sum, item) => sum + item.amount, 0)
-    const platformFeeAmount = Number((subtotal * (feePercentage / 100)).toFixed(2))
-    if (platformFeeAmount > 0) {
+  // Tax calculation strictly configured on the clinic side
+  if (data.taxApplied && data.taxAmount && data.taxAmount > 0) {
+    const label = `${data.taxLabel || "Tax"} (${data.taxRate || 0}%)`
+    if (!processedItems.some(it => it.desc.startsWith(label))) {
       processedItems.push({
-        desc: `Applicable Tax (${feePercentage}%)`,
-        amount: platformFeeAmount
+        desc: label,
+        amount: Number(data.taxAmount.toFixed(2))
       })
     }
   }
@@ -121,10 +121,17 @@ export async function createInvoiceAction(data: {
   if (patient?.email) {
     const APP = process.env.NEXT_PUBLIC_APP_URL || "https://openordo.com"
     const patientAccount = await db.patientAccount.findFirst({ where: { email: patient.email } })
-    const items: { desc: string; amount: number }[] = (() => {
+
+    const baseItems: { desc: string; amount: number }[] = (() => {
       try { return JSON.parse(typeof data.items === "string" ? data.items : JSON.stringify(data.items)) } catch { return [] }
     })()
-    const total = items.reduce((s, i) => s + Number(i.amount || 0), 0)
+    const baseSubtotal = baseItems.reduce((s, i) => s + Number(i.amount || 0), 0)
+    // Grand total includes base items plus any clinic-calculated tax in processedItems
+    const grandTotal = processedItems.reduce((s, i) => s + Number(i.amount || 0), 0)
+    const hasTax = Boolean(data.taxApplied && data.taxAmount && data.taxAmount > 0)
+
+    const sym = patient.clinic.countryCode === "IN" ? "₹" : (patient.clinic.countryCode === "GB" ? "£" : patient.clinic.countryCode === "AE" ? "AED " : "$")
+
     sendNotificationEmail(
       "INVOICE_EVENT",
       { toEmail: patient.email, ownerType: "PATIENT_ACCOUNT", ownerId: patientAccount?.id || null, clinicId },
@@ -132,8 +139,11 @@ export async function createInvoiceAction(data: {
         patientName: patient.name,
         clinicName: patient.clinic.name,
         invoiceDisplayId: displayId,
-        amount: `${patient.clinic.countryCode === "IN" ? "₹" : "$"}${total.toFixed(2)}`,
+        amount: `${sym}${grandTotal.toFixed(2)}`,
         status: "created",
+        subtotal: hasTax ? `${sym}${baseSubtotal.toFixed(2)}` : undefined,
+        tax: hasTax ? `${sym}${Number(data.taxAmount).toFixed(2)}` : undefined,
+        taxLabel: hasTax ? `${data.taxLabel || "Tax"} (${data.taxRate || 0}%)` : undefined,
         loginUrl: `${APP}${Routes.PatientPortalForClinic(patient.clinic.slug)}`,
         preferencesUrl: `${APP}${Routes.PatientPortalSettingsForClinic(patient.clinic.slug)}`,
       })
@@ -169,6 +179,12 @@ export async function markInvoicePaidAction(id: string) {
   if (paidPatient?.email) {
     const APP = process.env.NEXT_PUBLIC_APP_URL || "https://openordo.com"
     const patientAccount = await db.patientAccount.findFirst({ where: { email: paidPatient.email } })
+    const items: { desc: string; amount: number }[] = (() => {
+      try { return JSON.parse(invoice.items) } catch { return [] }
+    })()
+    const total = items.reduce((s, i) => s + Number(i.amount || 0), 0)
+    const sym = paidPatient.clinic.countryCode === "IN" ? "₹" : (paidPatient.clinic.countryCode === "GB" ? "£" : paidPatient.clinic.countryCode === "AE" ? "AED " : "$")
+
     sendNotificationEmail(
       "INVOICE_EVENT",
       { toEmail: paidPatient.email, ownerType: "PATIENT_ACCOUNT", ownerId: patientAccount?.id || null, clinicId },
@@ -176,7 +192,7 @@ export async function markInvoicePaidAction(id: string) {
         patientName: paidPatient.name,
         clinicName: paidPatient.clinic.name,
         invoiceDisplayId: invoice.displayId,
-        amount: "—",
+        amount: `${sym}${total.toFixed(2)}`,
         status: "paid",
         loginUrl: `${APP}${Routes.PatientPortalForClinic(paidPatient.clinic.slug)}`,
         preferencesUrl: `${APP}${Routes.PatientPortalSettingsForClinic(paidPatient.clinic.slug)}`,
@@ -192,6 +208,78 @@ export async function markInvoicePaidAction(id: string) {
 
 export async function getInvoicePdfUrlAction(displayId: string, patientId: string) {
   const clinicId = await requireClinicId()
+
+  try {
+    const invoice = await db.invoice.findFirst({
+      where: {
+        displayId,
+        clinicId,
+        ...(patientId ? { patientId } : {})
+      }
+    })
+
+    if (invoice) {
+      const clinic = await db.clinic.findUnique({ where: { id: clinicId } })
+      const patient = await db.patient.findUnique({ where: { id: invoice.patientId } })
+
+      if (clinic && patient) {
+        let prescription = null
+        let doctor = null
+        if (invoice.prescriptionId) {
+          prescription = await db.prescription.findUnique({ where: { id: invoice.prescriptionId } })
+          if (prescription?.doctorId) {
+            doctor = await db.doctor.findUnique({ where: { id: prescription.doctorId } })
+          }
+        }
+
+        const { generateInvoicePDF } = await import("@/lib/pdf-generator")
+        const pdfBuffer = await generateInvoicePDF({ clinic, patient, invoice, prescription, doctor })
+
+        const fs = await import("fs/promises")
+        const path = await import("path")
+        const uploadDir = path.join(process.cwd(), "private_uploads")
+        await fs.mkdir(uploadDir, { recursive: true }).catch(() => {})
+
+        const filename = `${invoice.id}_${displayId}.pdf`
+        await fs.writeFile(path.join(uploadDir, filename), pdfBuffer)
+
+        const fileUrl = `/api/files/${filename}`
+        const sizeBytes = pdfBuffer.length
+
+        const existingDoc = await db.patientDocument.findFirst({
+          where: {
+            clinicId,
+            patientId: invoice.patientId,
+            type: "INVOICE",
+            name: `Invoice ${displayId}`
+          }
+        })
+
+        if (existingDoc) {
+          await db.patientDocument.update({
+            where: { id: existingDoc.id },
+            data: { url: fileUrl, sizeBytes }
+          })
+        } else {
+          await db.patientDocument.create({
+            data: {
+              clinicId,
+              patientId: invoice.patientId,
+              name: `Invoice ${displayId}`,
+              type: "INVOICE",
+              sizeBytes,
+              url: fileUrl
+            }
+          })
+        }
+
+        return fileUrl
+      }
+    }
+  } catch (err) {
+    console.error("Error generating invoice PDF on demand:", err)
+  }
+
   const doc = await db.patientDocument.findFirst({
     where: {
       clinicId,

@@ -64,3 +64,14 @@ export async function createRecordAction(data: {
   revalidatePath("/dashboard")
   return record
 }
+
+export async function deleteRecordAction(id: string) {
+  const clinicId = await requireClinicId()
+  await db.medicalRecord.deleteMany({
+    where: { id, clinicId }
+  })
+  revalidatePath("/dashboard/records")
+  revalidatePath("/dashboard/patients")
+  revalidatePath("/dashboard")
+  return { success: true }
+}

@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useTransition } from "react"
-import { Search, Plus, LayoutGrid, List as ListIcon, ChevronLeft, ChevronRight, ChevronDown, X, Pencil, Trash2, Lock, Video } from "lucide-react"
+import { Search, Plus, LayoutGrid, List as ListIcon, ChevronLeft, ChevronRight, ChevronDown, X, Pencil, Trash2, Lock, Video, Receipt, User, Copy, CheckCircle2, Clock } from "lucide-react"
 import { initials, fmtDate, fmtDateShort, fmtTime12, toISO, pad, StatusBadge } from "@/components/DashboardHelpers"
 import { createAppointmentAction, updateAppointmentAction, updateAppointmentStatusAction } from "@/server/actions/appointments"
 import { generatePatientLinkToken } from "@/server/actions/video-consultation"
@@ -280,7 +280,7 @@ export function AppointmentsClient({
               <table className="cw-table cw-table-sticky-col">
                 <thead><tr><th>Patient</th><th>Doctor</th><th>Date & time</th><th>Reason</th><th>Status</th><th></th></tr></thead>
                 <tbody>
-                  {paginatedList.map((a: any) => (
+                  {paginatedList.map((a: any, idx: number) => (
                     <tr key={a.id}>
                       <td style={{ fontWeight: 600 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -296,21 +296,34 @@ export function AppointmentsClient({
                       <td className="num">{fmtDateShort(a.dateString)}, {fmtTime12(a.time)}</td>
                       <td>{a.reason}</td>
                       <td><StatusBadge status={a.status} /></td>
-                      <td>
-                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <td style={{ textAlign: "right" }}>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end" }}>
+                          {/* Important primary action on main line - identical 78x28 size */}
                           {a.visitType === "VIDEO" && a.status?.toLowerCase() === "scheduled" && (
-                            <>
-                              <Link
-                                href={"/consultation/join/" + (a.roomId || a.id)}
-                                target="_blank"
-                                className="cw-btn cw-btn-primary cw-btn-sm"
-                                style={{ padding: "3px 8px", fontSize: 11, background: "#7C3AED", borderColor: "#7C3AED", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 3 }}
-                              >
-                                <Video size={11} /> Join
-                              </Link>
+                            <Link
+                              href={"/consultation/join/" + (a.roomId || a.id)}
+                              target="_blank"
+                              className="cw-btn cw-btn-primary cw-btn-sm"
+                              style={{ width: "78px", height: "28px", padding: 0, fontSize: "11.5px", fontWeight: 600, background: "#7C3AED", borderColor: "#7C3AED", textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, borderRadius: 6, flexShrink: 0, boxSizing: "border-box" }}
+                            >
+                              <Video size={12} /> Join
+                            </Link>
+                          )}
+                          {a.status?.toLowerCase() === "completed" && (
+                            <Link 
+                              href={`/dashboard/billing?action=new&patientId=${a.patientId}`} 
+                              className="cw-btn cw-btn-primary cw-btn-sm" 
+                              style={{ width: "78px", height: "28px", padding: 0, fontSize: "11.5px", fontWeight: 600, textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, borderRadius: 6, flexShrink: 0, boxSizing: "border-box" }}
+                            >
+                              <Receipt size={12} /> Invoice
+                            </Link>
+                          )}
+
+                          {/* 3-dot kebab menu for all other actions */}
+                          <CardKebab direction="auto">
+                            {a.visitType === "VIDEO" && a.status?.toLowerCase() === "scheduled" && (
                               <button
-                                className="cw-btn cw-btn-ghost cw-btn-icon"
-                                style={{ padding: "3px 6px", fontSize: 11 }}
+                                className="cw-dropdown-item flex items-center gap-2"
                                 onClick={async () => {
                                   const result = await generatePatientLinkToken(a.id);
                                   if ('error' in result) {
@@ -320,21 +333,42 @@ export function AppointmentsClient({
                                   navigator.clipboard.writeText(result.url);
                                   showAlert({ title: "Copied", body: "Patient video link copied!", tone: "primary" });
                                 }}
-                                title="Copy Patient Invite Link"
                               >
-                                📋
+                                <Copy size={13} /> Copy Video Link
                               </button>
-                            </>
-                          )}
-                          {a.status.toLowerCase() === "completed" && (
-                            <Link href={`/dashboard/billing?action=new&patientId=${a.patientId}`} className="cw-btn cw-btn-primary cw-btn-sm" style={{ padding: "3px 8px", fontSize: 11, textDecoration: "none" }}>Invoice</Link>
-                          )}
-                          <Link href={`/dashboard/patients?search=${patientName(a.patientId)}`} className="cw-btn cw-btn-ghost cw-btn-sm" style={{ padding: "3px 8px", fontSize: 11, textDecoration: "none" }}>Patient</Link>
-                          <button className="cw-btn cw-btn-ghost cw-btn-icon" onClick={() => { 
-                            setEditing({ ...a, date: a.dateString }); 
-                            setModalOpen(true); 
-                          }} disabled={isPending}><Pencil size={13} /></button>
-                          {a.status.toLowerCase() === "scheduled" && <button className="cw-btn cw-btn-ghost cw-btn-icon" onClick={() => setStatus(a.id, "cancelled")} disabled={isPending}><X size={13} /></button>}
+                            )}
+                            <Link href={`/dashboard/patients?search=${patientName(a.patientId)}`} className="cw-dropdown-item flex items-center gap-2">
+                              <User size={13} /> View Patient
+                            </Link>
+                            <button 
+                              className="cw-dropdown-item flex items-center gap-2" 
+                              onClick={() => { 
+                                setEditing({ ...a, date: a.dateString }); 
+                                setModalOpen(true); 
+                              }} 
+                              disabled={isPending}
+                            >
+                              <Pencil size={13} /> Edit
+                            </button>
+                            {a.status?.toLowerCase() === "scheduled" && (
+                              <>
+                                <button className="cw-dropdown-item flex items-center gap-2 text-forest" onClick={() => setStatus(a.id, "completed")} disabled={isPending}>
+                                  <CheckCircle2 size={13} /> Mark Completed
+                                </button>
+                                <button className="cw-dropdown-item flex items-center gap-2 text-ink-soft" onClick={() => setStatus(a.id, "noshow")} disabled={isPending}>
+                                  <Clock size={13} /> Mark No-show
+                                </button>
+                                <button className="cw-dropdown-item flex items-center gap-2 text-coral" onClick={() => setStatus(a.id, "cancelled")} disabled={isPending}>
+                                  <X size={13} /> Cancel
+                                </button>
+                              </>
+                            )}
+                            {a.status?.toLowerCase() !== "completed" && a.status?.toLowerCase() !== "cancelled" && (
+                              <Link href={`/dashboard/billing?action=new&patientId=${a.patientId}`} className="cw-dropdown-item flex items-center gap-2">
+                                <Receipt size={13} /> Create Invoice
+                              </Link>
+                            )}
+                          </CardKebab>
                         </div>
                       </td>
                     </tr>
@@ -343,7 +377,7 @@ export function AppointmentsClient({
               </table>
             }
             cards={
-              paginatedList.map((a: any) => (
+              paginatedList.map((a: any, idx: number) => (
                 <div key={a.id} className="cw-stat-card flex flex-col gap-3">
                   <div className="flex justify-between items-start">
                     <div>
@@ -359,27 +393,65 @@ export function AppointmentsClient({
                     </div>
                     <div className="flex items-center gap-2">
                       <StatusBadge status={a.status} />
-                      <CardKebab>
+                      {a.visitType === "VIDEO" && a.status?.toLowerCase() === "scheduled" && (
+                        <Link
+                          href={"/consultation/join/" + (a.roomId || a.id)}
+                          target="_blank"
+                          className="cw-btn cw-btn-primary cw-btn-sm"
+                          style={{ width: "78px", height: "28px", padding: 0, fontSize: "11px", fontWeight: 600, background: "#7C3AED", borderColor: "#7C3AED", textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 4, borderRadius: 6, flexShrink: 0, boxSizing: "border-box" }}
+                        >
+                          <Video size={11} /> Join
+                        </Link>
+                      )}
+                      {a.status?.toLowerCase() === "completed" && (
+                        <Link 
+                          href={`/dashboard/billing?action=new&patientId=${a.patientId}`} 
+                          className="cw-btn cw-btn-primary cw-btn-sm" 
+                          style={{ width: "78px", height: "28px", padding: 0, fontSize: "11px", fontWeight: 600, textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 4, borderRadius: 6, flexShrink: 0, boxSizing: "border-box" }}
+                        >
+                          <Receipt size={11} /> Invoice
+                        </Link>
+                      )}
+                      <CardKebab direction="auto">
                         {a.visitType === "VIDEO" && a.status?.toLowerCase() === "scheduled" && (
-                          <Link href={"/consultation/join/" + (a.roomId || a.id)} target="_blank" className="cw-dropdown-item flex items-center gap-2 text-[#7C3AED]">
-                            <Video size={13} /> Join Call
-                          </Link>
-                        )}
-                        {a.status.toLowerCase() === "completed" && (
-                          <Link href={`/dashboard/billing?action=new&patientId=${a.patientId}`} className="cw-dropdown-item flex items-center gap-2">
-                            Generate Invoice
-                          </Link>
+                          <button
+                            className="cw-dropdown-item flex items-center gap-2"
+                            onClick={async () => {
+                              const result = await generatePatientLinkToken(a.id);
+                              if ('error' in result) {
+                                showAlert({ title: "Error", body: result.error, tone: "danger" });
+                                return;
+                              }
+                              navigator.clipboard.writeText(result.url);
+                              showAlert({ title: "Copied", body: "Patient video link copied!", tone: "primary" });
+                            }}
+                          >
+                            <Copy size={13} /> Copy Video Link
+                          </button>
                         )}
                         <Link href={`/dashboard/patients?search=${patientName(a.patientId)}`} className="cw-dropdown-item flex items-center gap-2">
-                          View Patient
+                          <User size={13} /> View Patient
                         </Link>
                         <button className="cw-dropdown-item flex items-center gap-2" onClick={() => { setEditing({ ...a, date: a.dateString }); setModalOpen(true); }}>
                           <Pencil size={13} /> Edit
                         </button>
-                        {a.status.toLowerCase() === "scheduled" && (
-                          <button className="cw-dropdown-item flex items-center gap-2 text-coral" onClick={() => setStatus(a.id, "cancelled")}>
-                            <X size={13} /> Cancel
-                          </button>
+                        {a.status?.toLowerCase() === "scheduled" && (
+                          <>
+                            <button className="cw-dropdown-item flex items-center gap-2 text-forest" onClick={() => setStatus(a.id, "completed")}>
+                              <CheckCircle2 size={13} /> Mark Completed
+                            </button>
+                            <button className="cw-dropdown-item flex items-center gap-2 text-ink-soft" onClick={() => setStatus(a.id, "noshow")}>
+                              <Clock size={13} /> Mark No-show
+                            </button>
+                            <button className="cw-dropdown-item flex items-center gap-2 text-coral" onClick={() => setStatus(a.id, "cancelled")}>
+                              <X size={13} /> Cancel
+                            </button>
+                          </>
+                        )}
+                        {a.status?.toLowerCase() !== "completed" && a.status?.toLowerCase() !== "cancelled" && (
+                          <Link href={`/dashboard/billing?action=new&patientId=${a.patientId}`} className="cw-dropdown-item flex items-center gap-2">
+                            <Receipt size={13} /> Create Invoice
+                          </Link>
                         )}
                       </CardKebab>
                     </div>

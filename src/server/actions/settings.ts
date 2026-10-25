@@ -32,19 +32,34 @@ export async function updateClinicSettingsAction(data: {
 
 export async function updateBillingSettingsAction(data: {
   countryCode: string
-  billingConfig: Record<string, string>
+  billingConfig: Record<string, any>
 }) {
   const clinicId = await requireClinicId()
+
+  const existing = await db.clinic.findUnique({
+    where: { id: clinicId },
+    select: { billingConfig: true }
+  })
+  let prevConfig: Record<string, any> = {}
+  try {
+    prevConfig = JSON.parse(existing?.billingConfig || "{}")
+  } catch {}
+
+  const mergedConfig = {
+    ...prevConfig,
+    ...data.billingConfig
+  }
 
   const clinic = await db.clinic.update({
     where: { id: clinicId },
     data: {
       countryCode: data.countryCode,
-      billingConfig: JSON.stringify(data.billingConfig)
+      billingConfig: JSON.stringify(mergedConfig)
     }
   })
 
   revalidatePath("/dashboard/settings")
+  revalidatePath("/dashboard/billing")
   return clinic
 }
 

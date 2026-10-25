@@ -63,21 +63,49 @@ export async function generateInvoicePDF({
     return currentY
   }
 
+  // Parse clinic billing config for currency, tax IDs and invoice notes
+  let billingConfig: any = {}
+  try {
+    billingConfig = typeof clinic?.billingConfig === "string" ? JSON.parse(clinic.billingConfig) : (clinic?.billingConfig || {})
+  } catch {}
+
+  const country = (clinic?.countryCode || billingConfig.countryCode || "IN").toUpperCase()
+  const isIndia = country === "IN"
+  // For standard PDF fonts (WinAnsi encoding), Indian Rupee cannot be drawn as unicode '₹' (0x20b9).
+  // Standard Indian accounting and invoicing uses 'Rs. ' or 'INR '.
+  const currencyPrefix = isIndia ? "Rs. " : (country === "GB" ? "£" : country === "AE" ? "AED " : "$")
+
   // ==== PAGE 1: INVOICE ====
   // Header
   drawText(clinic.name, margin, y, 20, true)
-  y -= 30
+  y -= 18
+  if (clinic.address) {
+    drawText(clinic.address, margin, y, 9.5)
+    y -= 13
+  }
+  if (clinic.phone) {
+    drawText(`Phone: ${clinic.phone}`, margin, y, 9.5)
+    y -= 13
+  }
+  const taxNumber = billingConfig.gstin || billingConfig.gstNumber || billingConfig.trn || billingConfig.ein
+  if (taxNumber) {
+    const taxLabel = isIndia ? "GSTIN" : (country === "AE" ? "TRN" : "Tax ID / EIN")
+    drawText(`${taxLabel}: ${taxNumber}`, margin, y, 9.5)
+    y -= 13
+  }
+
+  y -= 10
   drawText("INVOICE", margin, y, 16, true)
   drawText(`Date: ${new Date(invoice.date).toLocaleDateString()}`, width - margin - 150, y, 11)
   y -= 20
   drawText(`Invoice #: ${invoice.displayId}`, margin, y, 11)
   
-  y -= 40
+  y -= 35
   
   // Patient Info
   drawText("Billed To:", margin, y, 11, true)
   y -= 15
-  drawText(`${patient?.name}`, margin, y, 11)
+  drawText(`${patient?.name || "Patient"}`, margin, y, 11)
   y -= 15
   if (patient?.phone) {
     drawText(`Phone: ${patient.phone}`, margin, y, 11)
@@ -90,7 +118,7 @@ export async function generateInvoicePDF({
   page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 1, color: rgb(0.8, 0.8, 0.8) })
   y -= 20
   drawText("Description", margin + 10, y, 11, true)
-  drawText("Amount", width - margin - 70, y, 11, true)
+  drawText("Amount", width - margin - 85, y, 11, true)
   y -= 10
   page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 1, color: rgb(0.8, 0.8, 0.8) })
   y -= 20
@@ -99,8 +127,8 @@ export async function generateInvoicePDF({
   const items = typeof invoice.items === "string" ? JSON.parse(invoice.items) : invoice.items
   let total = 0
   for (const item of items) {
-    y = drawWrappedText(item.desc || "Item", margin + 10, y, 11, false, width - margin * 2 - 100)
-    drawText(`$${Number(item.amount).toFixed(2)}`, width - margin - 70, y + 15, 11)
+    y = drawWrappedText(item.desc || "Item", margin + 10, y, 11, false, width - margin * 2 - 120)
+    drawText(`${currencyPrefix}${Number(item.amount).toFixed(2)}`, width - margin - 85, y + 15, 11)
     total += Number(item.amount)
     y -= 10
   }
@@ -109,8 +137,15 @@ export async function generateInvoicePDF({
   page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 1, color: rgb(0.8, 0.8, 0.8) })
   y -= 20
   
-  drawText("TOTAL:", width - margin - 150, y, 12, true)
-  drawText(`$${total.toFixed(2)}`, width - margin - 70, y, 12, true)
+  drawText("TOTAL:", width - margin - 170, y, 12, true)
+  drawText(`${currencyPrefix}${total.toFixed(2)}`, width - margin - 85, y, 12, true)
+
+  if (billingConfig.invoiceNotes) {
+    y -= 35
+    page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 0.5, color: rgb(0.85, 0.85, 0.85) })
+    y -= 15
+    drawWrappedText(billingConfig.invoiceNotes, margin, y, 9.5, false, width - margin * 2)
+  }
 
 
   // ==== PAGE 2: PRESCRIPTION (Optional) ====

@@ -15,7 +15,8 @@ import {
 } from "@/server/actions/settings"
 import { saveBookingPageConfig } from "@/server/actions/bookingPageConfig"
 import { submitDeletionRequest } from "@/server/actions/deletion-request"
-import { Copy, RefreshCw, Eye, EyeOff, ExternalLink, Lock, Check, ArrowUpRight, Sparkles, Download, Calendar, Receipt, Users, X, FileText, Palette, Globe, Plus, Trash2, ImagePlus, Upload, Info, AlertTriangle, Bell, Clock, Package, Send, ShieldCheck, CheckCircle2 } from "lucide-react"
+import { Copy, RefreshCw, Eye, EyeOff, ExternalLink, Lock, Check, ArrowUpRight, Sparkles, Download, Calendar, Receipt, Users, X, FileText, Palette, Globe, Plus, Trash2, ImagePlus, Upload, Info, AlertTriangle, Bell, Clock, Package, Send, ShieldCheck, CheckCircle2, Search } from "lucide-react"
+import { ResponsiveTable, Pagination } from "@/components/ResponsiveTable"
 import { useConfirm } from "@/components/ui/ConfirmDialog"
 import { toast } from "sonner"
 import { StorageTab } from "./StorageTab"
@@ -752,21 +753,29 @@ export function SettingsClient({
                 <div className="cw-field !mb-0"><label>Phone</label><input className="cw-input" value={clinic.phone || ""} onChange={e => setClinic({ ...clinic, phone: e.target.value })} disabled={isPending} /></div>
                 <div className="cw-field !mb-0"><label>WhatsApp number</label><input className="cw-input" value={clinic.whatsappNumber || ""} onChange={e => setClinic({ ...clinic, whatsappNumber: e.target.value })} disabled={isPending} /></div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="cw-field !mb-0"><label>Address</label><input className="cw-input" value={clinic.address || ""} onChange={e => setClinic({ ...clinic, address: e.target.value })} disabled={isPending} /></div>
+              <div className="cw-field !mb-0">
+                <label>Address</label>
+                <textarea 
+                  className="cw-input !h-auto resize-y" 
+                  rows={3} 
+                  placeholder="Clinic street address, building, suite, city, pin/zip code..."
+                  value={clinic.address || ""} 
+                  onChange={e => setClinic({ ...clinic, address: e.target.value })} 
+                  disabled={isPending} 
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 <div className="cw-field !mb-0">
                   <label>Country / Billing Region</label>
                   <select className="cw-select" value={clinic.countryCode || "IN"} onChange={e => setClinic({ ...clinic, countryCode: e.target.value })} disabled={isPending}>
                     <option value="IN">India (₹ INR / GST)</option>
                     <option value="US">United States ($ USD)</option>
-                    <option value="GB">United Kingdom ($ USD)</option>
-                    <option value="CA">Canada ($ USD)</option>
-                    <option value="AU">Australia ($ USD)</option>
+                    <option value="GB">United Kingdom (£ GBP)</option>
+                    <option value="CA">Canada ($ CAD)</option>
+                    <option value="AU">Australia ($ AUD)</option>
                     <option value="OTHER">Other ($ USD)</option>
                   </select>
                 </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="cw-field !mb-0"><label>Opens at</label><input className="cw-input" type="time" value={clinic.openTime || "09:00"} onChange={e => setClinic({ ...clinic, openTime: e.target.value })} disabled={isPending} /></div>
                 <div className="cw-field !mb-0"><label>Closes at</label><input className="cw-input" type="time" value={clinic.closeTime || "18:00"} onChange={e => setClinic({ ...clinic, closeTime: e.target.value })} disabled={isPending} /></div>
               </div>
@@ -1467,6 +1476,112 @@ export function SettingsClient({
                 </div>
               </div>
             )}
+
+            {/* ── Patient Invoice & Tax Configuration ── */}
+            <div className="border border-line rounded-xl p-5 bg-paper-raised/40 space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <h4 className="font-bold text-[15px] m-0 text-ink">Patient Invoice Tax Setup</h4>
+                  <p className="text-[12.5px] text-ink-soft mt-0.5 mb-0">
+                    Configure the tax calculation applied when generating patient invoices and receipts.
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer text-[13px] font-semibold text-ink">
+                  <input
+                    type="checkbox"
+                    checked={billing.config.taxEnabled !== false}
+                    onChange={e => setBilling({
+                      ...billing,
+                      config: { ...billing.config, taxEnabled: e.target.checked }
+                    })}
+                    className="rounded text-forest focus:ring-forest cursor-pointer"
+                    disabled={isPending}
+                  />
+                  <span>Enable Tax Calculation</span>
+                </label>
+              </div>
+
+              {billing.config.taxEnabled !== false && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-line">
+                  <div className="cw-field !mb-0">
+                    <label>Tax Name / Label</label>
+                    <input
+                      className="cw-input"
+                      placeholder={billing.countryCode === "IN" ? "GST" : billing.countryCode === "US" ? "Sales Tax" : "VAT"}
+                      value={billing.config.taxLabel ?? (billing.countryCode === "IN" ? "GST" : "Tax")}
+                      onChange={e => setBilling({
+                        ...billing,
+                        config: { ...billing.config, taxLabel: e.target.value }
+                      })}
+                      disabled={isPending}
+                    />
+                    <span className="text-[11.5px] text-ink-soft mt-1 block">
+                      Name displayed on invoices (e.g. GST, VAT, Sales Tax).
+                    </span>
+                  </div>
+
+                  <div className="cw-field !mb-0">
+                    <label>Default Tax Rate (%)</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        className="cw-input"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        placeholder={billing.countryCode === "IN" ? "18" : "0"}
+                        value={billing.config.taxRate ?? (billing.countryCode === "IN" ? "18" : "0")}
+                        onChange={e => setBilling({
+                          ...billing,
+                          config: { ...billing.config, taxRate: e.target.value }
+                        })}
+                        disabled={isPending}
+                      />
+                      <span className="text-sm font-semibold text-ink-soft shrink-0">%</span>
+                    </div>
+                    {/* Quick rate presets */}
+                    <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                      <span className="text-[11px] text-ink-soft mr-1">Presets:</span>
+                      {[0, 5, 12, 18, 28].map(pct => (
+                        <button
+                          key={pct}
+                          type="button"
+                          onClick={() => setBilling({
+                            ...billing,
+                            config: { ...billing.config, taxRate: String(pct) }
+                          })}
+                          className={`text-[11px] px-2 py-0.5 rounded border transition-colors cursor-pointer ${
+                            String(billing.config.taxRate ?? (billing.countryCode === "IN" ? "18" : "0")) === String(pct)
+                              ? "bg-forest/10 border-forest text-forest font-bold"
+                              : "bg-paper border-line text-ink-soft hover:text-ink hover:bg-paper-raised"
+                          }`}
+                        >
+                          {pct}%
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="cw-field !mb-0 pt-3 border-t border-line">
+                <label>Invoice Notes / Payment Instructions (Optional)</label>
+                <textarea
+                  className="cw-textarea"
+                  rows={2}
+                  placeholder="e.g. Thank you for choosing our clinic. Please complete payment within 7 days."
+                  value={billing.config.invoiceNotes || ""}
+                  onChange={e => setBilling({
+                    ...billing,
+                    config: { ...billing.config, invoiceNotes: e.target.value }
+                  })}
+                  disabled={isPending}
+                />
+                <span className="text-[11.5px] text-ink-soft mt-1 block">
+                  Printed in the footer of patient invoice PDFs and receipts.
+                </span>
+              </div>
+            </div>
 
           </div>
           <div className="px-6 py-4 bg-paper-raised/50 border-t border-line flex justify-end">
@@ -3283,81 +3398,248 @@ function ClinicDataRequestsTab() {
   const [loading, setLoading] = React.useState(true)
   const [requests, setRequests] = React.useState<any[]>([])
   const [processingId, setProcessingId] = React.useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = React.useState<string>("ALL")
+  const [searchTerm, setSearchTerm] = React.useState("")
+  const [currentPage, setCurrentPage] = React.useState(1)
+  const itemsPerPage = 10
 
-  React.useEffect(() => {
+  const fetchRequests = React.useCallback(() => {
     import("@/server/actions/data-export").then(mod => {
       mod.clinicGetDataRequestsAction().then(res => {
-        setRequests(res)
+        setRequests(res || [])
         setLoading(false)
       })
     })
   }, [])
 
+  React.useEffect(() => {
+    fetchRequests()
+  }, [fetchRequests])
+
+  const filteredRequests = requests.filter(req => {
+    if (statusFilter !== "ALL" && req.status !== statusFilter) return false
+    if (!searchTerm) return true
+    const q = searchTerm.toLowerCase()
+    const name = (req.patientAccount?.name || "").toLowerCase()
+    const email = (req.patientAccount?.email || "").toLowerCase()
+    return name.includes(q) || email.includes(q)
+  })
+
+  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / itemsPerPage))
+  const paginatedRequests = filteredRequests.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+
   return (
     <div className="bg-white border border-line rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.02)] overflow-hidden">
       <div className="px-6 py-5 border-b border-line bg-paper-raised">
         <h3 className="text-[17px] font-bold m-0 text-ink">Patient Data Requests</h3>
-        <p className="text-[13px] text-ink-soft mt-1 mb-0">Review and fulfill requests from patients for their medical data.</p>
+        <p className="text-[13px] text-ink-soft mt-1 mb-0">Review and fulfill requests from patients for their medical data export.</p>
       </div>
+
       <div className="p-6">
+        {/* Toolbar: Search and Filter Chips */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <div className="cw-chip-filter">
+            {["ALL", "PENDING", "COMPLETED"].map(st => (
+              <button
+                key={st}
+                className={`cw-chip ${statusFilter === st ? "active" : ""}`}
+                onClick={() => { setStatusFilter(st); setCurrentPage(1); }}
+              >
+                {st === "ALL" ? "All Requests" : st.charAt(0) + st.slice(1).toLowerCase()}
+              </button>
+            ))}
+          </div>
+
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft w-4 h-4" />
+            <input 
+              type="text" 
+              placeholder="Search patient name or email..." 
+              value={searchTerm} 
+              onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+              className="cw-input !pl-9 w-full sm:w-64 !m-0 !py-1.5 !text-xs"
+            />
+          </div>
+        </div>
+
         {loading ? (
-          <div className="text-sm text-ink-soft">Loading requests...</div>
-        ) : requests.length === 0 ? (
-          <div className="text-center py-10 bg-paper/50 rounded-lg border border-dashed border-line text-ink-soft">
-            <FileText size={32} className="mx-auto mb-2 opacity-50" />
-            No data requests yet.
+          <div className="p-12 text-center text-ink-soft text-[13.5px]">Loading requests...</div>
+        ) : filteredRequests.length === 0 ? (
+          <div className="text-center py-12 bg-paper/50 rounded-lg border border-dashed border-line text-ink-soft">
+            <FileText size={32} className="mx-auto mb-2 opacity-50 text-moss" />
+            <div className="font-semibold text-ink text-sm">No data requests found</div>
+            <div className="text-xs text-ink-soft mt-1">
+              {requests.length === 0 ? "No patient data requests have been submitted yet." : "No requests match your current search or filter."}
+            </div>
           </div>
         ) : (
-          <div className="border border-line rounded-lg overflow-hidden">
-            <div className="bg-paper px-4 py-2 text-xs font-semibold text-ink-soft uppercase tracking-wider border-b border-line">
-              Requests
-            </div>
-            <div className="divide-y divide-line">
-              {requests.map(req => (
-                <div key={req.id} className="flex justify-between items-center p-4">
-                  <div>
-                    <div className="font-semibold text-ink text-sm flex items-center gap-2">
-                      {req.patientAccount.name} <span className="text-xs text-ink-soft font-normal">({req.patientAccount.email})</span>
-                    </div>
-                    <div className="text-xs text-ink-soft mt-1">Requested: {new Date(req.createdAt).toLocaleString()}</div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {req.status === "PENDING" ? (
-                      <button 
-                        onClick={async () => {
-                          setProcessingId(req.id)
-                          try {
-                            const { clinicProcessDataRequestAction } = await import("@/server/actions/data-export")
-                            await clinicProcessDataRequestAction(req.id)
-                            
-                            // Re-fetch requests
-                            const mod = await import("@/server/actions/data-export")
-                            const res = await mod.clinicGetDataRequestsAction()
-                            setRequests(res)
-                            toast.success("Data export generated and sent to patient!")
-                          } catch (e: any) {
-                            toast.error(e.message || "Failed to process request")
-                          } finally {
-                            setProcessingId(null)
-                          }
-                        }}
-                        disabled={processingId === req.id}
-                        className={`px-4 py-1.5 text-white text-xs font-semibold rounded transition-colors ${processingId === req.id ? 'bg-forest/60 cursor-not-allowed' : 'bg-forest hover:bg-forest-dark'}`}
-                      >
-                        {processingId === req.id ? "Processing..." : "Generate & Send"}
-                      </button>
-                    ) : req.status === "COMPLETED" ? (
+          <div className="border border-line rounded-lg overflow-hidden bg-white">
+            <ResponsiveTable
+              table={
+                <table className="w-full text-left text-[13.5px]">
+                  <thead>
+                    <tr className="border-b border-line bg-paper/50">
+                      <th className="font-semibold text-ink-soft px-4 py-3 w-12 text-center">#</th>
+                      <th className="font-semibold text-ink-soft px-4 py-3">Patient</th>
+                      <th className="font-semibold text-ink-soft px-4 py-3">Date Requested</th>
+                      <th className="font-semibold text-ink-soft px-4 py-3">Status</th>
+                      <th className="font-semibold text-ink-soft px-4 py-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line">
+                    {paginatedRequests.map((req, idx) => (
+                      <tr key={req.id} className="hover:bg-paper/30 transition-colors">
+                        <td className="px-4 py-3 text-ink-soft text-center font-mono text-xs">
+                          {(currentPage - 1) * itemsPerPage + idx + 1}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-ink text-sm">
+                            {req.patientAccount?.name || "Patient"}
+                          </div>
+                          <div className="text-xs text-ink-soft mt-0.5">
+                            {req.patientAccount?.email || "—"}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-ink text-xs whitespace-nowrap">
+                          {new Date(req.createdAt).toLocaleDateString(undefined, {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit"
+                          })}
+                        </td>
+                        <td className="px-4 py-3">
+                          {req.status === "PENDING" ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                              <Clock size={12} className="text-amber-600" /> Pending
+                            </span>
+                          ) : req.status === "COMPLETED" ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
+                              <CheckCircle2 size={12} className="text-green-600" /> Completed
+                            </span>
+                          ) : (
+                            <span className="text-xs font-semibold text-ink-soft uppercase">{req.status}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {req.status === "PENDING" ? (
+                            <button 
+                              onClick={async () => {
+                                setProcessingId(req.id)
+                                try {
+                                  const { clinicProcessDataRequestAction } = await import("@/server/actions/data-export")
+                                  await clinicProcessDataRequestAction(req.id)
+                                  fetchRequests()
+                                  toast.success("Data export generated and sent to patient!")
+                                } catch (e: any) {
+                                  toast.error(e.message || "Failed to process request")
+                                } finally {
+                                  setProcessingId(null)
+                                }
+                              }}
+                              disabled={processingId === req.id}
+                              className="cw-btn cw-btn-primary cw-btn-sm"
+                            >
+                              {processingId === req.id ? "Processing..." : "Generate & Send"}
+                            </button>
+                          ) : req.status === "COMPLETED" ? (
+                            <a 
+                              href={req.downloadUrl} 
+                              download 
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[7px] text-[12.5px] font-medium bg-paper border border-line text-ink hover:bg-paper-raised hover:text-forest transition-colors"
+                              title="Download patient data export"
+                            >
+                              <Download size={13} className="text-moss" />
+                              Download
+                            </a>
+                          ) : (
+                            <span className="text-xs text-ink-soft font-mono">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              }
+              cards={
+                paginatedRequests.map((req, idx) => (
+                  <div key={req.id} className="cw-stat-card flex flex-col gap-3">
+                    <div className="flex justify-between items-start">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-green-700 bg-green-50 px-2 py-1 rounded">Completed</span>
-                        <a href={req.downloadUrl} download className="text-xs text-forest font-semibold underline hover:text-forest-dark">View</a>
+                        <span className="text-xs font-mono text-ink-soft font-semibold">
+                          #{(currentPage - 1) * itemsPerPage + idx + 1}
+                        </span>
+                        <div>
+                          <div className="font-semibold text-ink text-sm">{req.patientAccount?.name || "Patient"}</div>
+                          <div className="text-xs text-ink-soft">{req.patientAccount?.email || "—"}</div>
+                        </div>
                       </div>
-                    ) : (
-                      <span className="text-xs font-semibold text-ink-soft uppercase">{req.status}</span>
-                    )}
+                      <div>
+                        {req.status === "PENDING" ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                            Pending
+                          </span>
+                        ) : req.status === "COMPLETED" ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
+                            Completed
+                          </span>
+                        ) : (
+                          <span className="text-xs font-semibold text-ink-soft uppercase">{req.status}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-xs text-ink-soft">
+                      Requested: {new Date(req.createdAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+                    </div>
+                    <div className="border-t border-line mt-1 pt-3 flex justify-end">
+                      {req.status === "PENDING" ? (
+                        <button 
+                          onClick={async () => {
+                            setProcessingId(req.id)
+                            try {
+                              const { clinicProcessDataRequestAction } = await import("@/server/actions/data-export")
+                              await clinicProcessDataRequestAction(req.id)
+                              fetchRequests()
+                              toast.success("Data export generated and sent to patient!")
+                            } catch (e: any) {
+                              toast.error(e.message || "Failed to process request")
+                            } finally {
+                              setProcessingId(null)
+                            }
+                          }}
+                          disabled={processingId === req.id}
+                          className="cw-btn cw-btn-primary cw-btn-sm w-full sm:w-auto justify-center"
+                        >
+                          {processingId === req.id ? "Processing..." : "Generate & Send"}
+                        </button>
+                      ) : req.status === "COMPLETED" ? (
+                        <a 
+                          href={req.downloadUrl} 
+                          download 
+                          className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-[7px] text-[12.5px] font-medium bg-paper border border-line text-ink hover:bg-paper-raised hover:text-forest transition-colors w-full sm:w-auto"
+                        >
+                          <Download size={13} className="text-moss" />
+                          Download
+                        </a>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))
+              }
+            />
+          </div>
+        )}
+
+        {!loading && filteredRequests.length > 0 && (
+          <div className="mt-4">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={filteredRequests.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={setCurrentPage}
+            />
           </div>
         )}
       </div>
